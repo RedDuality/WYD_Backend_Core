@@ -4,7 +4,7 @@ using MongoDB.Bson.Serialization.Attributes;
 
 namespace NRModel
 {
-    public class ProfileEventDocument(EventDocument ev, ObjectId profileId) : BaseDateEntity
+    public class ProfileEventDocument(Event ev, ObjectId profileId) : BaseDateEntity
     {
         [BsonElement("eventId")]
         public ObjectId EventId { get; set; } = ev.Id;

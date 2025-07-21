@@ -3,7 +3,7 @@ using MongoDB.Bson.Serialization.Attributes;
 
 namespace NRModel
 {
-    public class EventDocument : BaseDateEntity
+    public class Event : BaseDateEntity
     {
         [BsonElement("title")]
         public required string Title { get; set; } = "Untitled";

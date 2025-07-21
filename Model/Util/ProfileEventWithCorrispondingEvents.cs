@@ -24,6 +24,6 @@ namespace NRModel
 
         [BsonElement("role")]
         public EventRole Role { get; set; }
-        public List<EventDocument> Events { get; set; } = [];
+        public List<Event> Events { get; set; } = [];
     }
 }
