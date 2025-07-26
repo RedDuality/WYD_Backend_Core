@@ -1,36 +1,28 @@
-using Microsoft.EntityFrameworkCore;
+using Core.Model;
+using Core.Model.Base;
 using MongoDB.Bson;
 using MongoDB.Bson.Serialization;
 using MongoDB.Bson.Serialization.Serializers;
+using Microsoft.Extensions.Configuration;
+
 using MongoDB.Driver;
-using NRModel;
 
-namespace Database;
+namespace Core;
 
-public class CosmosDbContext
+public class MongoDbContext
 {
     private readonly MongoClient client;
-
     public readonly IMongoDatabase database;
 
-    public CosmosDbContext()
+    public MongoDbContext(IConfiguration configuration) 
     {
         BsonSerializer.RegisterSerializer(new DateTimeOffsetSerializer(BsonType.DateTime));
 
-        string? connectionString = Environment.GetEnvironmentVariable("CosmosConnectionString");
-        string databaseName = "wydCentral";
+        string connectionString = configuration.GetConnectionString("MongoDB")
+            ?? throw new Exception("Database connection failed: 'ConnectionStrings:MongoDB' is not set in configuration.");
 
-        if (string.IsNullOrEmpty(connectionString))
-        {
-            throw new Exception("Database connection failed: no connection string");
-        }
-
-        if (string.IsNullOrEmpty(databaseName))
-        {
-            throw new InvalidOperationException(
-                "Database connection failed: CosmosDatabaseName is not set."
-            );
-        }
+        string databaseName = configuration.GetValue<string>("MongoDB:DatabaseName")
+            ?? throw new InvalidOperationException("Database connection failed: 'MongoDB:DatabaseName' is not set in configuration.");
 
         try
         {
@@ -76,9 +68,9 @@ public class CosmosDbContext
         //await InitializeCollectionAsync("Profiles", "_id");
 
         await InitializeCollectionAsync("ProfileEvents", "profileId");
-        await CreateIndexAsync<ProfileEventDocument>("ProfileEvents", "eventUpdatedAt");
-        await CreateIndexAsync<ProfileEventDocument>("ProfileEvents", "eventStartTime");
-        await CreateIndexAsync<ProfileEventDocument>("ProfileEvents", "eventEndTime");
+        await CreateIndexAsync<ProfileEvent>("ProfileEvents", "eventUpdatedAt");
+        await CreateIndexAsync<ProfileEvent>("ProfileEvents", "eventStartTime");
+        await CreateIndexAsync<ProfileEvent>("ProfileEvents", "eventEndTime");
 
         await InitializeCollectionAsync("EventProfiles", "eventId");
 

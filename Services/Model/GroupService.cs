@@ -1,4 +1,4 @@
-using Model;
+/* using Model;
 using Database;
 
 namespace Service;
@@ -16,4 +16,4 @@ public class GroupService(WydDbContext context)
     {
         return db.Groups.Where(g => groupIds.Contains(g.Id)).ToHashSet();
     }
-}
+} */

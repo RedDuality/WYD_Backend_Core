@@ -1,4 +1,4 @@
-using Google.Cloud.Firestore;
+/* using Google.Cloud.Firestore;
 using Model;
 
 namespace Service;
@@ -115,3 +115,4 @@ public class NotificationService
         await Send([hash], UpdateType.UpdateEvent, "prova", null);
     }
 }
+ */

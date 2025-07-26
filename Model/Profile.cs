@@ -1,9 +1,10 @@
+using Core.Model.Base;
 using MongoDB.Bson;
 using MongoDB.Bson.Serialization.Attributes;
 
-namespace NRModel
+namespace Core.Model
 {
-    public class ProfileDocument : BaseCreatedEntity
+    public class Profile : BaseCreatedEntity
     {
         [BsonElement("tag")]
         public required string Tag { get; set; }

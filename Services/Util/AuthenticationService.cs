@@ -1,4 +1,4 @@
-using FirebaseAdmin;
+/* using FirebaseAdmin;
 using FirebaseAdmin.Auth;
 using Google.Apis.Auth.OAuth2;
 using Microsoft.IdentityModel.Tokens;
@@ -72,4 +72,4 @@ public class AuthenticationService() : IAuthenticationService
         return new UserRecord(userRecord.Email, userRecord.Uid);
     }
 
-}
+} */

@@ -1,4 +1,4 @@
-namespace NRModel
+namespace Core.Model.Util
 {
     public enum EventUpdateType
     {

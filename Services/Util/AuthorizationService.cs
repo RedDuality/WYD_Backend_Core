@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Http;
+/* using Microsoft.AspNetCore.Http;
 using Model;
 
 namespace Service;
@@ -34,4 +34,4 @@ public class AuthorizationService(RequestService requestService, ProfileService 
         return _profileService.RetrieveByHash(profileHash);
     }
 
-}
+} */

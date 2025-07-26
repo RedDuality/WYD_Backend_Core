@@ -1,11 +1,12 @@
 using System.Diagnostics.CodeAnalysis;
+using Core.Model.Base;
 using MongoDB.Bson;
 using MongoDB.Bson.Serialization.Attributes;
 
-namespace NRModel
+namespace Core.Model
 {
     [method: SetsRequiredMembers]
-    public class EventProfileDocument(ProfileEventDocument profileEventDocument) : BaseEntity
+    public class EventProfile(ProfileEvent profileEventDocument) : BaseEntity
     {
         [BsonElement("eventId")]
         public required ObjectId EventId { get; set; } = profileEventDocument.EventId;

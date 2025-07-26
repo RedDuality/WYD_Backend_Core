@@ -1,3 +1,4 @@
+using Core.Model.Base;
 using MongoDB.Bson;
 using MongoDB.Bson.Serialization.Attributes;
 

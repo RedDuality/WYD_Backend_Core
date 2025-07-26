@@ -1,7 +1,8 @@
+using Core.Model.Base;
 using MongoDB.Bson;
 using MongoDB.Bson.Serialization.Attributes;
 
-namespace NRModel
+namespace Core.Model
 {
     public class Event : BaseDateEntity
     {

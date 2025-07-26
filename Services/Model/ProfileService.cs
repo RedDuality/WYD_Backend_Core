@@ -1,4 +1,4 @@
-using Model;
+/* using Model;
 using Database;
 using Dto;
 
@@ -78,4 +78,4 @@ public class ProfileService(WydDbContext wydDbContext)
                  .Take(5).Select(p => new ProfileDto(p)).ToList();
     }
 
-}
+} */

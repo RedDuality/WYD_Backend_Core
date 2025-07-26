@@ -1,4 +1,4 @@
-using System.Collections.Concurrent;
+/* using System.Collections.Concurrent;
 using Azure.Storage.Blobs;
 using Dto;
 using Model;
@@ -28,7 +28,7 @@ public class BlobService
         { "video/quicktime", ".mov" },
         { "video/x-ms-wmv", ".wmv" },
         { "video/x-flv", ".flv" },
-        { "video/x-matroska", ".mkv" }*/
+        { "video/x-matroska", ".mkv" }*//*
     };
 
     private static string SanifyBlobData(BlobData blobData)
@@ -55,26 +55,6 @@ public class BlobService
 
         return MimeTypeToExtension[blobData.MimeType.ToLower()];
     }
-
-    /*
-        public static async Task<BlobContainerClient> GetContainerClientAsync(string parentHash)
-        {
-            var connectionString =
-                Environment.GetEnvironmentVariable("BlobConnectionString")
-                ?? throw new Exception("BlobConnectionString not found");
-    
-            string containerName = parentHash.ToLower(); // Use event hash as container name
-    
-            var containerClient = new BlobServiceClient(connectionString).GetBlobContainerClient(
-                containerName
-            );
-            await containerClient.CreateIfNotExistsAsync(
-                publicAccessType: Azure.Storage.Blobs.Models.PublicAccessType.Blob
-            );
-    
-            return containerClient;
-        }
-    */
 
     public static async Task<BlobContainerClient> GetContainerClientAsync(string parentHash)
     {
@@ -121,3 +101,4 @@ public class BlobService
         return extension;
     }
 }
+ */

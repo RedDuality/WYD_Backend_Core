@@ -1,5 +1,5 @@
 
-namespace NRModel
+namespace Core.Model.Util
 {
     public class EventUpdateQueueMessage(string eventId)
     {

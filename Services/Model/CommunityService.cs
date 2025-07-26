@@ -1,4 +1,4 @@
-using Model;
+/* using Model;
 using Database;
 using Dto;
 
@@ -105,4 +105,4 @@ public class CommunityService(WydDbContext context, ProfileService profileServic
         return community;
     }
 
-}
+} */

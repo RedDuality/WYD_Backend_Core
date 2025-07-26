@@ -1,7 +1,7 @@
 using MongoDB.Bson;
 using MongoDB.Bson.Serialization.Attributes;
 
-namespace NRModel
+namespace Core.Model.Base
 {
     public abstract class BaseDateEntity : BaseCreatedEntity
     {

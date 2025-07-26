@@ -1,10 +1,11 @@
-using Model;
+using Core.Model.Base;
+using Core.Model.Enum;
 using MongoDB.Bson;
 using MongoDB.Bson.Serialization.Attributes;
 
-namespace NRModel
+namespace Core.Model
 {
-    public class ProfileEventDocument(Event ev, ObjectId profileId) : BaseDateEntity
+    public class ProfileEvent(Event ev, ObjectId profileId) : BaseDateEntity
     {
         [BsonElement("eventId")]
         public ObjectId EventId { get; set; } = ev.Id;

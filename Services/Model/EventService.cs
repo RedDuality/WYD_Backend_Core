@@ -1,4 +1,4 @@
-using System.Collections.Concurrent;
+/* using System.Collections.Concurrent;
 using Azure.Storage.Blobs;
 using Database;
 using Dto;
@@ -228,5 +228,6 @@ public class EventService(
             return true;
 
         }
-*/
+*//*
 }
+ */

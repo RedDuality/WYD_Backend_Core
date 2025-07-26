@@ -1,4 +1,4 @@
-using System.Security.Cryptography;
+/* using System.Security.Cryptography;
 
 namespace Service;
 
@@ -16,3 +16,4 @@ public class HashService()
         return result;
     }
 }
+ */
