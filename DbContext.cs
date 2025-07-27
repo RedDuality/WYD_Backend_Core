@@ -14,7 +14,7 @@ public class MongoDbContext
     private readonly MongoClient client;
     public readonly IMongoDatabase database;
 
-    public MongoDbContext(IConfiguration configuration) 
+    public MongoDbContext(IConfiguration configuration)
     {
         BsonSerializer.RegisterSerializer(new DateTimeOffsetSerializer(BsonType.DateTime));
 
@@ -63,74 +63,89 @@ public class MongoDbContext
 
     public async Task Init()
     {
-        Console.WriteLine("I was here!");
-        /*
-        //await InitializeCollectionAsync("Events", "_id");
+        Console.WriteLine("Initializing MongoDB collections...");
 
-        //await InitializeCollectionAsync("Profiles", "_id");
+        var collectionNames = await database.ListCollectionNames().ToListAsync();
+        var isShardingEnabled = await IsDatabaseShardingEnabledAsync(database.DatabaseNamespace.DatabaseName);
 
-        await InitializeCollectionAsync("ProfileEvents", "profileId");
+        if (!collectionNames.Contains("Events"))
+            await InitializeCollectionAsync("Events", "_id", isShardingEnabled);
+
+        if (!collectionNames.Contains("Profiles"))
+            await InitializeCollectionAsync("Profiles", "_id", isShardingEnabled);
+
+        if (!collectionNames.Contains("ProfileEvents"))
+            await InitializeCollectionAsync("ProfileEvents", "profileId", isShardingEnabled);
+
         await CreateIndexAsync<ProfileEvent>("ProfileEvents", "eventUpdatedAt");
         await CreateIndexAsync<ProfileEvent>("ProfileEvents", "eventStartTime");
         await CreateIndexAsync<ProfileEvent>("ProfileEvents", "eventEndTime");
 
-        await InitializeCollectionAsync("EventProfiles", "eventId");
 
-        //await InitializeCollectionAsync("Images", "eventId");
-        */
+        if (!collectionNames.Contains("EventProfiles"))
+            await InitializeCollectionAsync("EventProfiles", "eventId", isShardingEnabled);
+
+        if (!collectionNames.Contains("Images"))
+            await InitializeCollectionAsync("Images", "eventId", isShardingEnabled);
+
+        Console.WriteLine("MongoDB collection initialization complete.", isShardingEnabled);
     }
 
-    private async Task InitializeCollectionAsync(string collectionName, string partitionKeyFieldName)
+    private async Task<bool> IsDatabaseShardingEnabledAsync(string databaseName)
     {
-        if (string.IsNullOrWhiteSpace(collectionName))
-        {
-            throw new ArgumentException(
-                "Collection name cannot be null or empty.",
-                nameof(collectionName)
-            );
-        }
-        if (string.IsNullOrWhiteSpace(partitionKeyFieldName))
-        {
-            throw new ArgumentException(
-                "Partition key field name cannot be null or empty.",
-                nameof(partitionKeyFieldName)
-            );
-        }
-
-        var adminDatabase = client.GetDatabase("admin");
-
-        var shardCommand = new BsonDocument
-        {
-            { "shardCollection", $"{database.DatabaseNamespace.DatabaseName}.{collectionName}" },
-            {
-                "key",
-                new BsonDocument { { partitionKeyFieldName, "hashed" } }
-            },
-        };
-
+        var configDatabase = client.GetDatabase("config");
         try
         {
-            var result = await adminDatabase.RunCommandAsync<BsonDocument>(shardCommand);
+            var databasesCollection = configDatabase.GetCollection<BsonDocument>("databases");
+            var filter = Builders<BsonDocument>.Filter.Eq("_id", databaseName);
+            var dbInfo = await databasesCollection.Find(filter).FirstOrDefaultAsync();
+
+            return dbInfo != null && dbInfo.TryGetValue("partitioned", out var partitionedValue) && partitionedValue.AsBoolean;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Warning: Could not determine sharding status for database '{databaseName}'. Error: {ex.Message}");
+            // If we can't determine, assume not sharded or proceed with sharding attempt and let it fail
+            return false;
+        }
+    }
+
+
+    public async Task InitializeCollectionAsync(string collectionName, string partitionKeyFieldName, bool sharding)
+    {
+        if (sharding)
+            await CreateShardedCollectionAsync(collectionName, partitionKeyFieldName);
+        else
+            await CreateUnshardedCollectionAsync(collectionName);
+    }
+
+    private async Task CreateShardedCollectionAsync(string collectionName, string partitionKeyFieldName)
+    {
+        Console.WriteLine($"Attempting to shard collection '{database.DatabaseNamespace.DatabaseName}.{collectionName}'...");
+        try
+        {
+            var adminDatabase = client.GetDatabase("admin");
+
+            var shardCommand = new BsonDocument
+            {
+                { "shardCollection", $"{database.DatabaseNamespace.DatabaseName}.{collectionName}" },
+                { "key", new BsonDocument { { partitionKeyFieldName, "hashed" } } },
+            };
+            await adminDatabase.RunCommandAsync<BsonDocument>(shardCommand);
         }
         catch (MongoCommandException ex)
         {
-            if (ex.Code == 292 || ex.Message.Contains("already sharded"))
+            if (ex.Code == 292 || ex.Message.Contains("already sharded", StringComparison.OrdinalIgnoreCase))
             {
                 Console.WriteLine(
                     $"Collection '{database.DatabaseNamespace.DatabaseName}.{collectionName}' is already sharded. No action needed."
                 );
-            }
-            else if (ex.Message.Contains("a collection") && ex.Message.Contains("already exists"))
-            {
-                throw new Exception(
-                    $"Failed to shard the collection '{database.DatabaseNamespace.DatabaseName}.{collectionName}'. It already exists in an unsharded form, and cannot be sharded without specific data migration/conversion steps (or was implicitly created by a prior operation without sharding).",
-                    ex
-                );
+                return;
             }
             else
             {
                 throw new Exception(
-                    $"Failed to shard the collection '{database.DatabaseNamespace.DatabaseName}.{collectionName}'. Ensure sharding is enabled for the database.",
+                    $"Failed to shard the collection '{database.DatabaseNamespace.DatabaseName}.{collectionName}' due to an unexpected MongoDB command error: {ex.Message}",
                     ex
                 );
             }
@@ -138,11 +153,105 @@ public class MongoDbContext
         catch (Exception ex)
         {
             throw new Exception(
-                $"An unexpected error occurred during sharding for collection '{database.DatabaseNamespace.DatabaseName}.{collectionName}'.",
+                $"An unexpected error occurred during collection initialization for '{database.DatabaseNamespace.DatabaseName}.{collectionName}'.",
                 ex
             );
         }
+
+        Console.WriteLine($"Collection '{database.DatabaseNamespace.DatabaseName}.{collectionName}' sharded successfully.");
     }
+
+    private async Task CreateUnshardedCollectionAsync(string collectionName)
+    {
+        Console.WriteLine($"Creating unsharded collection '{database.DatabaseNamespace.DatabaseName}.{collectionName}'.");
+        try
+        {
+            await database.CreateCollectionAsync(collectionName);
+        }
+        catch (MongoCommandException ex)
+        {
+            if (ex.Code == 48 || ex.Message.Contains("already exists", StringComparison.OrdinalIgnoreCase))
+            {
+                Console.WriteLine($"Collection '{collectionName}' already exists (unsharded). No action needed.");
+            }
+            else
+            {
+                throw new Exception($"Failed to create unsharded collection '{collectionName}': {ex.Message}", ex);
+            }
+        }
+        catch (Exception ex)
+        {
+            throw new Exception($"An unexpected error occurred while creating unsharded collection '{collectionName}': {ex.Message}", ex);
+        }
+
+        Console.WriteLine($"Collection '{collectionName}' ensured to exist (unsharded).");
+    }
+
+    /*
+        private async Task InitializeCollectionAsync(string collectionName, string partitionKeyFieldName)
+        {
+            if (string.IsNullOrWhiteSpace(collectionName))
+            {
+                throw new ArgumentException(
+                    "Collection name cannot be null or empty.",
+                    nameof(collectionName)
+                );
+            }
+            if (string.IsNullOrWhiteSpace(partitionKeyFieldName))
+            {
+                throw new ArgumentException(
+                    "Partition key field name cannot be null or empty.",
+                    nameof(partitionKeyFieldName)
+                );
+            }
+
+            var adminDatabase = client.GetDatabase("admin");
+
+            var shardCommand = new BsonDocument
+            {
+                { "shardCollection", $"{database.DatabaseNamespace.DatabaseName}.{collectionName}" },
+                {
+                    "key",
+                    new BsonDocument { { partitionKeyFieldName, "hashed" } }
+                },
+            };
+
+            try
+            {
+                var result = await adminDatabase.RunCommandAsync<BsonDocument>(shardCommand);
+            }
+            catch (MongoCommandException ex)
+            {
+                if (ex.Code == 292 || ex.Message.Contains("already sharded"))
+                {
+                    Console.WriteLine(
+                        $"Collection '{database.DatabaseNamespace.DatabaseName}.{collectionName}' is already sharded. No action needed."
+                    );
+                }
+                else if (ex.Message.Contains("a collection") && ex.Message.Contains("already exists"))
+                {
+                    throw new Exception(
+                        $"Failed to shard the collection '{database.DatabaseNamespace.DatabaseName}.{collectionName}'. It already exists in an unsharded form, and cannot be sharded without specific data migration/conversion steps (or was implicitly created by a prior operation without sharding).",
+                        ex
+                    );
+                }
+                else
+                {
+                    throw new Exception(
+                        $"Failed to shard the collection '{database.DatabaseNamespace.DatabaseName}.{collectionName}'. Ensure sharding is enabled for the database.",
+                        ex
+                    );
+                }
+            }
+            catch (Exception ex)
+            {
+                throw new Exception(
+                    $"An unexpected error occurred during sharding for collection '{database.DatabaseNamespace.DatabaseName}.{collectionName}'.",
+                    ex
+                );
+            }
+        }
+    */
 
     private async Task CreateIndexAsync<TDocument>(
         string collectionName,
