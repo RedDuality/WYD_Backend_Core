@@ -1,4 +1,3 @@
-/*
 using Core.Model.Enum;
 
 namespace Core.Model.Dto;
@@ -13,13 +12,13 @@ public class ProfileEventDto
     // Parameterized constructor for custom initialization
     public ProfileEventDto(ProfileEvent pe)
     {
-        ProfileHash = pe.Profile.Hash;
+        ProfileHash = pe.ProfileId.ToString();
         Role = pe.Role;
         Confirmed = pe.Confirmed;
-        Trusted = pe.Trusted;
+        //TODO
+        Trusted = false;
     }
 
     // Parameterless constructor for deserialization
-    public ProfileEventDto() { }
+    //public ProfileEventDto() { }
 }
-*/

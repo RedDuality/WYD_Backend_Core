@@ -38,19 +38,29 @@ public class MongoDbService(MongoDbContext dbContext)
     public async Task<T> ExecuteInTransactionAsync<T>(Func<IClientSessionHandle, Task<T>> transactionalLogic)
     {
         using var session = await dbContext.GetNewSession();
-        session.StartTransaction();
-        try
-        {
-            T result = await transactionalLogic(session);
-            await session.CommitTransactionAsync();
 
-            return result;
-        }
-        catch (Exception ex)
+        bool transactionsSupported = dbContext.AreTransactionsSupported();
+
+        if (transactionsSupported)
         {
-            Console.WriteLine($"Error during transaction: {ex.Message}");
-            await session.AbortTransactionAsync();
-            throw;
+            try
+            {
+                session.StartTransaction();
+                T result = await transactionalLogic(session);
+                await session.CommitTransactionAsync();
+                return result;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error during transaction: {ex.Message}");
+                await session.AbortTransactionAsync();
+                throw; 
+            }
+        }
+        else
+        {
+            Console.WriteLine("Transactions are not supported by the current database technology. Executing logic without a transaction.");
+            return await transactionalLogic(session);
         }
     }
 

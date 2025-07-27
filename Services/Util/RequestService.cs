@@ -1,28 +1,31 @@
-/* using System.Text;
+using System.Text;
 using System.Text.Json;
-using AutoMapper.Configuration.Annotations;
-using Azure;
+//using AutoMapper.Configuration.Annotations;
+//using Azure;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Primitives;
+//using Microsoft.Extensions.Primitives;
 using Microsoft.IdentityModel.Tokens;
-using Model;
 
-namespace Service;
+namespace Core.Services.Util;
 
 public class RequestService(
-    JsonSerializerOptions jsonSerializerOptions,
-    UserService userService,
-    IAuthenticationService authenticationService,
-    NotificationService notificationService
+    //JsonSerializerOptions jsonSerializerOptions,
+    //UserService userService,
+    //IAuthenticationService authenticationService,
+    //NotificationService notificationService
 )
 {
+
+    /*
     private readonly JsonSerializerOptions _jsonSerializerOptions = jsonSerializerOptions;
 
     private readonly UserService _userService = userService;
 
     private readonly IAuthenticationService _authenticationService = authenticationService;
+
     private readonly NotificationService notificationService = notificationService;
+
 
     public async Task<User> VerifyRequestAsync(HttpRequest req)
     {
@@ -104,7 +107,7 @@ public class RequestService(
             Console.WriteLine(e.Message);
         }
     }
-
+*/
     public static IActionResult GetErrorResult(Exception e)
     {
         return e switch
@@ -138,4 +141,3 @@ public class RequestService(
         };
     }
 }
- */

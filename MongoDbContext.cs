@@ -6,6 +6,7 @@ using Microsoft.Extensions.Configuration;
 
 using MongoDB.Driver;
 using Core.Model;
+using MongoDB.Driver.Core.Servers;
 
 namespace Core;
 
@@ -13,6 +14,8 @@ public class MongoDbContext
 {
     private readonly MongoClient client;
     public readonly IMongoDatabase database;
+
+    private bool? _transactionsSupported;
 
     public MongoDbContext(IConfiguration configuration)
     {
@@ -51,7 +54,43 @@ public class MongoDbContext
         return database.GetCollection<TDocument>(collectionName);
     }
 
+    public bool AreTransactionsSupported()
+    {
+        // Cache the result after the first check to avoid repeated server topology checks
+        if (_transactionsSupported.HasValue)
+            return _transactionsSupported.Value;
+        
 
+        // Get the current server description
+        ServerDescription? serverDescription = null;
+        var servers = client.Cluster.Description.Servers; 
+
+        if (servers.Count > 0)
+            serverDescription = servers[0];
+
+        if (serverDescription != null)
+        {
+            // Check the server type for transaction support
+            // Transactions are supported on ReplicaSetPrimary, ReplicaSetSecondary, Sharded, and Unknown (if it eventually connects to one of the above)
+            // They are NOT supported on Standalone.
+            _transactionsSupported = serverDescription.Type switch
+            {
+                ServerType.ReplicaSetPrimary => true,
+                ServerType.ReplicaSetSecondary => true,
+                ServerType.ShardRouter => true, // MongoDB 4.2+ supports transactions on sharded clusters
+                ServerType.Standalone => false, // Standalone servers do not support transactions
+                ServerType.Unknown => false, // If the server type is unknown, assume no transaction support for safety
+                _ => false // Default to false for any other unexpected server types
+            };
+        }
+        else
+        {
+            _transactionsSupported = false;
+            Console.WriteLine("Warning: Could not determine MongoDB server type. Assuming transactions are not supported.");
+        }
+
+        return _transactionsSupported.Value;
+    }
 
 
     #region init
