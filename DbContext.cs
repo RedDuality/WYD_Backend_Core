@@ -63,6 +63,8 @@ public class MongoDbContext
 
     public async Task Init()
     {
+        Console.WriteLine("I was here!");
+        /*
         //await InitializeCollectionAsync("Events", "_id");
 
         //await InitializeCollectionAsync("Profiles", "_id");
@@ -75,6 +77,7 @@ public class MongoDbContext
         await InitializeCollectionAsync("EventProfiles", "eventId");
 
         //await InitializeCollectionAsync("Images", "eventId");
+        */
     }
 
     private async Task InitializeCollectionAsync(string collectionName, string partitionKeyFieldName)
