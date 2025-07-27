@@ -2,9 +2,9 @@ using Core.Model.Base;
 using MongoDB.Bson;
 using MongoDB.Bson.Serialization.Attributes;
 
-namespace NRModel
+namespace Core.Model
 {
-    public class ImageDocument : BaseDateEntity
+    public class Image : BaseDateEntity
     {
         [BsonElement("eventId")]
         public required ObjectId EventId { get; set; }

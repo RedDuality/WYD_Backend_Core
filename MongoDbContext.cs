@@ -1,4 +1,3 @@
-using Core.Model;
 using Core.Model.Base;
 using MongoDB.Bson;
 using MongoDB.Bson.Serialization;
@@ -6,6 +5,7 @@ using MongoDB.Bson.Serialization.Serializers;
 using Microsoft.Extensions.Configuration;
 
 using MongoDB.Driver;
+using Core.Model;
 
 namespace Core;
 
@@ -38,17 +38,7 @@ public class MongoDbContext
         }
     }
 
-    public async Task<List<string>> CheckConnection()
-    {
-        try
-        {
-            return await (await client.ListDatabaseNamesAsync()).ToListAsync();
-        }
-        catch (Exception ex)
-        {
-            throw new Exception("An unexpected error occurred during connection check.", ex);
-        }
-    }
+
 
     public async Task<IClientSessionHandle> GetNewSession()
     {
@@ -61,12 +51,46 @@ public class MongoDbContext
         return database.GetCollection<TDocument>(collectionName);
     }
 
+
+
+
+    #region init
+
+    private async Task<List<string>> ListCollectionsAsync()
+    {
+        return await database.ListCollectionNames().ToListAsync();
+    }
+
+    private string GetDatabaseName()
+    {
+        return database.DatabaseNamespace.DatabaseName;
+    }
+
+    private async Task<bool> IsDatabaseShardingEnabledAsync()
+    {
+        var configDatabase = client.GetDatabase("config");
+        try
+        {
+            var databasesCollection = configDatabase.GetCollection<BsonDocument>("databases");
+            var filter = Builders<BsonDocument>.Filter.Eq("_id", GetDatabaseName());
+            var dbInfo = await databasesCollection.Find(filter).FirstOrDefaultAsync();
+
+            return dbInfo != null && dbInfo.TryGetValue("partitioned", out var partitionedValue) && partitionedValue.AsBoolean;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Warning: Could not determine sharding status for database '{GetDatabaseName}'. Error: {ex.Message}");
+            // If we can't determine, assume not sharded or proceed with sharding attempt and let it fail
+            return false;
+        }
+    }
+
     public async Task Init()
     {
         Console.WriteLine("Initializing MongoDB collections...");
 
-        var collectionNames = await database.ListCollectionNames().ToListAsync();
-        var isShardingEnabled = await IsDatabaseShardingEnabledAsync(database.DatabaseNamespace.DatabaseName);
+        var collectionNames = await ListCollectionsAsync();
+        var isShardingEnabled = await IsDatabaseShardingEnabledAsync();
 
         if (!collectionNames.Contains("Events"))
             await InitializeCollectionAsync("Events", "_id", isShardingEnabled);
@@ -91,24 +115,7 @@ public class MongoDbContext
         Console.WriteLine("MongoDB collection initialization complete.", isShardingEnabled);
     }
 
-    private async Task<bool> IsDatabaseShardingEnabledAsync(string databaseName)
-    {
-        var configDatabase = client.GetDatabase("config");
-        try
-        {
-            var databasesCollection = configDatabase.GetCollection<BsonDocument>("databases");
-            var filter = Builders<BsonDocument>.Filter.Eq("_id", databaseName);
-            var dbInfo = await databasesCollection.Find(filter).FirstOrDefaultAsync();
 
-            return dbInfo != null && dbInfo.TryGetValue("partitioned", out var partitionedValue) && partitionedValue.AsBoolean;
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Warning: Could not determine sharding status for database '{databaseName}'. Error: {ex.Message}");
-            // If we can't determine, assume not sharded or proceed with sharding attempt and let it fail
-            return false;
-        }
-    }
 
 
     public async Task InitializeCollectionAsync(string collectionName, string partitionKeyFieldName, bool sharding)
@@ -121,14 +128,14 @@ public class MongoDbContext
 
     private async Task CreateShardedCollectionAsync(string collectionName, string partitionKeyFieldName)
     {
-        Console.WriteLine($"Attempting to shard collection '{database.DatabaseNamespace.DatabaseName}.{collectionName}'...");
+        Console.WriteLine($"Attempting to shard collection '{GetDatabaseName()}.{collectionName}'...");
         try
         {
             var adminDatabase = client.GetDatabase("admin");
 
             var shardCommand = new BsonDocument
             {
-                { "shardCollection", $"{database.DatabaseNamespace.DatabaseName}.{collectionName}" },
+                { "shardCollection", $"{GetDatabaseName()}.{collectionName}" },
                 { "key", new BsonDocument { { partitionKeyFieldName, "hashed" } } },
             };
             await adminDatabase.RunCommandAsync<BsonDocument>(shardCommand);
@@ -138,14 +145,14 @@ public class MongoDbContext
             if (ex.Code == 292 || ex.Message.Contains("already sharded", StringComparison.OrdinalIgnoreCase))
             {
                 Console.WriteLine(
-                    $"Collection '{database.DatabaseNamespace.DatabaseName}.{collectionName}' is already sharded. No action needed."
+                    $"Collection '{GetDatabaseName()}.{collectionName}' is already sharded. No action needed."
                 );
                 return;
             }
             else
             {
                 throw new Exception(
-                    $"Failed to shard the collection '{database.DatabaseNamespace.DatabaseName}.{collectionName}' due to an unexpected MongoDB command error: {ex.Message}",
+                    $"Failed to shard the collection '{GetDatabaseName()}.{collectionName}' due to an unexpected MongoDB command error: {ex.Message}",
                     ex
                 );
             }
@@ -153,17 +160,17 @@ public class MongoDbContext
         catch (Exception ex)
         {
             throw new Exception(
-                $"An unexpected error occurred during collection initialization for '{database.DatabaseNamespace.DatabaseName}.{collectionName}'.",
+                $"An unexpected error occurred during collection initialization for '{GetDatabaseName()}.{collectionName}'.",
                 ex
             );
         }
 
-        Console.WriteLine($"Collection '{database.DatabaseNamespace.DatabaseName}.{collectionName}' sharded successfully.");
+        Console.WriteLine($"Collection '{GetDatabaseName()}.{collectionName}' sharded successfully.");
     }
 
     private async Task CreateUnshardedCollectionAsync(string collectionName)
     {
-        Console.WriteLine($"Creating unsharded collection '{database.DatabaseNamespace.DatabaseName}.{collectionName}'.");
+        Console.WriteLine($"Creating unsharded collection '{GetDatabaseName()}.{collectionName}'.");
         try
         {
             await database.CreateCollectionAsync(collectionName);
@@ -187,72 +194,6 @@ public class MongoDbContext
         Console.WriteLine($"Collection '{collectionName}' ensured to exist (unsharded).");
     }
 
-    /*
-        private async Task InitializeCollectionAsync(string collectionName, string partitionKeyFieldName)
-        {
-            if (string.IsNullOrWhiteSpace(collectionName))
-            {
-                throw new ArgumentException(
-                    "Collection name cannot be null or empty.",
-                    nameof(collectionName)
-                );
-            }
-            if (string.IsNullOrWhiteSpace(partitionKeyFieldName))
-            {
-                throw new ArgumentException(
-                    "Partition key field name cannot be null or empty.",
-                    nameof(partitionKeyFieldName)
-                );
-            }
-
-            var adminDatabase = client.GetDatabase("admin");
-
-            var shardCommand = new BsonDocument
-            {
-                { "shardCollection", $"{database.DatabaseNamespace.DatabaseName}.{collectionName}" },
-                {
-                    "key",
-                    new BsonDocument { { partitionKeyFieldName, "hashed" } }
-                },
-            };
-
-            try
-            {
-                var result = await adminDatabase.RunCommandAsync<BsonDocument>(shardCommand);
-            }
-            catch (MongoCommandException ex)
-            {
-                if (ex.Code == 292 || ex.Message.Contains("already sharded"))
-                {
-                    Console.WriteLine(
-                        $"Collection '{database.DatabaseNamespace.DatabaseName}.{collectionName}' is already sharded. No action needed."
-                    );
-                }
-                else if (ex.Message.Contains("a collection") && ex.Message.Contains("already exists"))
-                {
-                    throw new Exception(
-                        $"Failed to shard the collection '{database.DatabaseNamespace.DatabaseName}.{collectionName}'. It already exists in an unsharded form, and cannot be sharded without specific data migration/conversion steps (or was implicitly created by a prior operation without sharding).",
-                        ex
-                    );
-                }
-                else
-                {
-                    throw new Exception(
-                        $"Failed to shard the collection '{database.DatabaseNamespace.DatabaseName}.{collectionName}'. Ensure sharding is enabled for the database.",
-                        ex
-                    );
-                }
-            }
-            catch (Exception ex)
-            {
-                throw new Exception(
-                    $"An unexpected error occurred during sharding for collection '{database.DatabaseNamespace.DatabaseName}.{collectionName}'.",
-                    ex
-                );
-            }
-        }
-    */
-
     private async Task CreateIndexAsync<TDocument>(
         string collectionName,
         string fieldName,
@@ -262,9 +203,8 @@ public class MongoDbContext
     {
         try
         {
-            IMongoCollection<TDocument> collection = database.GetCollection<TDocument>(
-                collectionName
-            );
+            var collection = GetCollection<TDocument>(collectionName);
+
             var indexKeys = Builders<TDocument>.IndexKeys.Ascending(fieldName);
             var indexOptions = new CreateIndexOptions { Unique = isUnique };
             var indexModel = new CreateIndexModel<TDocument>(indexKeys, indexOptions);
@@ -287,4 +227,9 @@ public class MongoDbContext
             );
         }
     }
+
+
+
+    #endregion
+
 }

@@ -1,233 +1,135 @@
-/* using System.Collections.Concurrent;
-using Azure.Storage.Blobs;
-using Database;
-using Dto;
-using Model;
+using MongoDB.Driver;
+using MongoDB.Bson;
+using Core.Services.Util;
+using Core.Model;
 
-namespace Service;
+namespace Core.Services.Model;
 
-public class EventService(
-    WydDbContext context,
-    GroupService groupService,
-    ProfileService profileService
-)
+
+public class EventService(MongoDbService dbService, ProfileEventService profileEventService )//ServiceBusService sbs)
 {
-    private readonly WydDbContext db =
-        context
-        ?? throw new ArgumentNullException(nameof(context), "Database context cannot be null");
+    private readonly string collectionName = "Events";
 
-    private readonly GroupService groupService =
-        groupService
-        ?? throw new ArgumentNullException(nameof(context), "GroupService cannot be null");
-
-    private readonly ProfileService profileService = profileService;
-
-    public Event RetrieveByHash(string eventHash)
+    public async Task<Event> CreateEventAsync(Event newEvent, string profileId)
     {
-        return db.Events.FirstOrDefault(e => e.Hash == eventHash)
-            ?? throw new KeyNotFoundException($"Event with ID {eventHash} not found.");
-    }
-
-    public Event SharedWithHash(string eventHash, Profile profile)
-    {
-        if (string.IsNullOrEmpty(eventHash))
+        Event Event = await dbService.ExecuteInTransactionAsync(async (session) =>
         {
-            throw new ArgumentException("Event hash cannot be null or empty.", nameof(eventHash));
-        }
-
-        Event ev = RetrieveByHash(eventHash);
-
-        ev.Profiles.Add(profile);
-        db.SaveChanges();
-
-        return ev;
-    }
-
-    private Event CreateNewAndSave(EventDto eventDto)
-    {
-        Event newEvent = Event.FromDto(eventDto);
-
-        db.Events.Add(newEvent);
-        db.SaveChanges();
-        return newEvent;
-    }
-
-    public Event Create(EventDto dto, Profile profile)
-    {
-        Event newEvent;
-        using var transaction = db.Database.BeginTransaction();
-        try
-        {
-            newEvent = CreateNewAndSave(dto);
-            Share(newEvent, [profile]); //add profile to event
-
-            if (dto.ProfileEvents.Count != 0 && dto.ProfileEvents.First().Confirmed)
-                ConfirmOrDecline(newEvent, profile, true);
-
-            profileService.SetEventRole(newEvent, profile, EventRole.Owner);
-
-            transaction.Commit();
-        }
-        catch (Exception ex)
-        {
-            transaction.Rollback();
-            throw new InvalidOperationException(
-                "Error creating event. Transaction rolled back.",
-                ex
+            var createdEvent = await dbService.CreateOneAsync(collectionName, newEvent, session);
+            var newProfileEvent = new ProfileEvent
+            (
+                createdEvent, new ObjectId(profileId)
             );
-        }
+            await profileEventService.CreateProfileEventAsync(newProfileEvent, session);
 
-        return newEvent;
+            return createdEvent;
+        });
+
+        return Event;
     }
 
-    public Event UpdateAsync(EventDto dto)
+    public async Task<Event> RetrieveEventById(string id)
     {
-        Event eventToUpdate;
-        try
-        {
-            eventToUpdate = RetrieveByHash(dto.Hash!);
-            eventToUpdate.Update(dto);
-            db.SaveChanges();
-        }
-        catch (Exception ex)
-        {
-            throw new InvalidOperationException("Error updating event", ex);
-        }
-
-        //TODO check for removed images
-
-        return eventToUpdate;
+        return await dbService.RetrieveByIdAsync<Event>(collectionName, id);
     }
 
-    public async Task<Event> AddMultipleBlobs(string eventHash, HashSet<BlobData> blobDatas)
+/*
+    public async Task<List<EventDto>> RetrieveEventsByProfileId(string profileId, DateTimeOffset startTime, DateTimeOffset endTime)
     {
-        Event ev = RetrieveByHash(eventHash);
-        await AddMultipleBlobs(ev, blobDatas);
-        return ev;
-    }
+        var aggregate = dbService.GetAggregate<ProfileEvent>("ProfileEvents");
 
-    private async Task AddMultipleBlobs(Event ev, HashSet<BlobData> blobDatas)
-    {
-        var savedImagesCount = blobDatas.Count;
+        // Step 1: Match ProfileEvents by profileId and time range
+        var matchStage = aggregate
+            .Match(pe =>
+                pe.ProfileId == new ObjectId(profileId) &&
+                pe.EventStartTime <= endTime.ToUniversalTime() &&
+                pe.EventEndTime >= startTime.ToUniversalTime())
+            .Limit(40);
 
-        if (savedImagesCount > 0)
-        {
-            try
+        // Step 2: Lookup the corresponding Event for each ProfileEvent
+        var lookupStage = matchStage.Lookup<ProfileEvent, Event, ProfileEventWithCorrespondingEvents>(
+            dbService.GetCollection<Event>(collectionName),
+            pe => pe.EventId,
+            e => e.Id,
+            pe => pe.Events);
+
+        var projected = lookupStage
+            .Project(pe => new
             {
-                var container = await BlobService.GetContainerClientAsync(ev.Hash);
-                foreach (var bd in blobDatas)
-                {
-                    var newBlob = AddBlob(container, bd);
-                    ev.Blobs.Add(newBlob);
+                Event = pe.Events[0],
+                pe.ProfileId,
+                pe.Role,
+                pe.Confirmed
+            });
+
+        var intermediateResults = await projected.ToListAsync();
+
+        var result = intermediateResults.Select(pe => new EventDto
+        {
+            Hash = pe.Event.Id.ToString(),
+            Title = pe.Event.Title,
+            Description = pe.Event.Description,
+            StartTime = pe.Event.StartTime,
+            EndTime = pe.Event.EndTime,
+            ProfileEvents =
+            [
+                new ProfileEventDto {
+                    ProfileHash = pe.ProfileId.ToString(),
+                    Role = pe.Role,
+                    Confirmed = pe.Confirmed,
+                    Trusted = false
                 }
-            }
-            catch (Exception ex)
+            ]
+        }).ToList();
+
+        //var result = await projectStage.ToListAsync();
+
+
+        return result;
+
+    }
+
+
+
+    public async Task ShareEventAsync(String eventId, List<string> profileIds)
+    {
+        var ev = await RetrieveEventById(eventId);
+        await dbService.ExecuteInTransactionAsync(async (session) =>
+        {
+            //TODO make this without the for
+            foreach (var profileId in profileIds)
             {
-                throw new Exception("Error saving images: ", ex);
+                var newProfileEvent = new ProfileEvent
+                (
+                     ev, new ObjectId(profileId)
+                );
+                await profileEventService.CreateProfileEventAsync(newProfileEvent, session);
             }
 
-            try
-            {
-                await db.SaveChangesAsync();
-            }
-            catch
-            {
-                throw new ThreadInterruptedException("No images were saved");
-            }
-        }
-    }
-
-    private static Blob AddBlob(BlobContainerClient blobContainerClient, BlobData blobData)
-    {
-        Blob newBlob = new();
-        string extension = BlobService.UploadBlob(blobContainerClient, newBlob, blobData);
-        newBlob.Hash += extension;
-        return newBlob;
-    }
-
-    internal Event ShareToGroups(string eventHash, HashSet<int> groupIds)
-    {
-        Event ev = RetrieveByHash(eventHash);
-
-        var groups = groupService.Retrieve(groupIds).ToList();
-        var profiles = groups.SelectMany(g => g.Profiles).ToHashSet();
-
-        if (profiles.Count == 0)
-            throw new Exception("No Profile to add this event to!");
-
-        return Share(ev, profiles!);
-    }
-
-    public Event Share(Event ev, HashSet<Profile> profiles)
-    {
-        ev.Profiles.UnionWith(profiles);
-
-        try
-        {
-            db.SaveChanges();
-            return ev;
-        }
-        catch (Exception ex)
-        {
-            throw new InvalidOperationException("Error sharing event with profiles.", ex);
-        }
-    }
-
-    public Event ConfirmOrDecline(string eventHash, Profile profile, bool confirmed)
-    {
-        Event ev = RetrieveByHash(eventHash);
-        return ConfirmOrDecline(ev, profile, confirmed);
-    }
-
-    public Event ConfirmOrDecline(Event ev, Profile profile, bool confirmed)
-    {
-        //TODO check the start time is not after now
-        var profileEvent =
-            ev.ProfileEvents.Find(pe => pe.Profile.Id == profile.Id)
-            ?? throw new KeyNotFoundException(
-                $"ProfileEvent with Profile ID {profile.Id} not found for the given profile."
-            );
-        profileEvent.Confirmed = confirmed;
-
-        try
-        {
-            db.SaveChanges();
-        }
-        catch (Exception ex)
-        {
-            throw new InvalidOperationException(
-                "Error confirming or declining event for profile.",
-                ex
-            );
-        }
-        return ev;
-    }
-
-    public Event? DeleteForProfile(string eventHash, Profile profile)
-    {
-        Event ev = RetrieveByHash(eventHash);
-        ev.Profiles.Remove(profile);
-        if (ev.Profiles.Count == 0)
-        {
-            db.Remove(ev);
-            db.SaveChanges();
-            return null;
-        }
-        db.SaveChanges();
-        return ev;
-    }
-
-    /*
-        public HashSet<Profile> Delete(int id, int userId)
-        {
-            Event ev = db.Events.Single(e => e.Id == id);
-            if (ev.OwnerId != userId)
-                return false;
-            db.Remove(ev);
-            db.SaveChanges();
             return true;
+        });
 
-        }
-*//*
+    }
+
+    public async Task<Event> UpdateEventById(string id, string title)
+    {
+        Event updatedEvent = await dbService.ExecuteInTransactionAsync(async (session) =>
+        {
+            var updateDefinition = Builders<Event>.Update
+                .Set(e => e.Title, title)
+                .Set(e => e.UpdatedAt, DateTimeOffset.UtcNow);
+
+            var updatedEvent = await dbService.PatchUpdateAsync(collectionName, id, updateDefinition, session);
+
+            var updateNotification = new EventUpdateQueueMessage(updatedEvent.Id.ToString())
+            {
+                UpdatedAt = updatedEvent.UpdatedAt
+            };
+            await sbs.SendMessageAsync("eventupdate", updateNotification);
+
+            return updatedEvent;
+        });
+        return updatedEvent;
+
+    }
+*/
 }
- */
