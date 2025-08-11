@@ -1,23 +1,23 @@
 using MongoDB.Driver;
 using MongoDB.Bson;
-using Core.Services.Util;
-using Core.Model;
+using Core.Model.Join;
+using Core.Services.Database;
 
 namespace Core.Services.Model;
 
 public class EventProfileService(MongoDbService dbService)
 {
-    private readonly string collectionName = "EventProfiles";
+    private readonly CollectionName eventProfileCollection = CollectionName.EventProfiles;
 
     public async Task<EventProfile> CreateEventProfileAsync(EventProfile eventProfile, IClientSessionHandle session)
     {
-        return await dbService.CreateOneAsync(collectionName, eventProfile, session);
+        return await dbService.CreateOneAsync(eventProfileCollection, eventProfile, session);
     }
 
     public async Task<List<EventProfile>> FindAllByEventId(string eventId)
     {
         var result = await dbService.FindAsync(
-            collectionName,
+            eventProfileCollection,
             Builders<EventProfile>.Filter.Eq(ep => ep.EventId, new ObjectId(eventId)));
 
         var eventProfiles = result?.ToList();

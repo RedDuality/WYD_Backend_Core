@@ -1,95 +1,65 @@
-/* using Model;
-using Database;
-using Dto;
+
+using Core.Model;
+using Core.Services.Database;
+using Core.Services.Interfaces;
+using Core.Services.Model;
+using MongoDB.Driver;
 
 namespace Service;
 
 
-public class UserService(WydDbContext context, AccountService accountService, ProfileService profileService, IAuthenticationService authenticationService)
+public class UserService(MongoDbService dbService, ProfileService profileService, IAuthenticationService authenticationService)
 {
-    private readonly WydDbContext db = context ?? throw new ArgumentNullException(nameof(context), "Database context cannot be null.");
-    private readonly AccountService _accountService = accountService ?? throw new ArgumentNullException(nameof(accountService), "Account service cannot be null.");
-    private readonly ProfileService _profileService = profileService ?? throw new ArgumentNullException(nameof(profileService), "Profile service cannot be null.");
 
-    private readonly IAuthenticationService _authenticationService = authenticationService;
+    private readonly CollectionName userCollection = CollectionName.Users;
 
-    public User? RetrieveOrNull(int id)
+    private async Task<User?> RetrieveByAccountUid(string accountUid)
     {
-        return db.Users.Find(id);
+
+        var filter = Builders<User>.Filter.ElemMatch(
+            u => u.Accounts,
+            a => a.Uid == accountUid);
+
+        var users = await dbService.FindAsync(userCollection, filter);
+
+        User? user = users.FirstOrDefault();
+
+        return user;
     }
 
     public async Task<User> GetOrCreateAsync(string uid)
     {
-        Account? account = _accountService.Retrieve(uid);
+        var user = await RetrieveByAccountUid(uid);
 
-        if (account == null) //registration
-        {
-            UserRecord UR = await _authenticationService.RetrieveAccount(uid);
-            return Create(UR.Email, UR.Uid);
-        }
-        return account.User;
+        return user ?? await CreateUserAsync(uid);
     }
 
-//TODO make private
-    public User Create(string Email, string Uid)
+    private async Task<User> CreateUserAsync(string accountUid)
     {
-        User user;
-        using var transaction = db.Database.BeginTransaction();
-        try
-        {
-            // Create a new user
-            user = new User();
-            db.Users.Add(user);
-            db.SaveChanges();
+        UserRecord UR = await authenticationService.RetrieveAccount(accountUid);
 
-            // Create associated account
-            var account = new Account
+        User user = await dbService.ExecuteInTransactionAsync(async (session) =>
+        {
+            var newAccount = new Account(UR.Uid, UR.Email);
+
+            var newUser = new User
             {
-                Mail = Email,
-                Uid = Uid,
-                User = user
+                Accounts = { newAccount }
             };
 
-            _accountService.Create(account);
+            var user = await dbService.CreateOneAsync(userCollection, newUser, session);
 
-            // Create associated profile
-            var profile = new Profile()
-            {
-                Name = Email,
-                Tag = Email
-            };
+            var profile = await profileService.CreateAsync(UR.Email, UR.Email, user, session);
 
-            AddProfile(user, profile);
+            await profileService.AddUserAsync(profile, user, session);
 
-            transaction.Commit();
-        }
-        catch (Exception ex)
-        {
-            transaction.Rollback();
-            throw new InvalidOperationException("Error creating user " + ex.Message);
-        }
+            return user;
+        });
+
         return user;
     }
-
-    public User AddProfile(User user, Profile profile)
-    {
-        if (user == null) throw new ArgumentNullException(nameof(user), "User cannot be null.");
-        if (profile == null) throw new ArgumentNullException(nameof(profile), "Profile cannot be null.");
-
-        try
-        {
-            _profileService.Create(profile);
-            user.MainProfile = profile;
-            user.Profiles.Add(profile);
-            db.SaveChanges();
-            return user;
-        }
-        catch (Exception ex)
-        {
-            throw new InvalidOperationException("Error adding profile to user.", ex);
-        }
-    }
-
+}
+/*
     public static async Task<List<EventDto>> RetrieveEventsAsync(User user)
     {
         var tasks = user.Profiles.Select(async profile =>

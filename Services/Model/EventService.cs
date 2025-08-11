@@ -1,20 +1,20 @@
-using MongoDB.Driver;
 using MongoDB.Bson;
-using Core.Services.Util;
 using Core.Model;
+using Core.Model.Join;
+using Core.Services.Database;
 
 namespace Core.Services.Model;
 
 
 public class EventService(MongoDbService dbService, ProfileEventService profileEventService )//ServiceBusService sbs)
 {
-    private readonly string collectionName = "Events";
+    private readonly CollectionName eventCollection = CollectionName.Events;
 
     public async Task<Event> CreateEventAsync(Event newEvent, string profileId)
     {
         Event Event = await dbService.ExecuteInTransactionAsync(async (session) =>
         {
-            var createdEvent = await dbService.CreateOneAsync(collectionName, newEvent, session);
+            var createdEvent = await dbService.CreateOneAsync(eventCollection, newEvent, session);
             var newProfileEvent = new ProfileEvent
             (
                 createdEvent, new ObjectId(profileId)
@@ -29,7 +29,7 @@ public class EventService(MongoDbService dbService, ProfileEventService profileE
 
     public async Task<Event> RetrieveEventById(string id)
     {
-        return await dbService.RetrieveByIdAsync<Event>(collectionName, id);
+        return await dbService.RetrieveByIdAsync<Event>(eventCollection, id);
     }
 
 /*

@@ -1,5 +1,3 @@
-using Core.Model.Enum;
-
 namespace Core.Model.Dto;
 
 public class ProfileEventDto

@@ -1,46 +1,42 @@
-/* using Model;
-using Database;
-using Dto;
+using Core.Model;
+using Core.Model.Join;
+using Core.Services.Database;
+using MongoDB.Driver;
 
-namespace Service;
-public class ProfileService(WydDbContext wydDbContext)
+namespace Core.Services.Model;
+
+public class ProfileService(MongoDbService dbService, ProfileDetailsService profileDetailsService)
 {
+    private readonly CollectionName profileCollection = CollectionName.Profiles;
 
-    readonly WydDbContext db = wydDbContext;
-
-    public Profile? RetrieveOrNull(int id)
+    public async Task<Profile> CreateAsync(string tag, string name, User user, IClientSessionHandle session)
     {
-        return db.Profiles.Find(id);
+        var profile = new Profile
+        {
+            Tag = tag,
+            Name = name
+        };
 
-    }
+        await dbService.CreateOneAsync(profileCollection, profile, session);
 
-    public Profile Retrieve(int id)
-    {
-        return db.Profiles.Find(id) ?? throw new KeyNotFoundException("Profile");
-    }
-
-    public Profile RetrieveByHash(string hash)
-    {
-        return db.Profiles.Where(p => p.Hash.Equals(hash)).First() ?? throw new KeyNotFoundException("Profile");
-    }
-
-
-    public HashSet<ProfileDto> RetrieveProfiles(HashSet<string> profileHashes)
-    {
-        return db.Profiles.Where(p => profileHashes.Contains(p.Hash)).Select(p => new ProfileDto(p)).ToHashSet();
-    }
-
-    public Profile Create(Profile profile)
-    {
-        db.Profiles.Add(profile);
-        db.SaveChanges();
+        await profileDetailsService.CreateAsync(profile, user, session);
         return profile;
     }
 
-    public static List<EventDto> RetrieveEvents(Profile profile)
+    public async Task<Profile> AddUserAsync(Profile profile, User user, IClientSessionHandle session)
     {
-        return profile.Events.Select(ev => new EventDto(ev)).ToList();
+        var userProfile = new UserProfile(profile);
+
+        var userUpdate = Builders<User>.Update.Push(u => u.Profiles, userProfile);
+        await dbService.PatchUpdateAsync(CollectionName.Users, user.Id, userUpdate, session);
+
+        await profileDetailsService.AddUser(profile.DetailsId, user, session);
+        return profile;
     }
+
+}
+/*
+
 
     public Profile UpdateAsync(ProfileDto dto)
     {

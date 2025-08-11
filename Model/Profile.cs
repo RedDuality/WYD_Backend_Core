@@ -11,5 +11,9 @@ namespace Core.Model
 
         [BsonElement("name")]
         public required string Name { get; set; }
+
+        [BsonElement("detailsId")]
+
+        public ObjectId DetailsId { get; set; }
     }
 }

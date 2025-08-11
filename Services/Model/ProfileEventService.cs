@@ -1,5 +1,6 @@
-using Core.Model;
-using Core.Services.Util;
+
+using Core.Model.Join;
+using Core.Services.Database;
 using MongoDB.Bson;
 using MongoDB.Driver;
 
@@ -7,11 +8,11 @@ namespace Core.Services.Model;
 
 public class ProfileEventService(MongoDbService dbService, EventProfileService eventProfileService)
 {
-    private readonly string collectionName = "ProfileEvents";
+    private readonly CollectionName profileEventCollection = CollectionName.ProfileEvents;
 
     public async Task<ProfileEvent> CreateProfileEventAsync(ProfileEvent profileEvent, IClientSessionHandle session)
     {
-        profileEvent = await dbService.CreateOneAsync(collectionName, profileEvent, session);
+        profileEvent = await dbService.CreateOneAsync(profileEventCollection, profileEvent, session);
         var eventProfile = new EventProfile(profileEvent);
         await eventProfileService.CreateEventProfileAsync(eventProfile, session);
         return profileEvent;
@@ -19,7 +20,7 @@ public class ProfileEventService(MongoDbService dbService, EventProfileService e
 
     public async Task<ProfileEvent> RetrieveProfileEventById(string id)
     {
-        return await dbService.RetrieveByIdAsync<ProfileEvent>(collectionName, id);
+        return await dbService.RetrieveByIdAsync<ProfileEvent>(profileEventCollection, id);
     }
 /*
     public async Task<ProfileEvent> ConfirmProfileEventById(string id)
@@ -36,7 +37,7 @@ public class ProfileEventService(MongoDbService dbService, EventProfileService e
     public async Task<List<ProfileEvent>> FindByProfileId(string profileId, DateTimeOffset startTime, DateTimeOffset endTime)
     {
         var filter = GetRetrieveFromProfileFilter(profileId, startTime, endTime);
-        return await dbService.FindAsync(collectionName, filter);
+        return await dbService.FindAsync(profileEventCollection, filter);
     }
 /*
     public async Task SyncProfileEvents(EventUpdateQueueMessage message)

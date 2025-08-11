@@ -1,20 +1,25 @@
-using Core.Model.Base;
+
 using MongoDB.Bson;
 using MongoDB.Bson.Serialization;
 using MongoDB.Bson.Serialization.Serializers;
-using Microsoft.Extensions.Configuration;
-
 using MongoDB.Driver;
-using Core.Model;
 using MongoDB.Driver.Core.Servers;
 
-namespace Core;
+using Microsoft.Extensions.Configuration;
+
+using Core.Model;
+using Core.Model.Base;
+using Core.Model.Join;
+
+
+namespace Core.Services.Database;
 
 public class MongoDbContext
 {
     private readonly MongoClient client;
     public readonly IMongoDatabase database;
 
+    private bool? _isShardingEnabled;
     private bool? _transactionsSupported;
 
     public MongoDbContext(IConfiguration configuration)
@@ -59,11 +64,11 @@ public class MongoDbContext
         // Cache the result after the first check to avoid repeated server topology checks
         if (_transactionsSupported.HasValue)
             return _transactionsSupported.Value;
-        
+
 
         // Get the current server description
         ServerDescription? serverDescription = null;
-        var servers = client.Cluster.Description.Servers; 
+        var servers = client.Cluster.Description.Servers;
 
         if (servers.Count > 0)
             serverDescription = servers[0];
@@ -95,6 +100,45 @@ public class MongoDbContext
 
     #region init
 
+    public async Task Init()
+    {
+        Console.WriteLine("Initializing MongoDB collections...");
+
+        var collectionNames = await ListCollectionsAsync();
+
+        await CheckShardingEnabledAsync();
+
+        if (!collectionNames.Contains(CollectionName.Users.ToString()))
+            await InitializeCollectionAsync(CollectionName.Users, "_id");
+
+        await CreateIndexAsync<User>(CollectionName.Users, "accounts.uid", true);
+
+        if (!collectionNames.Contains(CollectionName.Profiles.ToString()))
+            await InitializeCollectionAsync(CollectionName.Profiles, "_id");
+
+        if (!collectionNames.Contains(CollectionName.ProfileDetails.ToString()))
+            await InitializeCollectionAsync(CollectionName.ProfileDetails, "profileId");
+
+        if (!collectionNames.Contains(CollectionName.ProfileEvents.ToString()))
+            await InitializeCollectionAsync(CollectionName.ProfileEvents, "profileId");
+
+        await CreateIndexAsync<ProfileEvent>(CollectionName.ProfileEvents, "eventUpdatedAt");
+        await CreateIndexAsync<ProfileEvent>(CollectionName.ProfileEvents, "eventStartTime");
+        await CreateIndexAsync<ProfileEvent>(CollectionName.ProfileEvents, "eventEndTime");
+
+
+        if (!collectionNames.Contains(CollectionName.EventProfiles.ToString()))
+            await InitializeCollectionAsync(CollectionName.ProfileEvents, "eventId");
+
+        if (!collectionNames.Contains(CollectionName.Events.ToString()))
+            await InitializeCollectionAsync(CollectionName.Events, "_id");
+
+        if (!collectionNames.Contains(CollectionName.Images.ToString()))
+            await InitializeCollectionAsync(CollectionName.Images, "eventId");
+
+        Console.WriteLine("MongoDB collection initialization complete.");
+    }
+
     private async Task<List<string>> ListCollectionsAsync()
     {
         return await database.ListCollectionNames().ToListAsync();
@@ -105,8 +149,11 @@ public class MongoDbContext
         return database.DatabaseNamespace.DatabaseName;
     }
 
-    private async Task<bool> IsDatabaseShardingEnabledAsync()
+    private async Task CheckShardingEnabledAsync()
     {
+        if (_isShardingEnabled.HasValue)
+            return;
+
         var configDatabase = client.GetDatabase("config");
         try
         {
@@ -114,52 +161,20 @@ public class MongoDbContext
             var filter = Builders<BsonDocument>.Filter.Eq("_id", GetDatabaseName());
             var dbInfo = await databasesCollection.Find(filter).FirstOrDefaultAsync();
 
-            return dbInfo != null && dbInfo.TryGetValue("partitioned", out var partitionedValue) && partitionedValue.AsBoolean;
+            _isShardingEnabled = dbInfo != null && dbInfo.TryGetValue("partitioned", out var partitionedValue) && partitionedValue.AsBoolean;
         }
         catch (Exception ex)
         {
             Console.WriteLine($"Warning: Could not determine sharding status for database '{GetDatabaseName}'. Error: {ex.Message}");
             // If we can't determine, assume not sharded or proceed with sharding attempt and let it fail
-            return false;
+            _isShardingEnabled = false;
         }
     }
 
-    public async Task Init()
+    public async Task InitializeCollectionAsync(CollectionName cn, string partitionKeyFieldName)
     {
-        Console.WriteLine("Initializing MongoDB collections...");
-
-        var collectionNames = await ListCollectionsAsync();
-        var isShardingEnabled = await IsDatabaseShardingEnabledAsync();
-
-        if (!collectionNames.Contains("Events"))
-            await InitializeCollectionAsync("Events", "_id", isShardingEnabled);
-
-        if (!collectionNames.Contains("Profiles"))
-            await InitializeCollectionAsync("Profiles", "_id", isShardingEnabled);
-
-        if (!collectionNames.Contains("ProfileEvents"))
-            await InitializeCollectionAsync("ProfileEvents", "profileId", isShardingEnabled);
-
-        await CreateIndexAsync<ProfileEvent>("ProfileEvents", "eventUpdatedAt");
-        await CreateIndexAsync<ProfileEvent>("ProfileEvents", "eventStartTime");
-        await CreateIndexAsync<ProfileEvent>("ProfileEvents", "eventEndTime");
-
-
-        if (!collectionNames.Contains("EventProfiles"))
-            await InitializeCollectionAsync("EventProfiles", "eventId", isShardingEnabled);
-
-        if (!collectionNames.Contains("Images"))
-            await InitializeCollectionAsync("Images", "eventId", isShardingEnabled);
-
-        Console.WriteLine("MongoDB collection initialization complete.", isShardingEnabled);
-    }
-
-
-
-
-    public async Task InitializeCollectionAsync(string collectionName, string partitionKeyFieldName, bool sharding)
-    {
-        if (sharding)
+        string collectionName = cn.ToString();
+        if (_isShardingEnabled is true)
             await CreateShardedCollectionAsync(collectionName, partitionKeyFieldName);
         else
             await CreateUnshardedCollectionAsync(collectionName);
@@ -234,12 +249,14 @@ public class MongoDbContext
     }
 
     private async Task CreateIndexAsync<TDocument>(
-        string collectionName,
+        CollectionName cn,
         string fieldName,
         bool isUnique = false
     )
     where TDocument : BaseEntity
     {
+        string collectionName = cn.ToString();
+
         try
         {
             var collection = GetCollection<TDocument>(collectionName);
@@ -266,8 +283,6 @@ public class MongoDbContext
             );
         }
     }
-
-
 
     #endregion
 

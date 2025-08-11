@@ -2,37 +2,21 @@ using MongoDB.Driver;
 using MongoDB.Bson;
 using Core.Model.Base;
 
-namespace Core.Services.Util;
+namespace Core.Services.Database;
 
 public class MongoDbService(MongoDbContext dbContext)
 {
-    public async Task ExecuteInTransactionAsync(Func<Task> transactionalLogic)
-    {
-        using var session = await dbContext.GetNewSession();
-        session.StartTransaction();
-        try
-        {
-            await transactionalLogic();
-            await session.CommitTransactionAsync();
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Error during transaction: {ex.Message}");
-            await session.AbortTransactionAsync();
-            throw;
-        }
-    }
-
-    public IMongoCollection<TDocument> GetCollection<TDocument>(string collectionName)
+    public IMongoCollection<TDocument> GetCollection<TDocument>(CollectionName cn)
         where TDocument : BaseEntity
     {
-        return dbContext.GetCollection<TDocument>(collectionName);
+
+        return dbContext.GetCollection<TDocument>(cn.ToString());
     }
 
-    public IAggregateFluent<TDocument> GetAggregate<TDocument>(string collectionName)
+    public IAggregateFluent<TDocument> GetAggregate<TDocument>(CollectionName cn)
     where TDocument : BaseEntity
     {
-        return dbContext.GetCollection<TDocument>(collectionName).Aggregate();
+        return dbContext.GetCollection<TDocument>(cn.ToString()).Aggregate();
     }
 
     public async Task<T> ExecuteInTransactionAsync<T>(Func<IClientSessionHandle, Task<T>> transactionalLogic)
@@ -64,9 +48,10 @@ public class MongoDbService(MongoDbContext dbContext)
         }
     }
 
-    public async Task<TDocument> CreateOneAsync<TDocument>(string collectionName, TDocument newDocument, IClientSessionHandle? session)
+    public async Task<TDocument> CreateOneAsync<TDocument>(CollectionName cn, TDocument newDocument, IClientSessionHandle? session)
         where TDocument : BaseEntity
     {
+        string collectionName = cn.ToString();
         try
         {
             var collection = dbContext.GetCollection<TDocument>(collectionName);
@@ -82,9 +67,10 @@ public class MongoDbService(MongoDbContext dbContext)
         }
     }
 
-    public async Task<List<TDocument>> CreateManyAsync<TDocument>(string collectionName, List<TDocument> newDocuments)
+    public async Task<List<TDocument>> CreateManyAsync<TDocument>(CollectionName cn, List<TDocument> newDocuments)
     where TDocument : BaseEntity
     {
+        string collectionName = cn.ToString();
         try
         {
             var collection = dbContext.GetCollection<TDocument>(collectionName);
@@ -101,14 +87,16 @@ public class MongoDbService(MongoDbContext dbContext)
     }
 
 
+    //filter more complex, no session
     public async Task<TDocument> FindOneAndUpdateAsync<TDocument>(
-        string collectionName,
+        CollectionName cn,
         FilterDefinition<TDocument> filter,
         UpdateDefinition<TDocument> updateDefinition,
         FindOneAndUpdateOptions<TDocument>? options = null
     )
     where TDocument : BaseEntity
     {
+        string collectionName = cn.ToString();
         try
         {
             var collection = dbContext.GetCollection<TDocument>(collectionName);
@@ -124,18 +112,19 @@ public class MongoDbService(MongoDbContext dbContext)
     }
 
     public async Task<TDocument> PatchUpdateAsync<TDocument>(
-        string collectionName,
-        string stringId,
+        CollectionName cn,
+        ObjectId objectId,
         UpdateDefinition<TDocument> updateDefinition,
         IClientSessionHandle session
     )
     where TDocument : BaseEntity
     {
+        string collectionName = cn.ToString();
         try
         {
             var collection = dbContext.GetCollection<TDocument>(collectionName);
 
-            var filter = Builders<TDocument>.Filter.Eq(doc => doc.Id, new ObjectId(stringId));
+            var filter = Builders<TDocument>.Filter.Eq(doc => doc.Id, objectId);
 
             return await collection.FindOneAndUpdateAsync(
                     session,
@@ -144,13 +133,13 @@ public class MongoDbService(MongoDbContext dbContext)
                     new FindOneAndUpdateOptions<TDocument> { ReturnDocument = ReturnDocument.After }
                 )
                 ?? throw new KeyNotFoundException(
-                    $"Document with id '{stringId}' not found in collection '{collectionName}' for patch update."
+                    $"Document with id '{objectId}' not found in collection '{collectionName}' for patch update."
                 );
         }
         catch (MongoException ex)
         {
             throw new Exception(
-                $"MongoDB operation failed while performing patch update for document with id '{stringId}' in collection '{collectionName}'.",
+                $"MongoDB operation failed while performing patch update for document with id '{objectId}' in collection '{collectionName}'.",
                 ex
             );
         }
@@ -158,11 +147,12 @@ public class MongoDbService(MongoDbContext dbContext)
 
 
     public async Task<UpdateResult> UpdateManyAsync<TDocument>(
-        string collectionName,
+        CollectionName cn,
         FilterDefinition<TDocument> filterDefinition,
         UpdateDefinition<TDocument> updateDefinition
     ) where TDocument : BaseEntity
     {
+        string collectionName = cn.ToString();
         try
         {
             var collection = dbContext.GetCollection<TDocument>(collectionName);
@@ -178,11 +168,12 @@ public class MongoDbService(MongoDbContext dbContext)
     }
 
     public async Task<TDocument> RetrieveByIdAsync<TDocument>(
-        string collectionName,
+        CollectionName cn,
         string stringId
     )
     where TDocument : BaseEntity
     {
+        string collectionName = cn.ToString();
         try
         {
             var collection = dbContext.GetCollection<TDocument>(collectionName);
@@ -206,11 +197,12 @@ public class MongoDbService(MongoDbContext dbContext)
 
 
     public async Task<List<TDocument>> FindAsync<TDocument>(
-        string collectionName,
+        CollectionName cn,
         FilterDefinition<TDocument> filter
     )
      where TDocument : BaseEntity
     {
+        string collectionName = cn.ToString();
         try
         {
             var collection = dbContext.GetCollection<TDocument>(collectionName);
