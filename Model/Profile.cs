@@ -4,16 +4,12 @@ using MongoDB.Bson.Serialization.Attributes;
 
 namespace Core.Model
 {
-    public class Profile : BaseCreatedEntity
+    public class Profile(string tag, string name) : BaseCreatedEntity
     {
         [BsonElement("tag")]
-        public required string Tag { get; set; }
+        public string Tag { get; set; } = tag;
 
         [BsonElement("name")]
-        public required string Name { get; set; }
-
-        [BsonElement("detailsId")]
-
-        public ObjectId DetailsId { get; set; }
+        public string Name { get; set; } = name;
     }
 }

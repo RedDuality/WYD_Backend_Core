@@ -1,9 +1,7 @@
 using Core.Model;
 using Core.Services.Interfaces;
+using Core.Services.Model;
 using Microsoft.AspNetCore.Http;
-using Microsoft.IdentityModel.Tokens;
-using Service;
-
 
 namespace Core.Services.Util;
 
@@ -19,7 +17,7 @@ public class TokenService(
 
         if (string.IsNullOrEmpty(authorization) || !authorization.ToString().StartsWith("Bearer "))
         {
-            throw new ArgumentNullException(
+            throw new UnauthorizedAccessException(
                 "No token in the request, or token not in the right format"
             );
         }
@@ -38,7 +36,7 @@ public class TokenService(
         }
         catch (Exception)
         {
-            throw new SecurityTokenValidationException("Invalid Token");
+            throw new UnauthorizedAccessException("Invalid Token");
         }
         return await userService.GetOrCreateAsync(uid);
     }

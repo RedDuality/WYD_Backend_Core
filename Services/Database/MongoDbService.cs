@@ -38,7 +38,7 @@ public class MongoDbService(MongoDbContext dbContext)
             {
                 Console.WriteLine($"Error during transaction: {ex.Message}");
                 await session.AbortTransactionAsync();
-                throw; 
+                throw;
             }
         }
         else
@@ -111,9 +111,25 @@ public class MongoDbService(MongoDbContext dbContext)
         }
     }
 
+    public async Task<TDocument> PatchUpdateByIdAsync<TDocument>(
+        CollectionName collectionName,
+        ObjectId objectId,
+        UpdateDefinition<TDocument> updateDefinition,
+        IClientSessionHandle session
+    )
+    where TDocument : BaseEntity
+    {
+        var filter = Builders<TDocument>.Filter.Eq(doc => doc.Id, objectId);
+        return await PatchUpdateAsync(collectionName, filter, updateDefinition, session)
+            ?? throw new KeyNotFoundException(
+                $"Document with id '{objectId}' not found in collection '{collectionName}' for patch update."
+            );
+
+    }
+
     public async Task<TDocument> PatchUpdateAsync<TDocument>(
         CollectionName cn,
-        ObjectId objectId,
+        FilterDefinition<TDocument> filterDefinition,
         UpdateDefinition<TDocument> updateDefinition,
         IClientSessionHandle session
     )
@@ -124,22 +140,17 @@ public class MongoDbService(MongoDbContext dbContext)
         {
             var collection = dbContext.GetCollection<TDocument>(collectionName);
 
-            var filter = Builders<TDocument>.Filter.Eq(doc => doc.Id, objectId);
-
             return await collection.FindOneAndUpdateAsync(
                     session,
-                    filter,
+                    filterDefinition,
                     updateDefinition,
                     new FindOneAndUpdateOptions<TDocument> { ReturnDocument = ReturnDocument.After }
-                )
-                ?? throw new KeyNotFoundException(
-                    $"Document with id '{objectId}' not found in collection '{collectionName}' for patch update."
                 );
         }
         catch (MongoException ex)
         {
             throw new Exception(
-                $"MongoDB operation failed while performing patch update for document with id '{objectId}' in collection '{collectionName}'.",
+                $"MongoDB operation failed while performing patch update for document in collection '{collectionName}'.",
                 ex
             );
         }
@@ -168,8 +179,18 @@ public class MongoDbService(MongoDbContext dbContext)
     }
 
     public async Task<TDocument> RetrieveByIdAsync<TDocument>(
-        CollectionName cn,
+        CollectionName collectionName,
         string stringId
+    )
+    where TDocument : BaseEntity
+    {
+        var filter = Builders<TDocument>.Filter.Eq(doc => doc.Id, new ObjectId(stringId));
+        return await FindOneAsync(collectionName, filter);
+    }
+
+    public async Task<TDocument> FindOneAsync<TDocument>(
+        CollectionName cn,
+        FilterDefinition<TDocument> filter
     )
     where TDocument : BaseEntity
     {
@@ -177,8 +198,6 @@ public class MongoDbService(MongoDbContext dbContext)
         try
         {
             var collection = dbContext.GetCollection<TDocument>(collectionName);
-
-            var filter = Builders<TDocument>.Filter.Eq(doc => doc.Id, new ObjectId(stringId));
 
             return await collection.Find(filter).FirstOrDefaultAsync()
                 ?? throw new KeyNotFoundException(
@@ -188,13 +207,31 @@ public class MongoDbService(MongoDbContext dbContext)
         catch (MongoException ex)
         {
             throw new Exception(
-                $"MongoDB operation failed while retrieving document by field from collection '{collectionName}'.",
+                $"MongoDB operation failed while retrieving for documents in collection '{collectionName}'.",
                 ex
             );
         }
     }
 
+    public async Task<List<TDocument>> RetrieveByIdsAsync<TDocument>(
+        CollectionName cn,
+        List<string> stringIds
+    )
+    where TDocument : BaseEntity
+    {
+        var objectIds = stringIds.Select(id => new ObjectId(id)).ToList();
+        return await RetrieveByIdsAsync<TDocument>(cn, objectIds);
+    }
 
+    public async Task<List<TDocument>> RetrieveByIdsAsync<TDocument>(
+        CollectionName collectionName,
+        List<ObjectId> objectIds
+    )
+    where TDocument : BaseEntity
+    {
+        var filter = Builders<TDocument>.Filter.In(doc => doc.Id, objectIds);
+        return await FindAsync(collectionName, filter);
+    }
 
     public async Task<List<TDocument>> FindAsync<TDocument>(
         CollectionName cn,
@@ -207,9 +244,7 @@ public class MongoDbService(MongoDbContext dbContext)
         {
             var collection = dbContext.GetCollection<TDocument>(collectionName);
 
-            var matchingDocuments = await collection.Find(filter).ToListAsync();
-
-            return matchingDocuments;
+            return await collection.Find(filter).ToListAsync();
         }
         catch (MongoException ex)
         {

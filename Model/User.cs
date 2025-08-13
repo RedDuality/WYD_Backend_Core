@@ -5,11 +5,11 @@ using MongoDB.Bson.Serialization.Attributes;
 
 namespace Core.Model;
 
-public class User : BaseDateEntity
+public class User(Account account) : BaseDateEntity
 {
     [BsonElement("profiles")]
     public List<UserProfile> Profiles { get; set; } = [];
 
     [BsonElement("accounts")]
-    public List<Account> Accounts { get; set; } = [];
+    public List<Account> Accounts { get; set; } = [account];
 }

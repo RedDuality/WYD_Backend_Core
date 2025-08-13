@@ -3,16 +3,18 @@
 //using Microsoft.Extensions.Primitives;
 
 
+using Core.Model;
+using Microsoft.AspNetCore.Http;
+
 namespace Core.Services.Util;
 
 public class RequestService(
-    //JsonSerializerOptions jsonSerializerOptions,
-    //UserService userService,
-    //IAuthenticationService authenticationService,
-    //NotificationService notificationService
+//JsonSerializerOptions jsonSerializerOptions,
+//UserService userService,
+//IAuthenticationService authenticationService,
+//NotificationService notificationService
 )
 {
-
     /*
     private readonly JsonSerializerOptions _jsonSerializerOptions = jsonSerializerOptions;
 

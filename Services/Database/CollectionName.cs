@@ -3,7 +3,6 @@ namespace Core.Services.Database;
 public sealed class CollectionName
 {
     public string Name { get; }
-
     private CollectionName(string name) => Name = name;
 
     public static readonly CollectionName Users = new("Users");

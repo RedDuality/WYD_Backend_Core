@@ -1,3 +1,6 @@
+using Core.Model.Enum;
+using Core.Model.Join;
+
 namespace Core.Model.Dto;
 
 public class ProfileEventDto

@@ -16,18 +16,17 @@ public class ProfileDetailsService(MongoDbService dbService)
         var profileDetails = new ProfileDetails(profile);
         await dbService.CreateOneAsync(profileDetailsCollection, profileDetails, session);
 
-        var updateDefinition = Builders<Profile>.Update.Set(p => p.DetailsId, profileDetails.Id);
-        await dbService.PatchUpdateAsync(CollectionName.Profiles, profile.Id, updateDefinition, session);
-
         return profileDetails;
     }
 
-    public async Task<ProfileDetails> AddUser(ObjectId detailsId, User user, IClientSessionHandle session)
+    public async Task<ProfileDetails> AddUser(ObjectId profileId, User user, IClientSessionHandle session)
     {
         var profileUser = new ProfileUser(user);
 
+        var detailsFilter = Builders<ProfileDetails>.Filter.Eq(d => d.ProfileId, profileId);
         var updateDefinition = Builders<ProfileDetails>.Update.AddToSet(pd => pd.Users, profileUser);
-        return await dbService.PatchUpdateAsync(profileDetailsCollection, detailsId, updateDefinition, session);
+        
+        return await dbService.PatchUpdateAsync(profileDetailsCollection, detailsFilter, updateDefinition, session);
     }
 
 }

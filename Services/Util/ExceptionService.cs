@@ -1,7 +1,6 @@
 using System.Text.Json;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.IdentityModel.Tokens;
 
 namespace Core.Services.Util;
 
@@ -14,17 +13,17 @@ public static class ExceptionService
             UnauthorizedAccessException unauthorizedEx => new UnauthorizedObjectResult(
                 unauthorizedEx.Message
             ),
-            SecurityTokenValidationException securityTokenValidationException =>
-                new UnauthorizedObjectResult(securityTokenValidationException.Message),
+
+
             InvalidOperationException invalidOperationException => new BadRequestObjectResult(
                 invalidOperationException.Message
             ),
 
             ArgumentNullException argumentNullException => new BadRequestObjectResult(
-                "Expected a value but none was given"
+                "Expected a value but none was given: " + argumentNullException.ParamName
             ),
             KeyNotFoundException keyNotFoundEx => new NotFoundObjectResult(
-                keyNotFoundEx.Message + " with given Id not found"
+                keyNotFoundEx.Message
             ),
 
             FormatException formatEx => new BadRequestObjectResult("Id Format wrong"),

@@ -1,11 +1,12 @@
 
 using Core.Model;
+using Core.Model.Enum;
+using Core.Model.Join;
 using Core.Services.Database;
 using Core.Services.Interfaces;
-using Core.Services.Model;
 using MongoDB.Driver;
 
-namespace Service;
+namespace Core.Services.Model;
 
 
 public class UserService(MongoDbService dbService, ProfileService profileService, IAuthenticationService authenticationService)
@@ -36,28 +37,44 @@ public class UserService(MongoDbService dbService, ProfileService profileService
 
     private async Task<User> CreateUserAsync(string accountUid)
     {
-        UserRecord UR = await authenticationService.RetrieveAccount(accountUid);
+        UserLoginRecord UR = await authenticationService.RetrieveAccount(accountUid);
 
-        User user = await dbService.ExecuteInTransactionAsync(async (session) =>
+        return await dbService.ExecuteInTransactionAsync(async (session) =>
         {
-            var newAccount = new Account(UR.Uid, UR.Email);
-
-            var newUser = new User
-            {
-                Accounts = { newAccount }
-            };
+            var newUser = new User(new Account(UR.Uid, UR.Email));
 
             var user = await dbService.CreateOneAsync(userCollection, newUser, session);
 
             var profile = await profileService.CreateAsync(UR.Email, UR.Email, user, session);
 
-            await profileService.AddUserAsync(profile, user, session);
+            await AddProfileAsync(profile, user, session, UserRole.Owner, true);
 
             return user;
         });
+    }
 
+    public async Task<User> AddProfileAsync(Profile profile, User user, IClientSessionHandle session, UserRole userRole = UserRole.Viewer, bool mainProfile = false)
+    {
+        var userProfile = new UserProfile(profile, userRole, mainProfile);
+
+        var userUpdate = Builders<User>.Update.Push(u => u.Profiles, userProfile);
+        user = await dbService.PatchUpdateByIdAsync(userCollection, user.Id, userUpdate, session);
+
+        await profileService.AddUserAsync(profile, user, session);
         return user;
     }
+
+    public async Task<List<Tuple<Profile, UserProfile>>> RetrieveProfilesAsync(User user)
+    {
+        var profileIds = user.Profiles.Select(up => up.ProfileId).ToList();
+        var profiles = await dbService.RetrieveByIdsAsync<Profile>(CollectionName.Profiles, profileIds);
+
+        // Map the results together
+        var userProfilesDictionary = user.Profiles.ToDictionary(d => d.ProfileId);
+        return profiles.Select(p => new Tuple<Profile, UserProfile>(p, userProfilesDictionary[p.Id])).ToList();
+    }
+
+
 }
 /*
     public static async Task<List<EventDto>> RetrieveEventsAsync(User user)

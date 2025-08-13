@@ -1,4 +1,3 @@
-using Core.Model;
 using Core.Model.Enum;
 using MongoDB.Bson;
 using MongoDB.Bson.Serialization.Attributes;
@@ -15,6 +14,7 @@ public class ProfileUser(User user)
     public UserRole Role { get; set; } = UserRole.Owner;
 
     [BsonElement("receivesNotifications")]
+    [BsonIgnoreIfDefault]
     public bool ReceivesNotifications { get; set; } = true;
 
 }
