@@ -26,12 +26,22 @@ public class MongoDbContext
     {
         BsonSerializer.RegisterSerializer(new DateTimeOffsetSerializer(BsonType.DateTime));
 
-        string connectionString = configuration.GetConnectionString("MongoDB")
-            ?? throw new Exception("Database connection failed: 'ConnectionStrings:MongoDB' is not set in configuration.");
-
-        string databaseName = configuration.GetValue<string>("MongoDB:DatabaseName")
-            ?? throw new InvalidOperationException("Database connection failed: 'MongoDB:DatabaseName' is not set in configuration.");
-
+        // Use the individual environment variables to construct the connection string
+        string username = configuration.GetValue<string>("MONGODB_APP_USER")
+            ?? throw new Exception("Database connection failed: 'MONGODB_APP_USER' is not set in configuration.");
+        
+        string password = configuration.GetValue<string>("MONGODB_APP_PASSWORD")
+            ?? throw new Exception("Database connection failed: 'MONGODB_APP_PASSWORD' is not set in configuration.");
+        
+        string hostname = configuration.GetValue<string>("MONGODB_HOSTNAME")
+            ?? throw new Exception("Database connection failed: 'MONGODB_HOSTNAME' is not set in configuration.");
+        
+        string databaseName = configuration.GetValue<string>("DATABASE_NAME")
+            ?? throw new InvalidOperationException("Database connection failed: 'DATABASENAME' is not set in configuration.");
+        
+        // Build the connection string from the individual components
+        string connectionString = $"mongodb://{username}:{password}@{hostname}:27017/{databaseName}?authSource=admin";
+        
         try
         {
             client = new MongoClient(connectionString);
