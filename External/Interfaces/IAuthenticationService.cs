@@ -1,4 +1,4 @@
-namespace Core.Ex.Interfaces;
+namespace Core.External.Interfaces;
 
 public interface IAuthenticationService
 {

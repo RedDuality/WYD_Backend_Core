@@ -2,7 +2,7 @@ using MongoDB.Driver;
 using MongoDB.Bson;
 using Core.Model.Base;
 
-namespace Core.Services.Database;
+namespace Core.Components.Database;
 
 public class MongoDbService(MongoDbContext dbContext)
 {

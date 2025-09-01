@@ -1,4 +1,4 @@
-namespace Core.Services.Database;
+namespace Core.Components.Database;
 
 public sealed class CollectionName
 {

@@ -1,7 +1,7 @@
 using MongoDB.Driver;
 using MongoDB.Bson;
 using Core.Model.Join;
-using Core.Services.Database;
+using Core.Components.Database;
 
 namespace Core.Services.Model;
 

@@ -12,7 +12,7 @@ using Core.Model.Base;
 using Core.Model.Join;
 
 
-namespace Core.Services.Database;
+namespace Core.Components.Database;
 
 public class MongoDbContext
 {

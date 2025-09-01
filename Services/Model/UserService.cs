@@ -2,8 +2,8 @@
 using Core.Model;
 using Core.Model.Enum;
 using Core.Model.Join;
-using Core.Services.Database;
-using Core.Services.Interfaces;
+using Core.Components.Database;
+using Core.External.Interfaces;
 using MongoDB.Driver;
 
 namespace Core.Services.Model;
@@ -37,15 +37,15 @@ public class UserService(MongoDbService dbService, ProfileService profileService
 
     private async Task<User> CreateUserAsync(string accountUid)
     {
-        UserLoginRecord UR = await authenticationService.RetrieveAccount(accountUid);
+        string mail = await authenticationService.RetrieveMail(accountUid);
 
         return await dbService.ExecuteInTransactionAsync(async (session) =>
         {
-            var newUser = new User(new Account(UR.Uid, UR.Email));
+            var newUser = new User(new Account(accountUid, mail));
 
             var user = await dbService.CreateOneAsync(userCollection, newUser, session);
 
-            var profile = await profileService.CreateAsync(UR.Email, UR.Email, user, session);
+            var profile = await profileService.CreateAsync(accountUid, mail, user, session);
 
             await AddProfileAsync(profile, user, session, UserRole.Owner, true);
 

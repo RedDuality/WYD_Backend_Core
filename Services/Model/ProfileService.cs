@@ -1,7 +1,7 @@
 using Core.Model;
 using Core.Model.Enum;
 using Core.Model.Join;
-using Core.Services.Database;
+using Core.Components.Database;
 using MongoDB.Driver;
 
 namespace Core.Services.Model;
