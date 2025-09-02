@@ -2,5 +2,5 @@ namespace Core.Ex.Interfaces;
 
 public interface IAuthenticationService
 {
-    public Task<string> RetrieveMail(string uid);
+    
 }

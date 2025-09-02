@@ -28,16 +28,17 @@ public class UserService(MongoDbService dbService, ProfileService profileService
         return user;
     }
 
-    public async Task<User> GetOrCreateAsync(string uid)
+    public async Task<User> GetOrCreateAsync(string uid, string? email)
     {
         var user = await RetrieveByAccountUid(uid);
 
-        return user ?? await CreateUserAsync(uid);
+        return user ?? await CreateUserAsync(uid, email);
     }
 
-    private async Task<User> CreateUserAsync(string accountUid)
+    private async Task<User> CreateUserAsync(string accountUid, string? email)
     {
-        string mail = await authenticationService.RetrieveMail(accountUid);
+        string mail = email ??
+            throw new UnauthorizedAccessException("No Email in the claims");
 
         return await dbService.ExecuteInTransactionAsync(async (session) =>
         {

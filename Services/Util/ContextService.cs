@@ -12,6 +12,8 @@ public class ContextService(UserService userService)
         string uid = user?.FindFirstValue(ClaimTypes.NameIdentifier) ??
             throw new UnauthorizedAccessException("No Id in the claims");
 
-        return await userService.GetOrCreateAsync(uid);
+        string? email = user?.FindFirstValue(ClaimTypes.Email);
+
+        return await userService.GetOrCreateAsync(uid, email);
     }
 }
