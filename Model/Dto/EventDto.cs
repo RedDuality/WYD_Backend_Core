@@ -25,9 +25,6 @@ public class EventDto
         //ProfileEvents = ev.ProfileEvents.Select(pe => new ProfileEventDto(pe)).ToList();
     }
 
-    public EventDto()
-    {
-        
-    }
+    public EventDto() { }
 
 }

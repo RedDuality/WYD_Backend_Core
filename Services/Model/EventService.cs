@@ -3,6 +3,8 @@ using Core.Model;
 using Core.Model.Join;
 using Core.Components.Database;
 using Core.Model.Dto;
+using MongoDB.Driver;
+using Core.Model.Util;
 
 namespace Core.Services.Model;
 
@@ -42,104 +44,109 @@ public class EventService(MongoDbService dbService, ProfileEventService profileE
         return await dbService.RetrieveByIdAsync<Event>(eventCollection, id);
     }
 
-    /*
-        public async Task<List<EventDto>> RetrieveEventsByProfileId(string profileId, DateTimeOffset startTime, DateTimeOffset endTime)
+    public async Task<List<EventDto>> RetrieveEventsByProfileId(List<string> profileHashes, DateTimeOffset startTime, DateTimeOffset? endTime)
+    {
+        var objectIds = profileHashes.Select(ph => new ObjectId(ph)).ToList();
+
+        var filterBuilder = Builders<ProfileEvent>.Filter;
+        var filters = new List<FilterDefinition<ProfileEvent>>
         {
-            var aggregate = dbService.GetAggregate<ProfileEvent>("ProfileEvents");
+            filterBuilder.In(pe => pe.ProfileId, objectIds),
+            filterBuilder.Gte(pe => pe.EventEndTime, startTime.ToUniversalTime())
+        };
 
-            // Step 1: Match ProfileEvents by profileId and time range
-            var matchStage = aggregate
-                .Match(pe =>
-                    pe.ProfileId == new ObjectId(profileId) &&
-                    pe.EventStartTime <= endTime.ToUniversalTime() &&
-                    pe.EventEndTime >= startTime.ToUniversalTime())
-                .Limit(40);
+        if (endTime.HasValue)
+        {
+            filters.Add(filterBuilder.Lte(pe => pe.EventStartTime, endTime.Value.ToUniversalTime()));
+        }
 
-            // Step 2: Lookup the corresponding Event for each ProfileEvent
-            var lookupStage = matchStage.Lookup<ProfileEvent, Event, ProfileEventWithCorrespondingEvents>(
-                dbService.GetCollection<Event>(collectionName),
+        var filter = filterBuilder.And(filters);
+
+        // Define the aggregation pipeline
+        var pipeline = dbService.GetAggregate<ProfileEvent>(CollectionName.ProfileEvents)
+            .Match(filter)
+            .Limit(40)
+            .Lookup<ProfileEvent, Event, ProfileEventWithCorrespondingEvents>(
+                dbService.GetCollection<Event>(eventCollection),
                 pe => pe.EventId,
                 e => e.Id,
-                pe => pe.Events);
+                pe => pe.Events)
+            .Unwind<ProfileEventWithCorrespondingEvents, ProfileEventWithCorrespondingEvents>(pe => pe.Events);
 
-            var projected = lookupStage
-                .Project(pe => new
+        // Use a Group stage to combine profile events for the same event.
+        // The result type is now explicitly defined as AggregatedEventWithProfileEvents.
+        var groupedResult = pipeline
+            .Group(
+                pe => pe.Events.First(), // Grouping by the Event document itself
+                g => new AggregatedEventWithProfileEvents
                 {
-                    Event = pe.Events[0],
-                    pe.ProfileId,
-                    pe.Role,
-                    pe.Confirmed
+                    Event = g.Key,
+                    ProfileEvents = g.Select(pe => new ProfileEvent(g.Key, pe.ProfileId)).ToList()
                 });
 
-            var intermediateResults = await projected.ToListAsync();
-
-            var result = intermediateResults.Select(pe => new EventDto
+        // The final projection from the grouped result to the EventDto
+        var projectedResults = groupedResult
+            .Project(g => new EventDto
             {
-                Hash = pe.Event.Id.ToString(),
-                Title = pe.Event.Title,
-                Description = pe.Event.Description,
-                StartTime = pe.Event.StartTime,
-                EndTime = pe.Event.EndTime,
-                ProfileEvents =
-                [
-                    new ProfileEventDto {
-                        ProfileHash = pe.ProfileId.ToString(),
-                        Role = pe.Role,
-                        Confirmed = pe.Confirmed,
-                        Trusted = false
+                Hash = g.Event.Id.ToString(),
+                Title = g.Event.Title,
+                Description = g.Event.Description,
+                StartTime = g.Event.StartTime,
+                EndTime = g.Event.EndTime,
+                ProfileEvents = g.ProfileEvents.Select(pe => new ProfileEventDto
+                {
+                    ProfileHash = pe.ProfileId.ToString(),
+                    EventRole = pe.Role,
+                    Confirmed = pe.Confirmed,
+                    Trusted = false
+                }).ToList()
+            });
+
+        return await projectedResults.ToListAsync();
+    }
+    /*
+
+
+            public async Task ShareEventAsync(String eventId, List<string> profileIds)
+            {
+                var ev = await RetrieveEventById(eventId);
+                await dbService.ExecuteInTransactionAsync(async (session) =>
+                {
+                    //TODO make this without the for
+                    foreach (var profileId in profileIds)
+                    {
+                        var newProfileEvent = new ProfileEvent
+                        (
+                             ev, new ObjectId(profileId)
+                        );
+                        await profileEventService.CreateProfileEventAsync(newProfileEvent, session);
                     }
-                ]
-            }).ToList();
 
-            //var result = await projectStage.ToListAsync();
+                    return true;
+                });
 
+            }
 
-            return result;
-
-        }
-
-
-
-        public async Task ShareEventAsync(String eventId, List<string> profileIds)
-        {
-            var ev = await RetrieveEventById(eventId);
-            await dbService.ExecuteInTransactionAsync(async (session) =>
+            public async Task<Event> UpdateEventById(string id, string title)
             {
-                //TODO make this without the for
-                foreach (var profileId in profileIds)
+                Event updatedEvent = await dbService.ExecuteInTransactionAsync(async (session) =>
                 {
-                    var newProfileEvent = new ProfileEvent
-                    (
-                         ev, new ObjectId(profileId)
-                    );
-                    await profileEventService.CreateProfileEventAsync(newProfileEvent, session);
-                }
+                    var updateDefinition = Builders<Event>.Update
+                        .Set(e => e.Title, title)
+                        .Set(e => e.UpdatedAt, DateTimeOffset.UtcNow);
 
-                return true;
-            });
+                    var updatedEvent = await dbService.PatchUpdateAsync(collectionName, id, updateDefinition, session);
 
-        }
+                    var updateNotification = new EventUpdateQueueMessage(updatedEvent.Id.ToString())
+                    {
+                        UpdatedAt = updatedEvent.UpdatedAt
+                    };
+                    await sbs.SendMessageAsync("eventupdate", updateNotification);
 
-        public async Task<Event> UpdateEventById(string id, string title)
-        {
-            Event updatedEvent = await dbService.ExecuteInTransactionAsync(async (session) =>
-            {
-                var updateDefinition = Builders<Event>.Update
-                    .Set(e => e.Title, title)
-                    .Set(e => e.UpdatedAt, DateTimeOffset.UtcNow);
-
-                var updatedEvent = await dbService.PatchUpdateAsync(collectionName, id, updateDefinition, session);
-
-                var updateNotification = new EventUpdateQueueMessage(updatedEvent.Id.ToString())
-                {
-                    UpdatedAt = updatedEvent.UpdatedAt
-                };
-                await sbs.SendMessageAsync("eventupdate", updateNotification);
-
+                    return updatedEvent;
+                });
                 return updatedEvent;
-            });
-            return updatedEvent;
 
-        }
-    */
+            }
+        */
 }

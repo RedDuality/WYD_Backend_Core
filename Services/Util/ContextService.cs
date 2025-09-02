@@ -1,6 +1,8 @@
 using System.Security.Claims;
 using Core.Model;
 using Core.Services.Model;
+using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Primitives;
 
 namespace Core.Services.Util;
 
@@ -15,5 +17,19 @@ public class ContextService(UserService userService)
         string? email = user?.FindFirstValue(ClaimTypes.Email);
 
         return await userService.GetOrCreateAsync(uid, email);
+    }
+
+    public static string RetrieveFromHeaders(HttpRequest req, string headerKey)
+    {
+        if (req.Headers.TryGetValue(headerKey, out var headerValue))
+        {
+            if (StringValues.IsNullOrEmpty(headerValue))
+            {
+                throw new ArgumentException("Header value malformed");
+            }
+            return headerValue!;
+        }
+        else
+            throw new ArgumentException(headerKey + " header not found or in the wrong format");
     }
 }
