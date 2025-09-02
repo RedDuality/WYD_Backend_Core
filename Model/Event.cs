@@ -1,24 +1,24 @@
 using Core.Model.Base;
+using Core.Model.Dto;
 using MongoDB.Bson;
 using MongoDB.Bson.Serialization.Attributes;
 
-namespace Core.Model
+namespace Core.Model;
+
+public class Event : BaseDateEntity
 {
-    public class Event : BaseDateEntity
-    {
-        [BsonElement("title")]
-        public required string Title { get; set; } = "Untitled";
+    [BsonElement("title")]
+    public required string Title { get; set; } = "Untitled";
 
-        [BsonElement("description")]
-        public string? Description { get; set; }
+    [BsonElement("description")]
+    public string? Description { get; set; }
 
-        [BsonElement("timestamp")]
-        public DateTimeOffset Timestamp { get; set; } = DateTimeOffset.UtcNow;
+    [BsonElement("timestamp")]
+    public DateTimeOffset Timestamp { get; set; } = DateTimeOffset.UtcNow;
 
-        [BsonElement("startTime")]
-        public required DateTimeOffset StartTime { get; set; }
+    [BsonElement("startTime")]
+    public required DateTimeOffset StartTime { get; set; }
 
-        [BsonElement("endTime")]
-        public required DateTimeOffset EndTime { get; set; }
-    }
+    [BsonElement("endTime")]
+    public required DateTimeOffset EndTime { get; set; }
 }
