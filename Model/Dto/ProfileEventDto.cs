@@ -6,7 +6,7 @@ namespace Core.Model.Dto;
 public class ProfileEventDto
 {
     public string? ProfileHash { get; set; }
-    public EventRole EventRole { get; set; }
+    public EventRole Role { get; set; }
     public bool Confirmed { get; set; }
     public bool Trusted { get; set; }
 
@@ -14,7 +14,7 @@ public class ProfileEventDto
     public ProfileEventDto(ProfileEvent pe)
     {
         ProfileHash = pe.ProfileId.ToString();
-        EventRole = pe.Role;
+        Role = pe.Role;
         Confirmed = pe.Confirmed;
         //TODO
         Trusted = false;

@@ -15,13 +15,6 @@ namespace Core.Model.Util
 
         [BsonElement("confirmed")]
         public bool Confirmed { get; set; }
-        [BsonElement("eventUpdatedAt")]
-        public DateTimeOffset EventUpdatedAt { get; set; } = DateTimeOffset.UtcNow;
-
-        [BsonElement("eventStartTime")]
-        public DateTimeOffset EventStartTime { get; set; }
-        [BsonElement("eventEndTime")]
-        public DateTimeOffset EventEndTime { get; set; }
 
         [BsonElement("role")]
         public EventRole Role { get; set; }

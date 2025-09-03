@@ -11,7 +11,7 @@ public class ProfileDetailsService(MongoDbService dbService)
 {
     private readonly CollectionName profileDetailsCollection = CollectionName.ProfileDetails;
 
-    public async Task<ProfileDetails> CreateAsync(Profile profile, User user, IClientSessionHandle session)
+    public async Task<ProfileDetails> CreateAsync(Profile profile, IClientSessionHandle session)
     {
         var profileDetails = new ProfileDetails(profile);
         await dbService.CreateOneAsync(profileDetailsCollection, profileDetails, session);

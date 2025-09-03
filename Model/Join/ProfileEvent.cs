@@ -26,5 +26,6 @@ public class ProfileEvent(Event ev, ObjectId profileId) : BaseDateEntity
 
     [BsonElement("role")]
     public EventRole Role { get; set; } = EventRole.Viewer;
+
 }
 

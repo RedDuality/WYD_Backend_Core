@@ -9,7 +9,7 @@ using MongoDB.Driver;
 namespace Core.Services.Model;
 
 
-public class UserService(MongoDbService dbService, ProfileService profileService, IAuthenticationService authenticationService)
+public class UserService(MongoDbService dbService, ProfileService profileService)
 {
 
     private readonly CollectionName userCollection = CollectionName.Users;
@@ -46,7 +46,7 @@ public class UserService(MongoDbService dbService, ProfileService profileService
 
             var user = await dbService.CreateOneAsync(userCollection, newUser, session);
 
-            var profile = await profileService.CreateAsync(accountUid, mail, user, session);
+            var profile = await profileService.CreateAsync(accountUid, mail, session);
 
             await AddProfileAsync(profile, user, session, UserRole.Owner, true);
 

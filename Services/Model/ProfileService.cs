@@ -1,6 +1,4 @@
 using Core.Model;
-using Core.Model.Enum;
-using Core.Model.Join;
 using Core.Components.Database;
 using MongoDB.Driver;
 
@@ -10,12 +8,12 @@ public class ProfileService(MongoDbService dbService, ProfileDetailsService prof
 {
     private readonly CollectionName profileCollection = CollectionName.Profiles;
 
-    public async Task<Profile> CreateAsync(string tag, string name, User user, IClientSessionHandle session)
+    public async Task<Profile> CreateAsync(string tag, string name, IClientSessionHandle session)
     {
         var profile = new Profile(tag, name);
         await dbService.CreateOneAsync(profileCollection, profile, session);
 
-        await profileDetailsService.CreateAsync(profile, user, session);
+        await profileDetailsService.CreateAsync(profile, session);
 
         return profile;
     }
