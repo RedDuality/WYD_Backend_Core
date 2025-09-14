@@ -4,7 +4,7 @@ using Core.Model.Enum;
 
 namespace Core.DTO.MediaAPI;
 
-public class MediaUploadUrlDto
+public class MediaUploadResponseDto
 {
     public string TempId { get; set; }
     public string? Id { get; set; }
@@ -16,7 +16,7 @@ public class MediaUploadUrlDto
 
     public string? Error { get; set; }
 
-    public MediaUploadUrlDto(string tempId, Media media, string url, BucketName bucketName)
+    public MediaUploadResponseDto(string tempId, Media media, string url, BucketName bucketName)
     {
         TempId = tempId;
         Id = media.Id.ToString();
@@ -27,7 +27,7 @@ public class MediaUploadUrlDto
         Url = url;
     }
 
-    public MediaUploadUrlDto(string tempId)
+    public MediaUploadResponseDto(string tempId)
     {
         TempId = tempId;
     }

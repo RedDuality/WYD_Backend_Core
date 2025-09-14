@@ -17,4 +17,12 @@ public class Event : BaseDateEntity
 
     [BsonElement("endTime")]
     public required DateTimeOffset EndTime { get; set; }
+
+    [BsonElement("TotalProfiles")]
+    [BsonIgnoreIfDefault]
+    public int TotalProfilesMinusOne { get; set; } = 0;
+
+    [BsonElement("TotalConfirmed")]
+    [BsonIgnoreIfDefault]
+    public int TotalConfirmedMinusOne { get; set; } = 0;
 }

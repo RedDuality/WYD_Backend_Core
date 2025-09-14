@@ -26,4 +26,11 @@ public class EventDetailsService(MongoDbService dbService)
         var filter = Builders<EventDetails>.Filter.Eq(ed => ed.EventId, new ObjectId(eventId));
         return await dbService.FindOneAsync(eventDetailsCollection, filter);
     }
+
+    public async Task AddImages(int added, string eventId)
+    {
+        var detailsFilter = Builders<EventDetails>.Filter.Eq(ed => ed.EventId, new ObjectId(eventId));
+        var updateDefinition = Builders<EventDetails>.Update.Inc(ed => ed.TotalImages, added);
+        await dbService.UpdateOneAsync(eventDetailsCollection, detailsFilter, updateDefinition, null);
+    }
 }

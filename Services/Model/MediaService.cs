@@ -42,7 +42,7 @@ public class MediaService(MongoDbService dbService, MinioClient minioClient)
     }
 
 
-    public async Task<List<MediaUploadUrlDto>> GetUploadUrlsAsync(Profile profile, BucketName bucketName, CollectionName mediaCollection, MediaUploadDto dto)
+    public async Task<List<MediaUploadResponseDto>> GetUploadUrlsAsync(Profile profile, BucketName bucketName, CollectionName mediaCollection, MediaUploadRequestDto dto)
     {
         var tasks = dto.Media.Select(async media =>
         {
@@ -71,12 +71,12 @@ public class MediaService(MongoDbService dbService, MinioClient minioClient)
                 var url = await minioClient.GetUploadUrl(bucketName, path, validUntil);
 
 
-                return new MediaUploadUrlDto(media.Id, createdMedia, url, bucketName);
+                return new MediaUploadResponseDto(media.Id, createdMedia, url, bucketName);
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"Failed to generate URL for extension '{media.Mimetype}': {ex.Message}");
-                return new MediaUploadUrlDto(media.Id) { Error = ex.Message };
+                return new MediaUploadResponseDto(media.Id) { Error = ex.Message };
             }
         });
         var dtos = await Task.WhenAll(tasks);
@@ -85,30 +85,38 @@ public class MediaService(MongoDbService dbService, MinioClient minioClient)
 
     private async Task<Media> CreateMedia(CollectionName mediaCollection, Media newMedia)
     {
-        return await dbService.CreateOneAsync(mediaCollection, newMedia, nul<l)>;
+        return await dbService.CreateOneAsync(mediaCollection, newMedia, null);
     }
 
-    public async Task<List<MediaReadUrlDto>> GetReadUrlsAsync(BucketName bucketName, List<string> parentIds)
+    public async Task<List<MediaReadResponseDto>> GetReadUrlsAsync(BucketName bucketName, MediaReadRequestDto mediaReadRequestDto)
     {
-        var objectIds = parentIds.Select(id => new ObjectId(id)).ToList();
+        var parentId = new ObjectId(mediaReadRequestDto.ParentHash);
 
-        var filter = Builders<Media>.Filter.In(m => m.ParentId, objectIds);
+        var sortDefinition = Builders<Media>.Sort.Descending("creationDate");
+        var filter = Builders<Media>.Filter.Eq(m => m.ParentId, parentId);
 
-        var media = await dbService.FindAsync(CollectionName.EventMedia, filter);
+        var media = await dbService.FindForPaginationAsync(
+            CollectionName.EventMedia,
+            filter,
+            sortDefinition,
+            mediaReadRequestDto.PageNumber,
+            mediaReadRequestDto.PageSize
+        );
 
         var tasks = media.Select(async m =>
         {
             var name = m.ParentId.ToString() + '/' + m.Id.ToString() + m.Extension;
             try
             {
-                var validUntil = DateTime.UtcNow.AddSeconds(600); // URL valid for 10 mins
+                var validUntil = DateTime.UtcNow.AddDays(1); // URL valid for 1 day
                 var url = await minioClient.GetReadUrl(bucketName, name, validUntil);
-                return new MediaReadUrlDto(m, url, validUntil);
+                return new MediaReadResponseDto(m, url, validUntil);
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Failed to retrieve URL for image '{m.Id}': {ex.Message}");
-                return new MediaReadUrlDto(m.Id, ex.Message);
+                var errorMessagge = $"Failed to retrieve URL";
+                Console.WriteLine($"{errorMessagge} for image '{m.Id}': {ex.Message}");
+                return new MediaReadResponseDto(m.Id, ex.Message);
             }
         });
         var dtos = await Task.WhenAll(tasks);

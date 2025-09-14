@@ -42,19 +42,4 @@ public class FirebaseAuthService : IAuthenticationService
 
     public FirebaseAuth GetInstance() => _authInstance.Value;
 
-    public async Task<string> RetrieveMail(string uid)
-    {
-        try
-        {
-            var userrecord = await GetInstance().GetUserAsync(uid);
-
-            return userrecord.Email;
-        }
-        catch (Exception)
-        {
-            throw new SecurityTokenValidationException("No Firebase user found");
-        }
-
-    }
-
 }

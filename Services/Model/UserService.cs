@@ -59,7 +59,7 @@ public class UserService(MongoDbService dbService, ProfileService profileService
         var userProfile = new UserProfile(profile, userRole, mainProfile);
 
         var userUpdate = Builders<User>.Update.Push(u => u.Profiles, userProfile);
-        user = await dbService.PatchUpdateByIdAsync(userCollection, user.Id, userUpdate, session);
+        user = await dbService.FindOneByIdAndUpdateAsync(userCollection, user.Id, userUpdate, session);
 
         await profileService.AddUserAsync(profile, user, session);
         return user;

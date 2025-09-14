@@ -61,7 +61,7 @@ public class MongoDbInitializer(
 
         await InitializeCollectionAsync(CollectionName.Profiles, "_id");
         await CreateIndexAsync<Profile>(CollectionName.Profiles, "tag", true);
-
+        
         await InitializeCollectionAsync(CollectionName.ProfileDetails, "profileId");
 
         await InitializeCollectionAsync(CollectionName.ProfileEvents, "profileId");
@@ -70,8 +70,12 @@ public class MongoDbInitializer(
         await CreateIndexAsync<ProfileEvent>(CollectionName.ProfileEvents, "eventEndTime");
 
         await InitializeCollectionAsync(CollectionName.Events, "_id");
+        await InitializeCollectionAsync(CollectionName.EventDetails, "eventId");
+        await InitializeCollectionAsync(CollectionName.EventMedia, "parentId");
+        await CreateIndexAsync<ProfileEvent>(CollectionName.EventMedia, "creationDate");
+
         await InitializeCollectionAsync(CollectionName.EventProfiles, "eventId");
-        await InitializeCollectionAsync(CollectionName.EventMedia, "eventId");
+
 
         log("MongoDB collection initialization complete.");
     }

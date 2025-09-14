@@ -29,24 +29,26 @@ public class EventService(MongoDbService dbService, EventDetailsService eventDet
             EndTime = newEventDto.EndTime.ToUniversalTime(),
         };
 
-        RetrieveEventResponseDto Event = await dbService.ExecuteInTransactionAsync(async (session) =>
+        RetrieveEventResponseDto EventDto = await dbService.ExecuteInTransactionAsync(async (session) =>
         {
             var createdEvent = await dbService.CreateOneAsync(eventCollection, newEvent, session);
             var eventDetails = await eventDetailsService.CreateAsync(createdEvent, newEventDto.Description, session);
 
             var newProfileEvent = new ProfileEvent
             (
-                createdEvent, new ObjectId(profileId)
+                createdEvent,
+                new ObjectId(profileId)
             )
             {
                 Confirmed = true
             };
+
             var profileEvent = await profileEventService.CreateProfileEventAsync(newProfileEvent, session);
 
             return new RetrieveEventResponseDto(createdEvent, eventDetails, [profileEvent]);
         });
 
-        return Event;
+        return EventDto;
     }
 
     public async Task<RetrieveEventResponseDto> RetrieveEventById(string id)
@@ -60,6 +62,7 @@ public class EventService(MongoDbService dbService, EventDetailsService eventDet
     {
         await dbService.ConfirmExists<Event>(eventCollection, id);
     }
+
 
 
     /*
@@ -143,11 +146,12 @@ public class EventService(MongoDbService dbService, EventDetailsService eventDet
 
         */
     //RetrieveEventsRequestDto
-    public async Task<List<RetrieveEventResponseDto>> RetrieveEventsByProfileId(List<string> profileHashes, DateTimeOffset startTime, DateTimeOffset? endTime)
+
+    public async Task<List<RetrieveEventResponseDto>> RetrieveEventsByProfileId(RetrieveMultipleEventsRequestDto requestDto)
     {
         var aggregate = dbService.GetAggregate<ProfileEvent>(CollectionName.ProfileEvents);
 
-        var objectIds = profileHashes.Select(ph => new ObjectId(ph)).ToList();
+        var objectIds = requestDto.ProfileHashes.Select(ph => new ObjectId(ph)).ToList();
 
         // Step 1: Define the filter using Builders
         var filterBuilder = Builders<ProfileEvent>.Filter;
@@ -157,14 +161,14 @@ public class EventService(MongoDbService dbService, EventDetailsService eventDet
         {
             // Add the mandatory filters
             filterBuilder.In(pe => pe.ProfileId, objectIds),
-            filterBuilder.Gte(pe => pe.EventEndTime, startTime.ToUniversalTime())
+            filterBuilder.Gte(pe => pe.EventEndTime, requestDto.StartTime.ToUniversalTime())
         };
 
         // Step 2: Conditionally add the end time filter
-        if (endTime.HasValue)
+        if (requestDto.EndTime.HasValue)
         {
             // Only apply the Less-than-or-equal filter if endTime has a value
-            filters.Add(filterBuilder.Lte(pe => pe.EventStartTime, endTime.Value.ToUniversalTime()));
+            filters.Add(filterBuilder.Lte(pe => pe.EventStartTime, requestDto.EndTime.Value.ToUniversalTime()));
         }
 
         // Combine all filters with a logical AND
@@ -265,16 +269,20 @@ public class EventService(MongoDbService dbService, EventDetailsService eventDet
             }
         */
 
-    public async Task<List<MediaUploadUrlDto>> GetMediaUploadUrlsAsync(Profile profile, MediaUploadDto dto)
+    public async Task<List<MediaUploadResponseDto>> GetMediaUploadUrlsAsync(Profile profile, MediaUploadRequestDto dto)
     {
         await ConfirmEventExists(dto.ParentHash);
 
-        return await mediaService.GetUploadUrlsAsync(profile, eventBucket, eventMediaCollection, dto);
+        var dtos = await mediaService.GetUploadUrlsAsync(profile, eventBucket, eventMediaCollection, dto);
+        // TODO move this to after the images have been checked
+        var okImages = dtos.Where((dto) => dto.Error == null).Count();
+        await eventDetailsService.AddImages(okImages, dto.ParentHash);
+        return dtos;
     }
 
-    public async Task<List<MediaReadUrlDto>> GetMediaReadUrlsAsync(Profile profile, List<string> eventHashes)
+    public async Task<List<MediaReadResponseDto>> GetMediaReadUrlsAsync(Profile profile, MediaReadRequestDto mediaReadRequestDto)
     {
         // TODO check profile permits over events
-        return await mediaService.GetReadUrlsAsync(eventBucket, eventHashes);
+        return await mediaService.GetReadUrlsAsync(eventBucket, mediaReadRequestDto);
     }
 }

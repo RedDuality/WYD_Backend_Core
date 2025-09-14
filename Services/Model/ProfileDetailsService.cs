@@ -26,7 +26,7 @@ public class ProfileDetailsService(MongoDbService dbService)
         var detailsFilter = Builders<ProfileDetails>.Filter.Eq(d => d.ProfileId, profileId);
         var updateDefinition = Builders<ProfileDetails>.Update.AddToSet(pd => pd.Users, profileUser);
         
-        return await dbService.PatchUpdateAsync(profileDetailsCollection, detailsFilter, updateDefinition, session);
+        return await dbService.FindOneAndUpdateAsync(profileDetailsCollection, detailsFilter, updateDefinition, session);
     }
 
 }

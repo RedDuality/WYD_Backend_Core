@@ -1,11 +1,15 @@
 using MongoDB.Driver;
 using MongoDB.Bson;
 using Core.Model.Base;
+using Microsoft.AspNetCore.Razor.Language;
 
 namespace Core.Components.Database;
 
 public class MongoDbService(MongoDbContext dbContext)
 {
+
+    #region util
+
     public IMongoCollection<TDocument> GetCollection<TDocument>(CollectionName cn)
         where TDocument : BaseEntity
     {
@@ -47,6 +51,43 @@ public class MongoDbService(MongoDbContext dbContext)
             return await transactionalLogic(session);
         }
     }
+
+    public async Task ConfirmExists<TDocument>(CollectionName cn, string stringId)
+    where TDocument : BaseEntity
+    {
+        string collectionName = cn.ToString();
+        var exists = false;
+        try
+        {
+            var collection = dbContext.GetCollection<TDocument>(collectionName);
+
+            exists = await collection
+                .Find(Builders<TDocument>.Filter.Eq(x => x.Id, new ObjectId(stringId)))
+                .Project(x => x.Id)   // only retrieve _id from index
+                .Limit(1)
+                .AnyAsync();
+        }
+        catch (MongoException ex)
+        {
+            throw new Exception(
+                $"MongoDB operation failed while performing CheckExistance on collection '{collectionName}'.",
+                ex
+            );
+        }
+
+        if (!exists)
+        {
+            throw new Exception(
+                $"Document with id '{stringId}' not found in collection '{collectionName}'"
+            );
+        }
+
+    }
+
+    #endregion
+
+
+    #region create
 
     public async Task<TDocument> CreateOneAsync<TDocument>(CollectionName cn, TDocument newDocument, IClientSessionHandle? session)
         where TDocument : BaseEntity
@@ -95,44 +136,34 @@ public class MongoDbService(MongoDbContext dbContext)
         }
     }
 
-    public async Task ConfirmExists<TDocument>(CollectionName cn, string stringId)
+    #endregion
+
+
+    #region update
+
+    public async Task<TDocument> FindOneByIdAndUpdateAsync<TDocument>(
+        CollectionName collectionName,
+        ObjectId objectId,
+        UpdateDefinition<TDocument> updateDefinition,
+        IClientSessionHandle? session
+    )
     where TDocument : BaseEntity
     {
-        string collectionName = cn.ToString();
-        var exists = false;
-        try
-        {
-            var collection = dbContext.GetCollection<TDocument>(collectionName);
-
-            exists = await collection
-                .Find(Builders<TDocument>.Filter.Eq(x => x.Id, new ObjectId(stringId)))
-                .Project(x => x.Id)   // only retrieve _id from index
-                .Limit(1)
-                .AnyAsync();
-        }
-        catch (MongoException ex)
-        {
-            throw new Exception(
-                $"MongoDB operation failed while performing CheckExistance on collection '{collectionName}'.",
-                ex
+        var filter = Builders<TDocument>.Filter.Eq(doc => doc.Id, objectId);
+        return await FindOneAndUpdateAsync(collectionName, filter, updateDefinition, null, null)
+            ?? throw new KeyNotFoundException(
+                $"Document with id '{objectId}' not found in collection '{collectionName}' for patch update."
             );
-        }
-
-        if (!exists)
-        {
-            throw new Exception(
-                $"Document with id '{stringId}' not found in collection '{collectionName}'"
-            );
-        }
 
     }
 
-
-    //filter more complex, no session
+    // inherently transactional on a sigle document
+    // returns the document
     public async Task<TDocument> FindOneAndUpdateAsync<TDocument>(
         CollectionName cn,
         FilterDefinition<TDocument> filter,
         UpdateDefinition<TDocument> updateDefinition,
+        IClientSessionHandle? session,
         FindOneAndUpdateOptions<TDocument>? options = null
     )
     where TDocument : BaseEntity
@@ -141,7 +172,32 @@ public class MongoDbService(MongoDbContext dbContext)
         try
         {
             var collection = dbContext.GetCollection<TDocument>(collectionName);
-            return await collection.FindOneAndUpdateAsync(filter, updateDefinition, options);
+            var combinedUpdateDefinition = updateDefinition;
+
+            if (typeof(BaseDateEntity).IsAssignableFrom(typeof(TDocument)))
+            {
+                combinedUpdateDefinition = Builders<TDocument>.Update.Combine(
+                    updateDefinition,
+                    Builders<TDocument>.Update.Set("updatedAt", DateTimeOffset.UtcNow)
+                );
+            }
+
+            if (session != null)
+            {
+                return await collection.FindOneAndUpdateAsync(
+                    session,
+                    filter,
+                    updateDefinition,
+                    new FindOneAndUpdateOptions<TDocument> { ReturnDocument = ReturnDocument.After }
+                );
+            }
+
+            return await collection.FindOneAndUpdateAsync(
+                filter,
+                updateDefinition,
+                new FindOneAndUpdateOptions<TDocument> { ReturnDocument = ReturnDocument.After }
+            );
+
         }
         catch (MongoException ex)
         {
@@ -152,27 +208,12 @@ public class MongoDbService(MongoDbContext dbContext)
         }
     }
 
-    public async Task<TDocument> PatchUpdateByIdAsync<TDocument>(
-        CollectionName collectionName,
-        ObjectId objectId,
-        UpdateDefinition<TDocument> updateDefinition,
-        IClientSessionHandle session
-    )
-    where TDocument : BaseEntity
-    {
-        var filter = Builders<TDocument>.Filter.Eq(doc => doc.Id, objectId);
-        return await PatchUpdateAsync(collectionName, filter, updateDefinition, session)
-            ?? throw new KeyNotFoundException(
-                $"Document with id '{objectId}' not found in collection '{collectionName}' for patch update."
-            );
-
-    }
-
-    public async Task<TDocument> PatchUpdateAsync<TDocument>(
+    // inherently transactional on a sigle document
+    public async Task<UpdateResult> UpdateOneAsync<TDocument>(
         CollectionName cn,
-        FilterDefinition<TDocument> filterDefinition,
+        FilterDefinition<TDocument> filter,
         UpdateDefinition<TDocument> updateDefinition,
-        IClientSessionHandle session
+        IClientSessionHandle? session
     )
     where TDocument : BaseEntity
     {
@@ -180,23 +221,38 @@ public class MongoDbService(MongoDbContext dbContext)
         try
         {
             var collection = dbContext.GetCollection<TDocument>(collectionName);
+            var combinedUpdateDefinition = updateDefinition;
 
-            return await collection.FindOneAndUpdateAsync(
-                    session,
-                    filterDefinition,
+            if (typeof(BaseDateEntity).IsAssignableFrom(typeof(TDocument)))
+            {
+                combinedUpdateDefinition = Builders<TDocument>.Update.Combine(
                     updateDefinition,
-                    new FindOneAndUpdateOptions<TDocument> { ReturnDocument = ReturnDocument.After }
+                    Builders<TDocument>.Update.Set("updatedAt", DateTimeOffset.UtcNow)
                 );
+            }
+
+            if (session != null)
+            {
+                return await collection.UpdateOneAsync(
+                    session,
+                    filter,
+                    combinedUpdateDefinition
+                );
+            }
+
+            return await collection.UpdateOneAsync(
+                filter,
+                combinedUpdateDefinition
+            );
         }
         catch (MongoException ex)
         {
             throw new Exception(
-                $"MongoDB operation failed while performing patch update for document in collection '{collectionName}'.",
+                $"MongoDB operation failed while performing UpdateOne on collection '{collectionName}'.",
                 ex
             );
         }
     }
-
 
     public async Task<UpdateResult> UpdateManyAsync<TDocument>(
         CollectionName cn,
@@ -208,7 +264,18 @@ public class MongoDbService(MongoDbContext dbContext)
         try
         {
             var collection = dbContext.GetCollection<TDocument>(collectionName);
-            return await collection.UpdateManyAsync(filterDefinition, updateDefinition);
+            var combinedUpdateDefinition = updateDefinition;
+
+            if (typeof(BaseDateEntity).IsAssignableFrom(typeof(TDocument)))
+            {
+                combinedUpdateDefinition = Builders<TDocument>.Update.Combine(
+                    updateDefinition,
+                    Builders<TDocument>.Update.Set("updatedAt", DateTimeOffset.UtcNow)
+                );
+            }
+
+            return await collection.UpdateManyAsync(filterDefinition, combinedUpdateDefinition);
+
         }
         catch (MongoException ex)
         {
@@ -218,6 +285,12 @@ public class MongoDbService(MongoDbContext dbContext)
             );
         }
     }
+
+    #endregion
+
+
+
+    #region retrieve
 
     public async Task<TDocument> RetrieveByIdAsync<TDocument>(
         CollectionName collectionName,
@@ -295,5 +368,40 @@ public class MongoDbService(MongoDbContext dbContext)
             );
         }
     }
+
+    public async Task<List<TDocument>> FindForPaginationAsync<TDocument>(
+        CollectionName cn,
+        FilterDefinition<TDocument> filter,
+        SortDefinition<TDocument> sortDefinition,
+        int? pageNumber,
+        int? pageSize
+    )
+     where TDocument : BaseEntity
+    {
+        string collectionName = cn.ToString();
+        try
+        {
+            var collection = dbContext.GetCollection<TDocument>(collectionName);
+            var findFluent = collection.Find(filter)
+                                       .Sort(sortDefinition);
+
+            if (pageNumber.HasValue && pageSize.HasValue)
+            {
+                findFluent = findFluent.Skip((pageNumber.Value - 1) * pageSize.Value)
+                                       .Limit(pageSize.Value);
+            }
+
+            return await findFluent.ToListAsync();
+        }
+        catch (MongoException ex)
+        {
+            throw new Exception(
+                $"MongoDB operation failed while retrieving for documents in collection '{collectionName}'.",
+                ex
+            );
+        }
+    }
+
+    #endregion
 
 }

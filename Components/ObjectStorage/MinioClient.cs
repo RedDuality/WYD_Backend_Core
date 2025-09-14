@@ -15,9 +15,10 @@ public class MinioClient
 
         string MinioEndpoint = configuration.GetValue<string>("OBJ_STORAGE_ENDPOINT")
             ?? throw new Exception("Object Storage connection failed: 'OBJ_STORAGE_ENDPOINT' is not set in configuration.");
-        string MinioRootUser = configuration.GetValue<string>("OBJ_STORAGE_USER")
+            
+        string MinioAppUser = configuration.GetValue<string>("OBJ_STORAGE_USER")
             ?? throw new Exception("Object Storage connection failed: 'OBJ_STORAGE_USER' is not set in configuration.");
-        string MinioRootPassword = configuration.GetValue<string>("OBJ_STORAGE_PASSWORD")
+        string MinioAppPassword = configuration.GetValue<string>("OBJ_STORAGE_PASSWORD")
             ?? throw new Exception("Object Storage connection failed: 'OBJ_STORAGE_PASSWORD' is not set in configuration.");
 
         var s3Config = new AmazonS3Config
@@ -28,7 +29,7 @@ public class MinioClient
             ForcePathStyle = true
         };
 
-        s3Client = new AmazonS3Client(MinioRootUser, MinioRootPassword, s3Config);
+        s3Client = new AmazonS3Client(MinioAppUser, MinioAppPassword, s3Config);
 
     }
 
@@ -41,9 +42,9 @@ public class MinioClient
             Console.WriteLine("Successfully connected to MinIO service." + response.Buckets);
             //return  != null;
         }
-        catch
+        catch(Exception ex)
         {
-            throw new Exception($"There was an error while trying to connect to the Object Storage");
+            throw new Exception($"There was an error while trying to connect to the Object Storage\n ${ex.Message}");
         }
     }
 
@@ -101,7 +102,7 @@ public class MinioClient
             uploadUrl = uploadUrl.Replace("https://", "http://");
 
 
-            Console.WriteLine($"\nGenerated pre-signed URL for upload:\n{uploadUrl}");
+            Console.WriteLine($"\nGenerated pre-signed URL for upload.");
 
             return uploadUrl;
         }
