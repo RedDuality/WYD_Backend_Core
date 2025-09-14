@@ -2,30 +2,38 @@ using MongoDB.Bson;
 using Core.Model;
 using Core.Model.Join;
 using Core.Components.Database;
-using Core.Model.Dto;
 using MongoDB.Driver;
 using Core.Model.Util;
+using Core.Components.ObjectStorage;
+using Core.DTO.MediaAPI;
+using Core.DTO.Model;
+using Core.DTO.EventAPI;
 
 namespace Core.Services.Model;
 
 
-public class EventService(MongoDbService dbService, ProfileEventService profileEventService)
+public class EventService(MongoDbService dbService, EventDetailsService eventDetailsService, ProfileEventService profileEventService, MediaService mediaService)
 {
     private readonly CollectionName eventCollection = CollectionName.Events;
 
-    public async Task<Event> CreateEventAsync(EventDto newEventDto, string profileId)
+    private readonly CollectionName eventMediaCollection = CollectionName.EventMedia;
+
+    private readonly BucketName eventBucket = BucketName.Events;
+
+    public async Task<RetrieveEventResponseDto> CreateEventAsync(CreateEventRequestDto newEventDto, string profileId)
     {
         var newEvent = new Event
         {
             Title = newEventDto.Title!,
-            Description = newEventDto.Description,
             StartTime = newEventDto.StartTime.ToUniversalTime(),
             EndTime = newEventDto.EndTime.ToUniversalTime(),
         };
 
-        Event Event = await dbService.ExecuteInTransactionAsync(async (session) =>
+        RetrieveEventResponseDto Event = await dbService.ExecuteInTransactionAsync(async (session) =>
         {
             var createdEvent = await dbService.CreateOneAsync(eventCollection, newEvent, session);
+            var eventDetails = await eventDetailsService.CreateAsync(createdEvent, newEventDto.Description, session);
+
             var newProfileEvent = new ProfileEvent
             (
                 createdEvent, new ObjectId(profileId)
@@ -33,106 +41,109 @@ public class EventService(MongoDbService dbService, ProfileEventService profileE
             {
                 Confirmed = true
             };
+            var profileEvent = await profileEventService.CreateProfileEventAsync(newProfileEvent, session);
 
-            await profileEventService.CreateProfileEventAsync(newProfileEvent, session);
-
-            return createdEvent;
+            return new RetrieveEventResponseDto(createdEvent, eventDetails, [profileEvent]);
         });
 
         return Event;
     }
 
-    public async Task<Event> RetrieveEventById(string id)
+    public async Task<RetrieveEventResponseDto> RetrieveEventById(string id)
     {
-        return await dbService.RetrieveByIdAsync<Event>(eventCollection, id);
+        var ev = await dbService.RetrieveByIdAsync<Event>(eventCollection, id);
+        var eventDetails = await eventDetailsService.RetrieveByEventId(id);
+        return new RetrieveEventResponseDto(ev, eventDetails);
     }
 
     public async Task ConfirmEventExists(string id)
     {
         await dbService.ConfirmExists<Event>(eventCollection, id);
     }
-/*
-        public async Task<List<EventDto>> RetrieveEventsByProfileIdOld(List<string> profileHashes, DateTimeOffset startTime, DateTimeOffset? endTime)
-        {
-            var aggregate = dbService.GetAggregate<ProfileEvent>(CollectionName.ProfileEvents);
 
-            var objectIds = profileHashes.Select(ph => new ObjectId(ph)).ToList();
 
-            // Step 1: Define the filter using Builders
-            var filterBuilder = Builders<ProfileEvent>.Filter;
-
-            // Build the filter with logical AND conditions
-            var filters = new List<FilterDefinition<ProfileEvent>>
+    /*
+            public async Task<List<EventDto>> RetrieveEventsByProfileIdOld(List<string> profileHashes, DateTimeOffset startTime, DateTimeOffset? endTime)
             {
-                // Add the mandatory filters
-                filterBuilder.In(pe => pe.ProfileId, objectIds),
-                filterBuilder.Gte(pe => pe.EventEndTime, startTime.ToUniversalTime())
-            };
+                var aggregate = dbService.GetAggregate<ProfileEvent>(CollectionName.ProfileEvents);
 
-            // Step 2: Conditionally add the end time filter
-            if (endTime.HasValue)
-            {
-                // Only apply the Less-than-or-equal filter if endTime has a value
-                filters.Add(filterBuilder.Lte(pe => pe.EventStartTime, endTime.Value.ToUniversalTime()));
+                var objectIds = profileHashes.Select(ph => new ObjectId(ph)).ToList();
+
+                // Step 1: Define the filter using Builders
+                var filterBuilder = Builders<ProfileEvent>.Filter;
+
+                // Build the filter with logical AND conditions
+                var filters = new List<FilterDefinition<ProfileEvent>>
+                {
+                    // Add the mandatory filters
+                    filterBuilder.In(pe => pe.ProfileId, objectIds),
+                    filterBuilder.Gte(pe => pe.EventEndTime, startTime.ToUniversalTime())
+                };
+
+                // Step 2: Conditionally add the end time filter
+                if (endTime.HasValue)
+                {
+                    // Only apply the Less-than-or-equal filter if endTime has a value
+                    filters.Add(filterBuilder.Lte(pe => pe.EventStartTime, endTime.Value.ToUniversalTime()));
+                }
+
+                // Combine all filters with a logical AND
+                var filter = filterBuilder.And(filters);
+
+                // Apply the filter to the aggregate pipeline
+                var matchStage = aggregate.Match(filter)
+                                          .Limit(40);
+
+                // Step 3: Lookup the corresponding Event for each ProfileEvent
+                // Join the two collecions in a ProfileEventWithCEvents object
+                var lookupStage = matchStage.Lookup<ProfileEvent, Event, ProfileEventWithCorrespondingEvents>(
+                    dbService.GetCollection<Event>(eventCollection),
+                    pe => pe.EventId,
+                    e => e.Id,
+                    pewce => pewce.Events);
+
+                //flat out the results on a new projected object
+                var projected = lookupStage
+                    .Project(pe => new
+                    {
+                        Event = pe.Events[0],
+                        pe.ProfileId,
+                        pe.Role,
+                        pe.Confirmed
+                    });
+
+
+                var intermediateResults = await projected.ToListAsync();
+
+                // convert projected obj into eventDto
+                var result = intermediateResults.Select(proj => new EventDto
+                {
+                    Hash = proj.Event.Id.ToString(),
+                    Title = proj.Event.Title,
+                    Description = proj.Event.Description,
+                    StartTime = proj.Event.StartTime,
+                    EndTime = proj.Event.EndTime,
+                    ProfileEvents =
+                    [
+                        new ProfileEventDto {
+                                ProfileHash = proj.ProfileId.ToString(),
+                                EventRole = proj.Role,
+                                Confirmed = proj.Confirmed,
+                                Trusted = false
+                            }
+                    ]
+                }).ToList();
+
+                //var result = await projectStage.ToListAsync();
+
+
+                return result;
+
             }
 
-            // Combine all filters with a logical AND
-            var filter = filterBuilder.And(filters);
-
-            // Apply the filter to the aggregate pipeline
-            var matchStage = aggregate.Match(filter)
-                                      .Limit(40);
-
-            // Step 3: Lookup the corresponding Event for each ProfileEvent
-            // Join the two collecions in a ProfileEventWithCEvents object
-            var lookupStage = matchStage.Lookup<ProfileEvent, Event, ProfileEventWithCorrespondingEvents>(
-                dbService.GetCollection<Event>(eventCollection),
-                pe => pe.EventId,
-                e => e.Id,
-                pewce => pewce.Events);
-
-            //flat out the results on a new projected object
-            var projected = lookupStage
-                .Project(pe => new
-                {
-                    Event = pe.Events[0],
-                    pe.ProfileId,
-                    pe.Role,
-                    pe.Confirmed
-                });
-
-
-            var intermediateResults = await projected.ToListAsync();
-
-            // convert projected obj into eventDto
-            var result = intermediateResults.Select(proj => new EventDto
-            {
-                Hash = proj.Event.Id.ToString(),
-                Title = proj.Event.Title,
-                Description = proj.Event.Description,
-                StartTime = proj.Event.StartTime,
-                EndTime = proj.Event.EndTime,
-                ProfileEvents =
-                [
-                    new ProfileEventDto {
-                            ProfileHash = proj.ProfileId.ToString(),
-                            EventRole = proj.Role,
-                            Confirmed = proj.Confirmed,
-                            Trusted = false
-                        }
-                ]
-            }).ToList();
-
-            //var result = await projectStage.ToListAsync();
-
-
-            return result;
-
-        }
-
-    */
-
-    public async Task<List<EventDto>> RetrieveEventsByProfileId(List<string> profileHashes, DateTimeOffset startTime, DateTimeOffset? endTime)
+        */
+    //RetrieveEventsRequestDto
+    public async Task<List<RetrieveEventResponseDto>> RetrieveEventsByProfileId(List<string> profileHashes, DateTimeOffset startTime, DateTimeOffset? endTime)
     {
         var aggregate = dbService.GetAggregate<ProfileEvent>(CollectionName.ProfileEvents);
 
@@ -188,11 +199,7 @@ public class EventService(MongoDbService dbService, ProfileEventService profileE
             pe => pe.Event.Id,
             group => new
             {
-                Id = group.Key,
-                Title = group.First().Event.Title,
-                Description = group.First().Event.Description,
-                StartTime = group.First().Event.StartTime,
-                EndTime = group.First().Event.EndTime,
+                ev = group.First().Event,
                 ProfileEvents = group.Select(pe => new ProfileEventDto
                 {
                     ProfileHash = pe.ProfileId.ToString(),
@@ -206,15 +213,7 @@ public class EventService(MongoDbService dbService, ProfileEventService profileE
         var result = await grouped.ToListAsync();
 
         // Map the results over EventDto objects
-        var finalResult = result.Select(g => new EventDto
-        {
-            Hash = g.Id.ToString(),
-            Title = g.Title,
-            Description = g.Description,
-            StartTime = g.StartTime,
-            EndTime = g.EndTime,
-            ProfileEvents = g.ProfileEvents.ToList()
-        }).ToList();
+        var finalResult = result.Select(g => new RetrieveEventResponseDto(g.ev, g.ProfileEvents.ToList())).ToList();
 
         return finalResult;
 
@@ -265,4 +264,17 @@ public class EventService(MongoDbService dbService, ProfileEventService profileE
 
             }
         */
+
+    public async Task<List<MediaUploadUrlDto>> GetMediaUploadUrlsAsync(Profile profile, MediaUploadDto dto)
+    {
+        await ConfirmEventExists(dto.ParentHash);
+
+        return await mediaService.GetUploadUrlsAsync(profile, eventBucket, eventMediaCollection, dto);
+    }
+
+    public async Task<List<MediaReadUrlDto>> GetMediaReadUrlsAsync(Profile profile, List<string> eventHashes)
+    {
+        // TODO check profile permits over events
+        return await mediaService.GetReadUrlsAsync(eventBucket, eventHashes);
+    }
 }

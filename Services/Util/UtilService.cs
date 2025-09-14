@@ -36,7 +36,7 @@ public class UtilService(
     private static List<Tuple<EventDto, Profile>> GenerateEventDtos(List<Profile> profiles)
     {
         List<Tuple<EventDto, Profile>> result = [];
-        DateTime now = DateTime.UtcNow;
+        DateTime now = DateTimeOffset.UtcNow;
         result.Add(
             new Tuple<EventDto, Profile>(
                 new EventDto

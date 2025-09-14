@@ -11,7 +11,10 @@ public sealed class CollectionName
     public static readonly CollectionName ProfileEvents = new("ProfileEvents");
     public static readonly CollectionName EventProfiles = new("EventProfiles");
     public static readonly CollectionName Events = new("Events");
-    public static readonly CollectionName Images = new("Images");
+    public static readonly CollectionName EventDetails = new("EventDetails");
+    public static readonly CollectionName EventMedia = new("EventMedia");
+
+
 
     public override string ToString() => Name;
 }

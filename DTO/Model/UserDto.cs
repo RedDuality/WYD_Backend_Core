@@ -1,6 +1,7 @@
+using Core.Model;
 using Core.Model.Join;
 
-namespace Core.Model.Dto;
+namespace Core.DTO.Model;
 
 public class UserDto(User user, List<Tuple<Profile, UserProfile>> profiles)
 {

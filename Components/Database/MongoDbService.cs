@@ -55,7 +55,16 @@ public class MongoDbService(MongoDbContext dbContext)
         try
         {
             var collection = dbContext.GetCollection<TDocument>(collectionName);
-            await collection.InsertOneAsync(session, newDocument);
+            if (session != null)
+            {
+                await collection.InsertOneAsync(session, newDocument);
+            }
+            else
+            {
+                await collection.InsertOneAsync(newDocument);
+            }
+
+
             return newDocument;
         }
         catch (MongoException ex)
@@ -84,6 +93,38 @@ public class MongoDbService(MongoDbContext dbContext)
                 ex
             );
         }
+    }
+
+    public async Task ConfirmExists<TDocument>(CollectionName cn, string stringId)
+    where TDocument : BaseEntity
+    {
+        string collectionName = cn.ToString();
+        var exists = false;
+        try
+        {
+            var collection = dbContext.GetCollection<TDocument>(collectionName);
+
+            exists = await collection
+                .Find(Builders<TDocument>.Filter.Eq(x => x.Id, new ObjectId(stringId)))
+                .Project(x => x.Id)   // only retrieve _id from index
+                .Limit(1)
+                .AnyAsync();
+        }
+        catch (MongoException ex)
+        {
+            throw new Exception(
+                $"MongoDB operation failed while performing CheckExistance on collection '{collectionName}'.",
+                ex
+            );
+        }
+
+        if (!exists)
+        {
+            throw new Exception(
+                $"Document with id '{stringId}' not found in collection '{collectionName}'"
+            );
+        }
+
     }
 
 

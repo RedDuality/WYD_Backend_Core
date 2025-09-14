@@ -27,7 +27,7 @@ public class ProfileEventService(MongoDbService dbService, EventProfileService e
     {
         var update = Builders<ProfileEvent>.Update
             .Set(doc => doc.Confirmed, true)
-            .Set(doc => doc.UpdatedAt, DateTime.UtcNow);
+            .Set(doc => doc.UpdatedAt, DateTimeOffset.UtcNow);
 
         return  await dbService.PatchUpdateAsync(collectionName, id, update);
     }
@@ -48,7 +48,7 @@ public class ProfileEventService(MongoDbService dbService, EventProfileService e
         if (eventProfiles == null || eventProfiles.Count == 0) return;
 
         var update = Builders<ProfileEvent>.Update
-            .Set(doc => doc.EventUpdatedAt, DateTime.UtcNow)
+            .Set(doc => doc.EventUpdatedAt, DateTimeOffset.UtcNow)
             .Set(doc => doc.UpdatedAt, message.UpdatedAt);
 
         foreach (var eventProfile in eventProfiles)

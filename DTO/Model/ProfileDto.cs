@@ -1,4 +1,6 @@
-namespace Core.Model.Dto;
+using Core.Model;
+
+namespace Core.DTO.Model;
 
 public class ProfileDto(Profile p)
 {

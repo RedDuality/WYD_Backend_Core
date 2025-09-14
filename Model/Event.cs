@@ -1,5 +1,4 @@
 using Core.Model.Base;
-using Core.Model.Dto;
 using MongoDB.Bson;
 using MongoDB.Bson.Serialization.Attributes;
 
@@ -9,9 +8,6 @@ public class Event : BaseDateEntity
 {
     [BsonElement("title")]
     public required string Title { get; set; } = "Untitled";
-
-    [BsonElement("description")]
-    public string? Description { get; set; }
 
     [BsonElement("timestamp")]
     public DateTimeOffset Timestamp { get; set; } = DateTimeOffset.UtcNow;

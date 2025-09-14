@@ -94,8 +94,8 @@ public class UserService(MongoDbService dbService, ProfileService profileService
                     Id = -1,
                     Title = $"Error retrieving events for profile {profile.Id}",
                     Description = ex.Message,
-                    StartTime = DateTime.MinValue,
-                    EndTime = DateTime.MinValue,
+                    StartTime = DateTimeOffset.MinValue,
+                    EndTime = DateTimeOffset.MinValue,
                 })];
             }
         });

@@ -24,6 +24,11 @@ public class ProfileService(MongoDbService dbService, ProfileDetailsService prof
         return profile;
     }
 
+    public async Task<Profile> RetrieveProfileById(string id)
+    {
+        return await dbService.RetrieveByIdAsync<Profile>(profileCollection, id);
+    }
+
 }
 /*
 
