@@ -10,16 +10,19 @@ public class MinioClient
     private readonly HashSet<string> checkedBuckets = [];
     private readonly AmazonS3Client s3Client;
 
+    private bool isLocalDevelop = false;
+
     public MinioClient(IConfiguration configuration)
     {
 
         string MinioEndpoint = configuration.GetValue<string>("OBJ_STORAGE_ENDPOINT")
             ?? throw new Exception("Object Storage connection failed: 'OBJ_STORAGE_ENDPOINT' is not set in configuration.");
-            
+
         string MinioAppUser = configuration.GetValue<string>("OBJ_STORAGE_USER")
             ?? throw new Exception("Object Storage connection failed: 'OBJ_STORAGE_USER' is not set in configuration.");
         string MinioAppPassword = configuration.GetValue<string>("OBJ_STORAGE_PASSWORD")
             ?? throw new Exception("Object Storage connection failed: 'OBJ_STORAGE_PASSWORD' is not set in configuration.");
+        isLocalDevelop = configuration.GetValue<bool?>("IS_LOCAL_DEVELOPMENT") ?? false;
 
         var s3Config = new AmazonS3Config
         {
@@ -42,7 +45,7 @@ public class MinioClient
             Console.WriteLine("Successfully connected to MinIO service." + response.Buckets);
             //return  != null;
         }
-        catch(Exception ex)
+        catch (Exception ex)
         {
             throw new Exception($"There was an error while trying to connect to the Object Storage\n ${ex.Message}");
         }
@@ -98,8 +101,8 @@ public class MinioClient
                 Verb = HttpVerb.PUT,
             });
 
-            // remove in production
-            uploadUrl = uploadUrl.Replace("https://", "http://");
+            if (isLocalDevelop)
+                uploadUrl = uploadUrl.Replace("https://", "http://");
 
 
             Console.WriteLine($"\nGenerated pre-signed URL for upload.");
@@ -127,12 +130,12 @@ public class MinioClient
             {
                 BucketName = bucketName.ToString(),
                 Key = ObjectName,
-                Expires = validUntil, 
+                Expires = validUntil,
                 Verb = HttpVerb.GET
             });
 
-            // remove in production
-            readUrl = readUrl.Replace("https://", "http://");
+            if (isLocalDevelop)
+                readUrl = readUrl.Replace("https://", "http://");
 
             return readUrl;
         }
