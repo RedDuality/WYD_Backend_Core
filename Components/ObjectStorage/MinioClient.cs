@@ -10,19 +10,23 @@ public class MinioClient
     private readonly HashSet<string> checkedBuckets = [];
     private readonly AmazonS3Client s3Client;
 
-    private bool isLocalDevelop = false;
+    private readonly string MinioEndpoint;
+
+    private readonly string MinioExternalUrl;
 
     public MinioClient(IConfiguration configuration)
     {
 
-        string MinioEndpoint = configuration.GetValue<string>("OBJ_STORAGE_ENDPOINT")
+        MinioEndpoint = configuration.GetValue<string>("OBJ_STORAGE_ENDPOINT")
             ?? throw new Exception("Object Storage connection failed: 'OBJ_STORAGE_ENDPOINT' is not set in configuration.");
+        MinioExternalUrl = configuration.GetValue<string>("BLOB_STORAGE_EXTERNAL_URL")
+            ?? throw new Exception("Object Storage connection failed: 'BLOB_STORAGE_EXTERNAL_URL' is not set in configuration.");
+
 
         string MinioAppUser = configuration.GetValue<string>("OBJ_STORAGE_USER")
             ?? throw new Exception("Object Storage connection failed: 'OBJ_STORAGE_USER' is not set in configuration.");
         string MinioAppPassword = configuration.GetValue<string>("OBJ_STORAGE_PASSWORD")
             ?? throw new Exception("Object Storage connection failed: 'OBJ_STORAGE_PASSWORD' is not set in configuration.");
-        isLocalDevelop = configuration.GetValue<bool?>("IS_LOCAL_DEVELOPMENT") ?? false;
 
         var s3Config = new AmazonS3Config
         {
@@ -33,7 +37,9 @@ public class MinioClient
         };
 
         s3Client = new AmazonS3Client(MinioAppUser, MinioAppPassword, s3Config);
-
+        
+        // to be used later for substitution
+        MinioEndpoint = MinioEndpoint.Replace("http:", "https:");
     }
 
     public async Task TestConnection()
@@ -101,11 +107,7 @@ public class MinioClient
                 Verb = HttpVerb.PUT,
             });
 
-            if (isLocalDevelop)
-                uploadUrl = uploadUrl.Replace("https://", "http://");
-
-
-            Console.WriteLine($"\nGenerated pre-signed URL for upload.");
+            uploadUrl = uploadUrl.Replace(MinioEndpoint, MinioExternalUrl);
 
             return uploadUrl;
         }
@@ -134,8 +136,7 @@ public class MinioClient
                 Verb = HttpVerb.GET
             });
 
-            if (isLocalDevelop)
-                readUrl = readUrl.Replace("https://", "http://");
+            readUrl = readUrl.Replace(MinioEndpoint, MinioExternalUrl);
 
             return readUrl;
         }

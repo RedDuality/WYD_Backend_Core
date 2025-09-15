@@ -288,8 +288,6 @@ public class MongoDbService(MongoDbContext dbContext)
 
     #endregion
 
-
-
     #region retrieve
 
     public async Task<TDocument> RetrieveByIdAsync<TDocument>(

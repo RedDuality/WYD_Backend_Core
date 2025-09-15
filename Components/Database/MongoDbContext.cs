@@ -33,14 +33,11 @@ public class MongoDbContext
         string hostname = configuration.GetValue<string>("MONGODB_HOSTNAME")
             ?? throw new Exception("Database connection failed: 'MONGODB_HOSTNAME' is not set in configuration.");
 
-        string port = configuration.GetValue<string>("MONGODB_PORT")
-            ?? throw new Exception("Database connection failed: 'MONGODB_PORT' is not set in configuration.");
-
         string databaseName = configuration.GetValue<string>("DATABASE_NAME")
             ?? throw new InvalidOperationException("Database connection failed: 'DATABASE_NAME' is not set in configuration.");
 
         // Build the connection string from the individual components
-        string connectionString = $"mongodb://{username}:{password}@{hostname}:{port}/{databaseName}?authSource=admin";
+        string connectionString = $"mongodb://{username}:{password}@{hostname}/{databaseName}?authSource=admin";
 
         try
         {
