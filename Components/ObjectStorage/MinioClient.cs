@@ -10,17 +10,16 @@ public class MinioClient
     private readonly HashSet<string> checkedBuckets = [];
     private readonly AmazonS3Client s3Client;
     private readonly string publicEndpoint;
-    private readonly bool IsLocalDevelopment;
+
     public MinioClient(IConfiguration configuration)
     {
-        IsLocalDevelopment = configuration.GetValue<string>("ASPNETCORE_ENVIRONMENT") == "Local";
         string MinioEndpoint = configuration.GetValue<string>("OBJ_STORAGE_ENDPOINT")
             ?? throw new Exception("Object Storage connection failed: 'OBJ_STORAGE_ENDPOINT' is not set in configuration.");
         string MinioAppUser = configuration.GetValue<string>("OBJ_STORAGE_USER")
             ?? throw new Exception("Object Storage connection failed: 'OBJ_STORAGE_USER' is not set in configuration.");
         string MinioAppPassword = configuration.GetValue<string>("OBJ_STORAGE_PASSWORD")
             ?? throw new Exception("Object Storage connection failed: 'OBJ_STORAGE_PASSWORD' is not set in configuration.");
-        this.publicEndpoint = configuration.GetValue<string>("OBJ_STORAGE_PUBLIC_ENDPOINT")
+        publicEndpoint = configuration.GetValue<string>("OBJ_STORAGE_PUBLIC_ENDPOINT")
         ?? throw new Exception("Object Storage connection failed: 'OBJ_STORAGE_PUBLIC_ENDPOINT' is not set in configuration.");
 
 
@@ -95,11 +94,9 @@ public class MinioClient
                 Verb = HttpVerb.PUT,
             });
 
-            string internalEndpoint = s3Client.Config.ServiceURL;
+            uploadUrl = uploadUrl.Replace("https:", "http:");
+            var internalEndpoint = s3Client.Config.ServiceURL;
             uploadUrl = uploadUrl.Replace(internalEndpoint, publicEndpoint);
-
-            if (IsLocalDevelopment)
-                uploadUrl = uploadUrl.Replace("https:", "http:");
 
             return uploadUrl;
         }
@@ -128,11 +125,9 @@ public class MinioClient
                 Verb = HttpVerb.GET
             });
 
-            string internalEndpoint = s3Client.Config.ServiceURL;
+            readUrl = readUrl.Replace("https:", "http:");
+            var internalEndpoint = s3Client.Config.ServiceURL;
             readUrl = readUrl.Replace(internalEndpoint, publicEndpoint);
-
-            if (IsLocalDevelopment)
-                readUrl = readUrl.Replace("https:", "http:");
 
             return readUrl;
         }
