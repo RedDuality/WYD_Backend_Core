@@ -9,7 +9,7 @@ public class MinioClient
 
     private readonly HashSet<string> checkedBuckets = [];
     private readonly AmazonS3Client s3Client;
-
+    private readonly string publicEndpoint;
     private readonly bool IsLocalDevelopment;
     public MinioClient(IConfiguration configuration)
     {
@@ -20,6 +20,8 @@ public class MinioClient
             ?? throw new Exception("Object Storage connection failed: 'OBJ_STORAGE_USER' is not set in configuration.");
         string MinioAppPassword = configuration.GetValue<string>("OBJ_STORAGE_PASSWORD")
             ?? throw new Exception("Object Storage connection failed: 'OBJ_STORAGE_PASSWORD' is not set in configuration.");
+        this.publicEndpoint = configuration.GetValue<string>("OBJ_STORAGE_PUBLIC_ENDPOINT")
+        ?? throw new Exception("Object Storage connection failed: 'OBJ_STORAGE_PUBLIC_ENDPOINT' is not set in configuration.");
 
 
         var s3Config = new AmazonS3Config
@@ -35,17 +37,12 @@ public class MinioClient
 
     public async Task TestConnection()
     {
-        try
-        {
-            // Attempt to list buckets. A successful response indicates a valid connection.
-            var response = await s3Client.ListBucketsAsync();
-            Console.WriteLine("Successfully connected to MinIO service." + response.Buckets);
-            //return  != null;
-        }
-        catch (Exception ex)
-        {
-            throw new Exception($"There was an error while trying to connect to the Object Storage\n ${ex.Message}");
-        }
+
+        // Attempt to list buckets. A successful response indicates a valid connection.
+        var response = await s3Client.ListBucketsAsync();
+        Console.WriteLine("Successfully connected to MinIO service." + response.Buckets);
+        //return  != null;
+
     }
 
     private async Task CreateBucketIfNotExistAsync(BucketName bn)
@@ -98,6 +95,9 @@ public class MinioClient
                 Verb = HttpVerb.PUT,
             });
 
+            string internalEndpoint = s3Client.Config.ServiceURL;
+            uploadUrl = uploadUrl.Replace(internalEndpoint, publicEndpoint);
+
             if (IsLocalDevelopment)
                 uploadUrl = uploadUrl.Replace("https:", "http:");
 
@@ -127,7 +127,10 @@ public class MinioClient
                 Expires = validUntil,
                 Verb = HttpVerb.GET
             });
-            
+
+            string internalEndpoint = s3Client.Config.ServiceURL;
+            readUrl = readUrl.Replace(internalEndpoint, publicEndpoint);
+
             if (IsLocalDevelopment)
                 readUrl = readUrl.Replace("https:", "http:");
 
