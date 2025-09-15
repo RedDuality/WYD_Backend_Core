@@ -19,8 +19,8 @@ public class MinioClient
 
         MinioEndpoint = configuration.GetValue<string>("OBJ_STORAGE_ENDPOINT")
             ?? throw new Exception("Object Storage connection failed: 'OBJ_STORAGE_ENDPOINT' is not set in configuration.");
-        MinioExternalUrl = configuration.GetValue<string>("BLOB_STORAGE_EXTERNAL_URL")
-            ?? throw new Exception("Object Storage connection failed: 'BLOB_STORAGE_EXTERNAL_URL' is not set in configuration.");
+        MinioExternalUrl = configuration.GetValue<string>("OBJ_STORAGE_EXTERNAL_URL")
+            ?? throw new Exception("Object Storage connection failed: 'OBJ_STORAGE_EXTERNAL_URL' is not set in configuration.");
 
 
         string MinioAppUser = configuration.GetValue<string>("OBJ_STORAGE_USER")
