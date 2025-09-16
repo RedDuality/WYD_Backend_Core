@@ -6,42 +6,45 @@ namespace Core.Components.ObjectStorage;
 
 public class MinioClient
 {
-
     private readonly HashSet<string> checkedBuckets = [];
-    private readonly AmazonS3Client s3Client;
-    private readonly string publicEndpoint;
+    private readonly AmazonS3Client internalS3Client;
+    private readonly AmazonS3Client publicS3Client;
+    private readonly bool IsLocalDevelopment;
 
     public MinioClient(IConfiguration configuration)
     {
-        string MinioEndpoint = configuration.GetValue<string>("OBJ_STORAGE_ENDPOINT")
+        IsLocalDevelopment = configuration.GetValue<string>("ASPNETCORE_ENVIRONMENT") == "Local";
+        string minioEndpoint = configuration.GetValue<string>("OBJ_STORAGE_ENDPOINT")
             ?? throw new Exception("Object Storage connection failed: 'OBJ_STORAGE_ENDPOINT' is not set in configuration.");
-        string MinioAppUser = configuration.GetValue<string>("OBJ_STORAGE_USER")
+        string minioAppUser = configuration.GetValue<string>("OBJ_STORAGE_USER")
             ?? throw new Exception("Object Storage connection failed: 'OBJ_STORAGE_USER' is not set in configuration.");
-        string MinioAppPassword = configuration.GetValue<string>("OBJ_STORAGE_PASSWORD")
+        string minioAppPassword = configuration.GetValue<string>("OBJ_STORAGE_PASSWORD")
             ?? throw new Exception("Object Storage connection failed: 'OBJ_STORAGE_PASSWORD' is not set in configuration.");
-        publicEndpoint = configuration.GetValue<string>("OBJ_STORAGE_PUBLIC_ENDPOINT")
-        ?? throw new Exception("Object Storage connection failed: 'OBJ_STORAGE_PUBLIC_ENDPOINT' is not set in configuration.");
+        string publicEndpoint = configuration.GetValue<string>("OBJ_STORAGE_PUBLIC_ENDPOINT")
+            ?? throw new Exception("Object Storage connection failed: 'OBJ_STORAGE_PUBLIC_ENDPOINT' is not set in configuration.");
 
-
-        var s3Config = new AmazonS3Config
+        // Internal client (talks directly to MinIO service inside cluster)
+        var internalConfig = new AmazonS3Config
         {
-            ServiceURL = MinioEndpoint,
-
-            // Required for MinIO
+            ServiceURL = minioEndpoint,
             ForcePathStyle = true
         };
+        internalS3Client = new AmazonS3Client(minioAppUser, minioAppPassword, internalConfig);
 
-        s3Client = new AmazonS3Client(MinioAppUser, MinioAppPassword, s3Config);
+        // Public client (signs URLs exactly as the browser will call them)
+        var publicConfig = new AmazonS3Config
+        {
+            ServiceURL = publicEndpoint,
+            ForcePathStyle = true
+        };
+        publicS3Client = new AmazonS3Client(minioAppUser, minioAppPassword, publicConfig);
     }
 
     public async Task TestConnection()
     {
-
-        // Attempt to list buckets. A successful response indicates a valid connection.
-        var response = await s3Client.ListBucketsAsync();
-        Console.WriteLine("Successfully connected to MinIO service." + response.Buckets);
-        //return  != null;
-
+        var response = await internalS3Client.ListBucketsAsync();
+        Console.WriteLine("Successfully connected to MinIO service. Buckets: " +
+                          string.Join(", ", response.Buckets.Select(b => b.BucketName)));
     }
 
     private async Task CreateBucketIfNotExistAsync(BucketName bn)
@@ -51,20 +54,15 @@ public class MinioClient
 
         try
         {
-            // 1. Check if the bucket exists by listing all buckets
-            var listBucketsResponse = await s3Client.ListBucketsAsync();
-
-            // Add a null check for the response and the Buckets property
-            bool bucketExists = listBucketsResponse != null && listBucketsResponse.Buckets != null && listBucketsResponse.Buckets.Any(b => b.BucketName == bucketName);
+            var listBucketsResponse = await internalS3Client.ListBucketsAsync();
+            bool bucketExists = listBucketsResponse?.Buckets?.Any(b => b.BucketName == bucketName) == true;
 
             if (!bucketExists)
             {
-                // 2. If the bucket doesn't exist, create it
-                var putBucketRequest = new PutBucketRequest
+                await internalS3Client.PutBucketAsync(new PutBucketRequest
                 {
                     BucketName = bucketName
-                };
-                await s3Client.PutBucketAsync(putBucketRequest);
+                });
                 Console.WriteLine($"Bucket '{bucketName}' created successfully.");
             }
             else
@@ -74,71 +72,45 @@ public class MinioClient
 
             checkedBuckets.Add(bucketName);
         }
-        catch
+        catch (Exception ex)
         {
-            throw new Exception($"There was an error while trying to create the Bucket");
+            throw new Exception($"There was an error while trying to create the bucket '{bucketName}'", ex);
         }
     }
-    public async Task<string> GetUploadUrl(BucketName bucketName, string ObjectName, DateTime validUntil)
+
+    public async Task<string> GetUploadUrl(BucketName bucketName, string objectName, DateTime validUntil)
     {
-        try
+        await CreateBucketIfNotExistAsync(bucketName);
+
+        var uploadUrl = publicS3Client.GetPreSignedURL(new GetPreSignedUrlRequest
         {
-            await CreateBucketIfNotExistAsync(bucketName);
+            BucketName = bucketName.ToString(),
+            Key = objectName,
+            Expires = validUntil,
+            Verb = HttpVerb.PUT
+        });
 
-            // Generate the pre-signed URL for the upload.
-            string uploadUrl = s3Client.GetPreSignedURL(new GetPreSignedUrlRequest
-            {
-                BucketName = bucketName.ToString(),
-                Key = ObjectName,
-                Expires = validUntil,
-                Verb = HttpVerb.PUT,
-            });
-
+        if (IsLocalDevelopment)
             uploadUrl = uploadUrl.Replace("https:", "http:");
-            var internalEndpoint = s3Client.Config.ServiceURL;
-            uploadUrl = uploadUrl.Replace(internalEndpoint, publicEndpoint);
 
-            return uploadUrl;
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"An error occurred: {ex.Message}");
-            throw new Exception(
-                "There was an error while trying to connect to the Object Storage",
-                ex
-            );
-        }
+        return uploadUrl;
     }
 
-    public async Task<string> GetReadUrl(BucketName bucketName, string ObjectName, DateTime validUntil)
+    public async Task<string> GetReadUrl(BucketName bucketName, string objectName, DateTime validUntil)
     {
-        try
+        await CreateBucketIfNotExistAsync(bucketName);
+
+        var readUrl = publicS3Client.GetPreSignedURL(new GetPreSignedUrlRequest
         {
-            await CreateBucketIfNotExistAsync(bucketName);
+            BucketName = bucketName.ToString(),
+            Key = objectName,
+            Expires = validUntil,
+            Verb = HttpVerb.GET
+        });
 
-            // Generate the pre-signed URL for the upload.
-            string readUrl = s3Client.GetPreSignedURL(new GetPreSignedUrlRequest
-            {
-                BucketName = bucketName.ToString(),
-                Key = ObjectName,
-                Expires = validUntil,
-                Verb = HttpVerb.GET
-            });
-
+        if (IsLocalDevelopment)
             readUrl = readUrl.Replace("https:", "http:");
-            var internalEndpoint = s3Client.Config.ServiceURL;
-            readUrl = readUrl.Replace(internalEndpoint, publicEndpoint);
 
-            return readUrl;
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"An error occurred: {ex.Message}");
-            throw new Exception(
-                "There was an error while trying to connect to the Object Storage",
-                ex
-            );
-        }
+        return readUrl;
     }
-
 }
