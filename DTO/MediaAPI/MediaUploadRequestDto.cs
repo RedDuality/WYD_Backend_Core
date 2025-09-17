@@ -1,5 +1,3 @@
-using Core.Model.Enum;
-
 namespace Core.DTO.MediaAPI;
 
 public record MediaInfo(string Id, DateTimeOffset? Date , string Mimetype);

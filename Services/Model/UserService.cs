@@ -3,8 +3,9 @@ using Core.Model;
 using Core.Model.Enum;
 using Core.Model.Join;
 using Core.Components.Database;
-using Core.External.Interfaces;
 using MongoDB.Driver;
+using Core.DTO.UserAPI;
+using MongoDB.Bson;
 
 namespace Core.Services.Model;
 
@@ -75,6 +76,26 @@ public class UserService(MongoDbService dbService, ProfileService profileService
         return profiles.Select(p => new Tuple<Profile, UserProfile>(p, userProfilesDictionary[p.Id])).ToList();
     }
 
+
+    #region devices
+
+    public async Task AddDevice(User user, StoreFcmTokenRequestDto requestDto)
+    {
+        var device = new Device(platform: requestDto.Platform, fcmToken: requestDto.FcmToken);
+        var deviceUpdate = Builders<User>.Update.AddToSet(u => u.Devices, device);
+        await dbService.UpdateOneByIdAsync(userCollection, user.Id, deviceUpdate, null, false);
+    }
+
+    public async Task RemoveDevice(ObjectId userId, string fcmToken)
+    {
+        var deviceUpdate = Builders<User>.Update.PullFilter(
+        u => u.Devices,
+        d => d.FcmToken == fcmToken
+    );
+        await dbService.UpdateOneByIdAsync(userCollection, userId, deviceUpdate, null, false);
+    }
+
+    #endregion
 
 }
 /*

@@ -145,12 +145,14 @@ public class MongoDbService(MongoDbContext dbContext)
         CollectionName collectionName,
         ObjectId objectId,
         UpdateDefinition<TDocument> updateDefinition,
-        IClientSessionHandle? session
+        IClientSessionHandle? session = null,
+        FindOneAndUpdateOptions<TDocument>? options = null,
+        bool saveUpdates = true
     )
     where TDocument : BaseEntity
     {
         var filter = Builders<TDocument>.Filter.Eq(doc => doc.Id, objectId);
-        return await FindOneAndUpdateAsync(collectionName, filter, updateDefinition, null, null)
+        return await FindOneAndUpdateAsync(collectionName, filter, updateDefinition, session, options, saveUpdates)
             ?? throw new KeyNotFoundException(
                 $"Document with id '{objectId}' not found in collection '{collectionName}' for patch update."
             );
@@ -163,8 +165,9 @@ public class MongoDbService(MongoDbContext dbContext)
         CollectionName cn,
         FilterDefinition<TDocument> filter,
         UpdateDefinition<TDocument> updateDefinition,
-        IClientSessionHandle? session,
-        FindOneAndUpdateOptions<TDocument>? options = null
+        IClientSessionHandle? session = null,
+        FindOneAndUpdateOptions<TDocument>? options = null,
+        bool saveUpdates = true
     )
     where TDocument : BaseEntity
     {
@@ -174,7 +177,7 @@ public class MongoDbService(MongoDbContext dbContext)
             var collection = dbContext.GetCollection<TDocument>(collectionName);
             var combinedUpdateDefinition = updateDefinition;
 
-            if (typeof(BaseDateEntity).IsAssignableFrom(typeof(TDocument)))
+            if (typeof(BaseDateEntity).IsAssignableFrom(typeof(TDocument)) && saveUpdates)
             {
                 combinedUpdateDefinition = Builders<TDocument>.Update.Combine(
                     updateDefinition,
@@ -188,14 +191,14 @@ public class MongoDbService(MongoDbContext dbContext)
                     session,
                     filter,
                     updateDefinition,
-                    new FindOneAndUpdateOptions<TDocument> { ReturnDocument = ReturnDocument.After }
+                    options ?? new FindOneAndUpdateOptions<TDocument> { ReturnDocument = ReturnDocument.After }
                 );
             }
 
             return await collection.FindOneAndUpdateAsync(
                 filter,
                 updateDefinition,
-                new FindOneAndUpdateOptions<TDocument> { ReturnDocument = ReturnDocument.After }
+                options ?? new FindOneAndUpdateOptions<TDocument> { ReturnDocument = ReturnDocument.After }
             );
 
         }
@@ -209,11 +212,26 @@ public class MongoDbService(MongoDbContext dbContext)
     }
 
     // inherently transactional on a sigle document
+
+    public async Task<UpdateResult> UpdateOneByIdAsync<TDocument>(
+        CollectionName cn,
+        ObjectId objectId,
+        UpdateDefinition<TDocument> updateDefinition,
+        IClientSessionHandle? session = null,
+        bool saveUpdates = true
+    )
+    where TDocument : BaseEntity
+    {
+        var filter = Builders<TDocument>.Filter.Eq(doc => doc.Id, objectId);
+        return await UpdateOneAsync(cn, filter, updateDefinition, session, saveUpdates);
+    }
+
     public async Task<UpdateResult> UpdateOneAsync<TDocument>(
         CollectionName cn,
         FilterDefinition<TDocument> filter,
         UpdateDefinition<TDocument> updateDefinition,
-        IClientSessionHandle? session
+        IClientSessionHandle? session = null,
+        bool saveUpdates = true
     )
     where TDocument : BaseEntity
     {
@@ -223,7 +241,7 @@ public class MongoDbService(MongoDbContext dbContext)
             var collection = dbContext.GetCollection<TDocument>(collectionName);
             var combinedUpdateDefinition = updateDefinition;
 
-            if (typeof(BaseDateEntity).IsAssignableFrom(typeof(TDocument)))
+            if (typeof(BaseDateEntity).IsAssignableFrom(typeof(TDocument)) && saveUpdates)
             {
                 combinedUpdateDefinition = Builders<TDocument>.Update.Combine(
                     updateDefinition,
@@ -257,7 +275,9 @@ public class MongoDbService(MongoDbContext dbContext)
     public async Task<UpdateResult> UpdateManyAsync<TDocument>(
         CollectionName cn,
         FilterDefinition<TDocument> filterDefinition,
-        UpdateDefinition<TDocument> updateDefinition
+        UpdateDefinition<TDocument> updateDefinition,
+        UpdateOptions<TDocument>? options = null,
+        bool saveUpdates = true
     ) where TDocument : BaseEntity
     {
         string collectionName = cn.ToString();
@@ -266,7 +286,7 @@ public class MongoDbService(MongoDbContext dbContext)
             var collection = dbContext.GetCollection<TDocument>(collectionName);
             var combinedUpdateDefinition = updateDefinition;
 
-            if (typeof(BaseDateEntity).IsAssignableFrom(typeof(TDocument)))
+            if (typeof(BaseDateEntity).IsAssignableFrom(typeof(TDocument)) && saveUpdates)
             {
                 combinedUpdateDefinition = Builders<TDocument>.Update.Combine(
                     updateDefinition,
@@ -274,7 +294,7 @@ public class MongoDbService(MongoDbContext dbContext)
                 );
             }
 
-            return await collection.UpdateManyAsync(filterDefinition, combinedUpdateDefinition);
+            return await collection.UpdateManyAsync(filterDefinition, combinedUpdateDefinition, options: options);
 
         }
         catch (MongoException ex)

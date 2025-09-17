@@ -9,8 +9,6 @@ public class MediaReadRequestDto
     public int? PageSize { get; set; }
 
 
-    public MediaReadRequestDto()
-    {
-    }
+    public MediaReadRequestDto() { }
 
 }
