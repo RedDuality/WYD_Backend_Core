@@ -8,17 +8,28 @@ using Core.Components.ObjectStorage;
 using Core.DTO.MediaAPI;
 using Core.DTO.Model;
 using Core.DTO.EventAPI;
+using Core.Services.Util;
+using Core.Model.Enum;
+using Core.Model.Details;
 
 namespace Core.Services.Model;
 
 
-public class EventService(MongoDbService dbService, EventDetailsService eventDetailsService, ProfileEventService profileEventService, MediaService mediaService)
+public class EventService(
+    MongoDbService dbService,
+    EventDetailsService eventDetailsService,
+    ProfileEventService profileEventService,
+    MediaService mediaService,
+    BroadcastService broadcastService
+)
 {
     private readonly CollectionName eventCollection = CollectionName.Events;
 
     private readonly CollectionName eventMediaCollection = CollectionName.EventMedia;
 
     private readonly BucketName eventBucket = BucketName.Events;
+
+    #region modify
 
     public async Task<RetrieveEventResponseDto> CreateEventAsync(CreateEventRequestDto newEventDto, string profileId)
     {
@@ -48,106 +59,75 @@ public class EventService(MongoDbService dbService, EventDetailsService eventDet
             return new RetrieveEventResponseDto(createdEvent, eventDetails, [profileEvent]);
         });
 
+        _ = broadcastService.BroadcastEventUpdate(EventDto.Hash, UpdateType.CreateEvent, "A new event was just created", "yeee, new events");
         return EventDto;
     }
 
-    public async Task<RetrieveEventResponseDto> RetrieveEventById(string id)
+    public async Task<RetrieveEventResponseDto> UpdateEventAsync(UpdateEventRequestDto updateDto)
     {
-        var ev = await dbService.RetrieveByIdAsync<Event>(eventCollection, id);
-        var eventDetails = await eventDetailsService.RetrieveByEventId(id);
-        return new RetrieveEventResponseDto(ev, eventDetails);
+        var ev = await dbService.RetrieveByIdAsync<Event>(eventCollection, updateDto.EventId);
+
+        var updates = new List<UpdateDefinition<Event>>();
+
+        // Add updates to the list based on non-null values
+        if (updateDto.Title != null)
+        {
+            updates.Add(Builders<Event>.Update.Set(e => e.Title, updateDto.Title));
+        }
+
+        if (updateDto.StartTime != null)
+        {
+            updates.Add(Builders<Event>.Update.Set(e => e.StartTime, updateDto.StartTime));
+        }
+
+        if (updateDto.EndTime != null)
+        {
+            updates.Add(Builders<Event>.Update.Set(e => e.EndTime, updateDto.EndTime));
+        }
+
+        // Check if there are any updates to perform
+        if (updates.Count != 0)
+        {
+            var combinedUpdate = Builders<Event>.Update.Combine(updates);
+
+            ev = await dbService.FindOneByIdAndUpdateAsync(eventCollection, ev.Id, combinedUpdate);
+
+            _ = broadcastService.BroadcastEventUpdate(ev.Id.ToString(), UpdateType.UpdateEssentialsEvent, "Un evento è stato aggiornato", "Better not be the medic visit");
+        }
+
+        EventDetails? details = null;
+        if (updateDto.Description != null)
+        {
+            details = await eventDetailsService.Update(ev.Id, updateDto.Description);
+        }
+
+        return new RetrieveEventResponseDto(ev, details: details);
     }
+
+    #endregion
+
+    #region retrieve
 
     public async Task ConfirmEventExists(string id)
     {
         await dbService.ConfirmExists<Event>(eventCollection, id);
     }
 
+    public async Task<RetrieveEventResponseDto> RetrieveEventById(string eventId, string profileId)
+    {
+        var ev = await dbService.RetrieveByIdAsync<Event>(eventCollection, eventId);
+        var pe = await profileEventService.FindByProfileAndEventId(profileId, eventId);
+        return new RetrieveEventResponseDto(ev, profileEvents: [pe]);
+    }
 
+    public async Task<RetrieveEventResponseDto> RetrieveEventWithDetailsById(string eventId)
+    {
+        var ev = await dbService.RetrieveByIdAsync<Event>(eventCollection, eventId);
+        var eventDetails = await eventDetailsService.RetrieveByEventId(eventId);
+        return new RetrieveEventResponseDto(ev, details: eventDetails);
+    }
 
-    /*
-            public async Task<List<EventDto>> RetrieveEventsByProfileIdOld(List<string> profileHashes, DateTimeOffset startTime, DateTimeOffset? endTime)
-            {
-                var aggregate = dbService.GetAggregate<ProfileEvent>(CollectionName.ProfileEvents);
-
-                var objectIds = profileHashes.Select(ph => new ObjectId(ph)).ToList();
-
-                // Step 1: Define the filter using Builders
-                var filterBuilder = Builders<ProfileEvent>.Filter;
-
-                // Build the filter with logical AND conditions
-                var filters = new List<FilterDefinition<ProfileEvent>>
-                {
-                    // Add the mandatory filters
-                    filterBuilder.In(pe => pe.ProfileId, objectIds),
-                    filterBuilder.Gte(pe => pe.EventEndTime, startTime.ToUniversalTime())
-                };
-
-                // Step 2: Conditionally add the end time filter
-                if (endTime.HasValue)
-                {
-                    // Only apply the Less-than-or-equal filter if endTime has a value
-                    filters.Add(filterBuilder.Lte(pe => pe.EventStartTime, endTime.Value.ToUniversalTime()));
-                }
-
-                // Combine all filters with a logical AND
-                var filter = filterBuilder.And(filters);
-
-                // Apply the filter to the aggregate pipeline
-                var matchStage = aggregate.Match(filter)
-                                          .Limit(40);
-
-                // Step 3: Lookup the corresponding Event for each ProfileEvent
-                // Join the two collecions in a ProfileEventWithCEvents object
-                var lookupStage = matchStage.Lookup<ProfileEvent, Event, ProfileEventWithCorrespondingEvents>(
-                    dbService.GetCollection<Event>(eventCollection),
-                    pe => pe.EventId,
-                    e => e.Id,
-                    pewce => pewce.Events);
-
-                //flat out the results on a new projected object
-                var projected = lookupStage
-                    .Project(pe => new
-                    {
-                        Event = pe.Events[0],
-                        pe.ProfileId,
-                        pe.Role,
-                        pe.Confirmed
-                    });
-
-
-                var intermediateResults = await projected.ToListAsync();
-
-                // convert projected obj into eventDto
-                var result = intermediateResults.Select(proj => new EventDto
-                {
-                    Hash = proj.Event.Id.ToString(),
-                    Title = proj.Event.Title,
-                    Description = proj.Event.Description,
-                    StartTime = proj.Event.StartTime,
-                    EndTime = proj.Event.EndTime,
-                    ProfileEvents =
-                    [
-                        new ProfileEventDto {
-                                ProfileHash = proj.ProfileId.ToString(),
-                                EventRole = proj.Role,
-                                Confirmed = proj.Confirmed,
-                                Trusted = false
-                            }
-                    ]
-                }).ToList();
-
-                //var result = await projectStage.ToListAsync();
-
-
-                return result;
-
-            }
-
-        */
-    //RetrieveEventsRequestDto
-
-    public async Task<List<RetrieveEventResponseDto>> RetrieveEventsByProfileId(RetrieveMultipleEventsRequestDto requestDto)
+    public async Task<List<RetrieveEventResponseDto>> RetrieveEventsByProfileIds(RetrieveMultipleEventsRequestDto requestDto)
     {
         var aggregate = dbService.GetAggregate<ProfileEvent>(CollectionName.ProfileEvents);
 
@@ -210,18 +190,20 @@ public class EventService(MongoDbService dbService, EventDetailsService eventDet
                     Role = pe.Role,
                     Confirmed = pe.Confirmed,
                     Trusted = false
-                })
+                }).ToList()
             }
         );
 
         var result = await grouped.ToListAsync();
 
         // Map the results over EventDto objects
-        var finalResult = result.Select(g => new RetrieveEventResponseDto(g.ev, g.ProfileEvents.ToList())).ToList();
+        var finalResult = result.Select(g => new RetrieveEventResponseDto(g.ev, profileEventDtos: g.ProfileEvents)).ToList();
 
         return finalResult;
 
     }
+
+    #endregion
 
     /*
 
@@ -269,6 +251,8 @@ public class EventService(MongoDbService dbService, EventDetailsService eventDet
             }
         */
 
+    #region media
+
     public async Task<List<MediaUploadResponseDto>> GetMediaUploadUrlsAsync(Profile profile, MediaUploadRequestDto dto)
     {
         await ConfirmEventExists(dto.ParentHash);
@@ -285,4 +269,7 @@ public class EventService(MongoDbService dbService, EventDetailsService eventDet
         // TODO check profile permits over events
         return await mediaService.GetReadUrlsAsync(eventBucket, mediaReadRequestDto);
     }
+
+    #endregion
+
 }

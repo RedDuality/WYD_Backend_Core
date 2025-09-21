@@ -190,14 +190,14 @@ public class MongoDbService(MongoDbContext dbContext)
                 return await collection.FindOneAndUpdateAsync(
                     session,
                     filter,
-                    updateDefinition,
+                    combinedUpdateDefinition,
                     options ?? new FindOneAndUpdateOptions<TDocument> { ReturnDocument = ReturnDocument.After }
                 );
             }
 
             return await collection.FindOneAndUpdateAsync(
                 filter,
-                updateDefinition,
+                combinedUpdateDefinition,
                 options ?? new FindOneAndUpdateOptions<TDocument> { ReturnDocument = ReturnDocument.After }
             );
 
@@ -308,6 +308,7 @@ public class MongoDbService(MongoDbContext dbContext)
 
     #endregion
 
+
     #region retrieve
 
     public async Task<TDocument> RetrieveByIdAsync<TDocument>(
@@ -317,10 +318,10 @@ public class MongoDbService(MongoDbContext dbContext)
     where TDocument : BaseEntity
     {
         var filter = Builders<TDocument>.Filter.Eq(doc => doc.Id, new ObjectId(stringId));
-        return await FindOneAsync(collectionName, filter);
+        return await RetrieveAsync(collectionName, filter);
     }
 
-    public async Task<TDocument> FindOneAsync<TDocument>(
+    public async Task<TDocument> RetrieveAsync<TDocument>(
         CollectionName cn,
         FilterDefinition<TDocument> filter
     )
@@ -362,10 +363,10 @@ public class MongoDbService(MongoDbContext dbContext)
     where TDocument : BaseEntity
     {
         var filter = Builders<TDocument>.Filter.In(doc => doc.Id, objectIds);
-        return await FindAsync(collectionName, filter);
+        return await RetrieveMultipleAsync(collectionName, filter);
     }
 
-    public async Task<List<TDocument>> FindAsync<TDocument>(
+    public async Task<List<TDocument>> RetrieveMultipleAsync<TDocument>(
         CollectionName cn,
         FilterDefinition<TDocument> filter
     )

@@ -16,7 +16,7 @@ public class EventProfileService(MongoDbService dbService)
 
     public async Task<List<EventProfile>> FindAllByEventId(string eventId)
     {
-        var result = await dbService.FindAsync(
+        var result = await dbService.RetrieveMultipleAsync(
             eventProfileCollection,
             Builders<EventProfile>.Filter.Eq(ep => ep.EventId, new ObjectId(eventId)));
 
