@@ -22,7 +22,7 @@ public class UserService(MongoDbService dbService, ProfileService profileService
             u => u.Accounts,
             a => a.Uid == accountUid);
 
-        var users = await dbService.FindAsync(userCollection, filter);
+        var users = await dbService.RetrieveMultipleAsync(userCollection, filter);
 
         User? user = users.FirstOrDefault();
 
@@ -90,7 +90,7 @@ public class UserService(MongoDbService dbService, ProfileService profileService
     {
         var deviceUpdate = Builders<User>.Update.PullFilter(
         u => u.Devices,
-        d => d.FcmToken == fcmToken
+        d => d.FcmToken.Equals(fcmToken, StringComparison.CurrentCultureIgnoreCase)
     );
         await dbService.UpdateOneByIdAsync(userCollection, userId, deviceUpdate, null, false);
     }

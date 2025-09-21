@@ -28,5 +28,6 @@ public class ProfileDetailsService(MongoDbService dbService)
         
         return await dbService.FindOneAndUpdateAsync(profileDetailsCollection, detailsFilter, updateDefinition, session);
     }
+    
 
 }

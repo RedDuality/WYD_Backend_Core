@@ -1,0 +1,44 @@
+using Core.Components.Database;
+using Core.Model;
+using Core.Model.Details;
+using Core.Model.Enum;
+using Core.Model.Join;
+using MongoDB.Bson;
+using MongoDB.Driver;
+
+namespace Core.Services.Util;
+
+
+public class BroadcastService(MongoDbService dbService, NotificationService notificationService)
+{
+    public async Task BroadcastEventUpdate(string eventId, UpdateType type, string title, string body)
+    {
+        var tokens = await GetEventNotificationTokens(eventId);
+
+        Dictionary<string, string> data = new() {
+            { "title", title},
+            { "body", body},
+            { "type", type.ToString() },
+            { "hash", eventId },
+        };
+
+        await notificationService.SendNotification(tokens, data);
+    }
+
+    private async Task<List<string>> GetEventNotificationTokens(string eventId)
+    {
+        var eventProfiles = await dbService.RetrieveMultipleAsync(CollectionName.EventProfiles, Builders<EventProfile>.Filter.Where(ep => ep.EventId == new ObjectId(eventId)));
+
+        var profileIds = eventProfiles.Select(ep => ep.ProfileId).ToList();
+        var profileDetails = await dbService.RetrieveMultipleAsync(CollectionName.ProfileDetails, Builders<ProfileDetails>.Filter.In(p => p.ProfileId, profileIds));
+
+        var userIds = profileDetails.SelectMany(pd => pd.Users)
+                                       .Select(pu => pu.UserId)
+                                       .ToHashSet();
+        var users = await dbService.RetrieveMultipleAsync(CollectionName.Users, Builders<User>.Filter.In(u => u.Id, userIds));
+
+        var fcmTokens = users.SelectMany(u => u.Devices).Select(d => d.FcmToken).ToHashSet().ToList();
+        return fcmTokens;
+    }
+
+}

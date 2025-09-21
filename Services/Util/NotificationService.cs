@@ -1,42 +1,60 @@
-/* using Google.Cloud.Firestore;
-using Model;
+using Core.Model.Enum;
+using FirebaseAdmin;
+using FirebaseAdmin.Messaging;
+using Google.Apis.Auth.OAuth2;
+using Microsoft.Extensions.Configuration;
+using MongoDB.Bson;
 
-namespace Service;
-
-public enum UpdateType
-{
-    NewEvent,
-    ShareEvent,
-    UpdateEvent,
-    UpdatePhotos,
-    ConfirmEvent,
-    DeclineEvent,
-    DeleteEvent,
-    DeleteForAll,
-    UpdateProfile,
-}
+namespace Core.Services.Util;
 
 public class NotificationService
 {
-    private readonly FirestoreDb firestoreDb;
 
-    public NotificationService()
+    private readonly Lazy<FirebaseMessaging> _messagingInstance;
+
+    public NotificationService(IConfiguration configuration)
     {
-        var projectId = Environment.GetEnvironmentVariable("GoogleProjectId");
-        var googleCredentialsJson = Environment.GetEnvironmentVariable("GOOGLE_CREDENTIALS");
 
-        if (string.IsNullOrEmpty(googleCredentialsJson) || string.IsNullOrEmpty(projectId))
+        _messagingInstance = new Lazy<FirebaseMessaging>(() =>
         {
-            throw new Exception("Google credentials not found in the environment variable");
-        }
+            if (FirebaseApp.DefaultInstance == null)
+            {
+                var googleCredentials = configuration["GOOGLE_APPLICATION_CREDENTIALS"]
+                    ?? throw new InvalidOperationException("'GOOGLE_APPLICATION_CREDENTIALS' is not set in configuration.");
 
-        firestoreDb = new FirestoreDbBuilder
-        {
-            ProjectId = projectId,
-            JsonCredentials = googleCredentialsJson,
-        }.Build();
+                FirebaseApp.Create(new AppOptions
+                {
+                    Credential = GoogleCredential.FromJson(googleCredentials)
+                });
+            }
+
+            return FirebaseMessaging.DefaultInstance;
+        }, isThreadSafe: true);
     }
 
+    private FirebaseMessaging Messaging => _messagingInstance.Value;
+
+    public async Task SendNotification(List<string> tokens, Dictionary<string, string>? data = null)
+    {
+        var message = new MulticastMessage()
+        {
+            Notification = null,
+            Tokens = tokens,
+            Data = data,
+        };
+
+        // Send the message
+        BatchResponse response = await Messaging.SendEachForMulticastAsync(message);
+        var failed = response.Responses.Where(r => r.IsSuccess == false).ToList();
+        //TODO failed.forEach( check error message -> delete token);
+    }
+
+    /*
+    https://firebase.flutter.dev/docs/messaging/server-integration/
+    Data-only messages are sent as low priority on both Android and iOS and will not trigger the background handler by default. 
+    To enable this functionality, you must set the "priority" to high on Android and enable the content-available flag for iOS in the message payload.
+    */
+    /*
     public async Task SendEventNotifications(Event ev, Profile currentProfile, UpdateType type)
     {
         //TODO add control over roles
@@ -113,6 +131,5 @@ public class NotificationService
     public async Task SendMockNotification(string hash)
     {
         await Send([hash], UpdateType.UpdateEvent, "prova", null);
-    }
+    }*/
 }
- */

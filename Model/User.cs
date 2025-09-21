@@ -17,5 +17,5 @@ public class User(Account account) : BaseDateEntity
 
     [BsonElement("devices")]
     [BsonIgnoreIfDefault]
-    public List<Device> Devices { get; set; } = [];
+    public HashSet<Device> Devices { get; set; } = [];
 }
