@@ -104,6 +104,34 @@ public class EventService(
         return new RetrieveEventResponseDto(ev, details: details);
     }
 
+    public async Task Confirm(string eventId, string profileId)
+    {
+        await dbService.ExecuteInTransactionAsync<object?>(async (session) =>
+        {
+            await profileEventService.Confirm(profileId, eventId, session);
+
+            var increaseUpdate = Builders<Event>.Update.Inc(ev => ev.TotalConfirmedMinusOne, 1);
+            var ev = await dbService.FindOneByIdAndUpdateAsync(eventCollection, new ObjectId(eventId), increaseUpdate, session);
+
+            _ = broadcastService.BroadcastEventUpdate(eventId, UpdateType.ConfirmEvent, profileId: profileId);
+            return null;
+        });
+    }
+
+    public async Task Decline(string eventId, string profileId)
+    {
+        await dbService.ExecuteInTransactionAsync<object?>(async (session) =>
+        {
+            await profileEventService.Decline(profileId, eventId, session);
+
+            var decreaseUpdate = Builders<Event>.Update.Inc(ev => ev.TotalConfirmedMinusOne, -1);
+            var ev = await dbService.FindOneByIdAndUpdateAsync(eventCollection, new ObjectId(eventId), decreaseUpdate, session);
+
+            _ = broadcastService.BroadcastEventUpdate(eventId, UpdateType.DeclineEvent, profileId: profileId);
+            return null;
+        });
+    }
+
     #endregion
 
     #region retrieve

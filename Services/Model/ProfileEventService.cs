@@ -3,7 +3,6 @@ using Core.Model.Join;
 using Core.Components.Database;
 using MongoDB.Bson;
 using MongoDB.Driver;
-using Core.Model;
 
 
 namespace Core.Services.Model;
@@ -29,6 +28,27 @@ public class ProfileEventService(MongoDbService dbService, EventProfileService e
         );
         return await dbService.RetrieveAsync(profileEventCollection, filter);
     }
+
+    public async Task Confirm(string profileId, string eventId, IClientSessionHandle session)
+    {
+        var filter = Builders<ProfileEvent>.Filter.And(
+            Builders<ProfileEvent>.Filter.Eq(doc => doc.ProfileId, new ObjectId(profileId)),
+            Builders<ProfileEvent>.Filter.Eq(doc => doc.EventId, new ObjectId(eventId))
+        );
+        var confirmUpdate = Builders<ProfileEvent>.Update.Set(pe => pe.Confirmed, true);
+        await dbService.UpdateOneAsync(CollectionName.ProfileEvents, filter, confirmUpdate, session);
+    }
+
+    public async Task Decline(string profileId, string eventId, IClientSessionHandle session)
+    {
+        var filter = Builders<ProfileEvent>.Filter.And(
+            Builders<ProfileEvent>.Filter.Eq(doc => doc.ProfileId, new ObjectId(profileId)),
+            Builders<ProfileEvent>.Filter.Eq(doc => doc.EventId, new ObjectId(eventId))
+        );
+        var confirmUpdate = Builders<ProfileEvent>.Update.Set(pe => pe.Confirmed, false);
+        await dbService.UpdateOneAsync(CollectionName.ProfileEvents, filter, confirmUpdate, session);
+    }
+
 
     /*
         public async Task<ProfileEvent> ConfirmProfileEventById(string id)

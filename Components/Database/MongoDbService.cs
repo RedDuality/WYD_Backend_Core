@@ -23,7 +23,7 @@ public class MongoDbService(MongoDbContext dbContext)
         return dbContext.GetCollection<TDocument>(cn.ToString()).Aggregate();
     }
 
-    public async Task<T> ExecuteInTransactionAsync<T>(Func<IClientSessionHandle, Task<T>> transactionalLogic)
+    public async Task<T?> ExecuteInTransactionAsync<T>(Func<IClientSessionHandle, Task<T>> transactionalLogic)
     {
         using var session = await dbContext.GetNewSession();
 
@@ -34,7 +34,7 @@ public class MongoDbService(MongoDbContext dbContext)
             try
             {
                 session.StartTransaction();
-                T result = await transactionalLogic(session);
+                T? result = await transactionalLogic(session);
                 await session.CommitTransactionAsync();
                 return result;
             }
