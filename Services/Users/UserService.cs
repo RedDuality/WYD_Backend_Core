@@ -3,7 +3,7 @@ using MongoDB.Driver;
 using Core.DTO.UserAPI;
 using MongoDB.Bson;
 using Core.Model.Users;
-using Core.Model.Profile;
+using Core.Model.Profiles;
 using Core.Model.Communities;
 
 namespace Core.Services.Users;
@@ -68,7 +68,7 @@ public class UserService(MongoDbService dbService, ProfileService profileService
     public async Task<RetrieveUserRequestDto> RetrieveProfilesAsync(User user)
     {
         var profileIds = user.Profiles.Select(up => up.ProfileId).ToHashSet();
-        var profiles = await dbService.RetrieveByIdsAsync<Profile>(CollectionName.Profiles, profileIds);
+        var profiles = await dbService.RetrieveMultipleByIdAsync<Profile>(CollectionName.Profiles, profileIds);
 
         // Map the results together
         var userProfilesDictionary = user.Profiles.ToDictionary(d => d.ProfileId);

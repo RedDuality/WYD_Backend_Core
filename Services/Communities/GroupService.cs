@@ -1,19 +1,29 @@
-/* using Model;
-using Database;
 
-namespace Service;
-public class GroupService(WydDbContext context)
+using Core.Components.Database;
+using Core.Model.Communities;
+using Core.Model.Profiles;
+using MongoDB.Driver;
+
+namespace Core.Services.Communities;
+
+public class GroupService(MongoDbService dbService)
 {
-    private readonly WydDbContext db = context ?? throw new ArgumentNullException(nameof(context), "Database context cannot be null");
+    private readonly CollectionName groupCollection = CollectionName.Groups;
 
-
-    public Group? RetrieveOrNull(int groupId)
+    public async Task<Group> CreateAsync(
+        HashSet<Profile> profiles,
+        Profile owner,
+        Community community,
+        string? name = null,
+        bool? mainGroup = null,
+        IClientSessionHandle? session = null)
     {
-        return db.Groups.Find(groupId);
-    }
+        var groupProfiles = profiles.Select((p) =>
+            {
+                return new GroupProfile(p, p.Id == owner.Id ? GroupRole.Owner : GroupRole.Viewer);
+            }).ToHashSet();
 
-    public HashSet<Group> Retrieve(HashSet<int> groupIds)
-    {
-        return db.Groups.Where(g => groupIds.Contains(g.Id)).ToHashSet();
+        var group = new Group(community, name ?? "General", groupProfiles, mainGroup);
+        return await dbService.CreateOneAsync(groupCollection, group, session);
     }
-} */
+}

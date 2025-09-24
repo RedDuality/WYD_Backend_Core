@@ -1,6 +1,6 @@
 using Core.Model;
 using Core.Model.Events;
-using Core.Model.Profile;
+using Core.Model.Profiles;
 
 namespace Core.DTO.EventAPI;
 

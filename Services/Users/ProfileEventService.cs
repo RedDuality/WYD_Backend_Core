@@ -4,7 +4,7 @@ using Core.Components.Database;
 using MongoDB.Bson;
 using MongoDB.Driver;
 using Core.Services.Events;
-using Core.Model.Profile;
+using Core.Model.Profiles;
 
 
 namespace Core.Services.Users;

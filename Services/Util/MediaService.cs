@@ -1,9 +1,8 @@
-using System.Management;
 using Core.Components.Database;
 using Core.Components.ObjectStorage;
 using Core.DTO.MediaAPI;
 using Core.Model.MediaStorage;
-using Core.Model.Profile;
+using Core.Model.Profiles;
 using MongoDB.Bson;
 using MongoDB.Driver;
 

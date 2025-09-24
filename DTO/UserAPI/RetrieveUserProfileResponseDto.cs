@@ -1,5 +1,5 @@
 using Core.Model.Communities;
-using Core.Model.Profile;
+using Core.Model.Profiles;
 using Core.Model.Users;
 
 namespace Core.DTO.UserAPI;

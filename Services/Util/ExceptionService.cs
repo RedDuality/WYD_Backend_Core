@@ -26,10 +26,8 @@ public static class ExceptionService
                 keyNotFoundEx.Message
             ),
 
-            FormatException formatEx => new BadRequestObjectResult("Id Format wrong"),
-            OverflowException overflowEx => new BadRequestObjectResult("Id Format wrong"),
             ArgumentException argumentException => new BadRequestObjectResult(
-                "Input error" + argumentException.Message
+                "Input error: " + argumentException.Message
             ),
             JsonException jsonException => new BadRequestObjectResult(
                 "Body malformed: " + jsonException.Message

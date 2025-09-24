@@ -3,7 +3,8 @@ using MongoDB.Driver;
 using Core.Model.Users;
 using Core.DTO.ProfileAPI;
 using MongoDB.Bson;
-using Core.Model.Profile;
+using Core.Model.Profiles;
+using System.Collections.ObjectModel;
 
 
 namespace Core.Services.Users;
@@ -65,7 +66,7 @@ public class ProfileService(
             return null;
         });
     }
-    
+
     private async Task<bool> SetProfileColor(User user, ObjectId profileId, long color, IClientSessionHandle session)
     {
 
@@ -96,6 +97,12 @@ public class ProfileService(
     {
         var profile = await dbService.RetrieveByIdAsync<Profile>(profileCollection, id);
         return profile;
+    }
+
+    public async Task<HashSet<Profile>> RetrieveMultipleProfileById(HashSet<string> profileIds)
+    {
+        var profiles = await dbService.RetrieveMultipleByIdAsync<Profile>(profileCollection, profileIds);
+        return [.. profiles];
     }
 
     #endregion

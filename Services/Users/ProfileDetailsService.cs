@@ -3,7 +3,7 @@ using Core.Components.Database;
 using MongoDB.Bson;
 using MongoDB.Driver;
 using Core.Model.Users;
-using Core.Model.Profile;
+using Core.Model.Profiles;
 using Core.Model.Profiles;
 
 namespace Core.Services.Users;

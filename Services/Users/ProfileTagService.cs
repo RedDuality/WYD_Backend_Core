@@ -24,7 +24,7 @@ public class ProfileTagService(MongoDbService dbService)
         var profileTags = await dbService.RetrieveMultipleAsync(profileTagsCollection, filter, limit: 5);
         var profileIds = profileTags.Select(t => t.ProfileId).ToHashSet();
 
-        var profiles = await dbService.RetrieveByIdsAsync<Profile>(CollectionName.Profiles, profileIds);
+        var profiles = await dbService.RetrieveMultipleByIdAsync<Profile>(CollectionName.Profiles, profileIds);
         var profileDtos = profiles.Select(p => new RetrieveProfileResponseDto(p)).ToList();
         return profileDtos;
     }

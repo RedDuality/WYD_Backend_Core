@@ -349,17 +349,17 @@ public class MongoDbService(MongoDbContext dbContext)
         }
     }
 
-    public async Task<List<TDocument>> RetrieveByIdsAsync<TDocument>(
+    public async Task<List<TDocument>> RetrieveMultipleByIdAsync<TDocument>(
         CollectionName cn,
-        List<string> stringIds
+        HashSet<string> stringIds
     )
     where TDocument : BaseEntity
     {
         var objectIds = stringIds.Select(id => new ObjectId(id)).ToList();
-        return await RetrieveByIdsAsync<TDocument>(cn, objectIds.ToHashSet());
+        return await RetrieveMultipleByIdAsync<TDocument>(cn, objectIds.ToHashSet());
     }
 
-    public async Task<List<TDocument>> RetrieveByIdsAsync<TDocument>(
+    public async Task<List<TDocument>> RetrieveMultipleByIdAsync<TDocument>(
         CollectionName collectionName,
         HashSet<ObjectId> objectIds
     )

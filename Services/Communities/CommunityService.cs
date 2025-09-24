@@ -1,67 +1,61 @@
 using Core.Components.Database;
+using Core.DTO.CommunityAPI;
+using Core.Model.Communities;
+using Core.Model.Profiles;
+using Core.Services.Users;
+using MongoDB.Driver;
 
 namespace Core.Services.Communities;
-public class CommunityService(MongoDbService dbService)
+
+public class CommunityService(MongoDbService dbService, ProfileService profileService, GroupService groupService, ProfileCommunityService profileCommunityService)
 {
+    private readonly CollectionName communityCollection = CollectionName.Communities;
 
-    public Community Retrieve(int id)
+    public async Task<RetrieveCommunityResponseDto> Create(CreateCommunityRequestDto dto, Profile ownerProfile)
     {
-        return RetrieveOrNull(id) ?? throw new KeyNotFoundException("Community");
+        HashSet<Profile> profiles = [];
+        if (dto.ProfileIds.Count > 0)
+            profiles = await profileService.RetrieveMultipleProfileById([.. dto.ProfileIds]);
+        profiles.Add(ownerProfile);
 
-    }
-    public Community Create(CreateCommunityDto dto, Profile profile)
-    {
-        using var transaction = db.Database.BeginTransaction();
-        try
-        {
-            Community newCommunity = FromDto(dto, profile);
+        var community = new Community(dto.Name, ownerProfile, dto.Type);
 
-            db.Communities.Add(newCommunity);
-            db.SaveChanges();
-
-            Group group = new()
+        RetrieveCommunityResponseDto communityDto = await dbService.ExecuteInTransactionAsync(async (session) =>
             {
-                Name = "General",
-                GeneralForCommunity = true,
-                Community = newCommunity,
-                Profiles = newCommunity.Profiles,
-            };
-
-            AddGroup(newCommunity, group);
-
-            transaction.Commit();
-
-            return newCommunity;
-        }
-        catch (Exception ex)
-        {
-            transaction.Rollback();
-            throw new InvalidOperationException("Error creating community. Transaction rolled back.", ex);
-        }
+                await dbService.CreateOneAsync(communityCollection, community, session);
+                var group = await AddGroup(community, profiles, ownerProfile, dto.Name, true, session);
+                var profileCommunities = await profileCommunityService.CreateAsync(community, group, ownerProfile, profiles);
+                return profileCommunities
+                    .Where(pc => pc.ProfileId == ownerProfile.Id)
+                    .Select(pc => new RetrieveCommunityResponseDto(pc))
+                    .First();
+            });
+        return communityDto;
     }
 
-    public Community CreateAndAddGroup(Community community, GroupDto dto, Profile profile)
+    public async Task<Group> AddGroup(
+        Community community,
+        HashSet<Profile> profiles,
+        Profile ownerProfile,
+        string? name = null,
+        bool? mainGroup = null,
+        IClientSessionHandle? session = null)
     {
-        //TODO check profiles are already in the commmunity
-        dto.ProfileHashes.Add(profile.Hash);
+        var group = await groupService.CreateAsync(profiles, ownerProfile, community, name, mainGroup, session);
 
-        Group group = new()
-        {
-            Name = dto.Name ?? "New Group",
-            GeneralForCommunity = false,
-            Community = community,
-            Profiles = db.Profiles.Where((p) => dto.ProfileHashes.Contains( p.Hash)).ToHashSet(),
-        };
+        var updates = new List<UpdateDefinition<Community>>();
 
-        return AddGroup(community, group);
+        if (mainGroup == true)
+            updates.Add(Builders<Community>.Update.Set(c => c.MainGroupId, group.Id));
+
+        updates.Add(Builders<Community>.Update.AddToSet(c => c.Groups, group.Id));
+
+        await dbService.UpdateOneByIdAsync(communityCollection, community.Id, Builders<Community>.Update.Combine(updates), session);
+        return group;
     }
 
-    private Community AddGroup(Community community, Group group)
+    public HashSet<RetrieveCommunityResponseDto> Retrieve(Profile profile)
     {
-        community.Groups.Add(group);
-        db.SaveChanges();
-
-        return community;
     }
 
     public Community MakeMultiGroup(Community community)
@@ -70,7 +64,6 @@ public class CommunityService(MongoDbService dbService)
             throw new Exception("Cannot transform this chat into a community");
 
         community.Type = CommunityType.Community;
-        db.SaveChanges();
         return community;
     }
 

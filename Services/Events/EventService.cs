@@ -8,7 +8,7 @@ using Core.DTO.MediaAPI;
 using Core.DTO.EventAPI;
 using Core.Services.Util;
 using Core.Services.Users;
-using Core.Model.Profile;
+using Core.Model.Profiles;
 using Core.Model.Events;
 
 namespace Core.Services.Events;
