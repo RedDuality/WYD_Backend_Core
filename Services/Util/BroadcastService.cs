@@ -1,8 +1,8 @@
 using Core.Components.Database;
-using Core.Model;
-using Core.Model.Details;
-using Core.Model.Enum;
 using Core.Model.Join;
+using Core.Model.Profiles;
+using Core.Model.Users;
+using Core.Model.Util;
 using MongoDB.Bson;
 using MongoDB.Driver;
 

@@ -1,7 +1,6 @@
-using Core.DTO.Model;
 using Core.Model;
-using Core.Model.Details;
-using Core.Model.Join;
+using Core.Model.Events;
+using Core.Model.Profile;
 
 namespace Core.DTO.EventAPI;
 
@@ -19,6 +18,7 @@ public class RetrieveEventResponseDto(Event ev)
     public List<ProfileEventDto>? ProfileEvents { get; set; }
 
     public EventDetailsDto? EventDetails { get; set; }
+
 
 
     public RetrieveEventResponseDto(Event ev, EventDetails? details = null)

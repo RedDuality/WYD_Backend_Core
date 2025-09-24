@@ -1,5 +1,6 @@
-using Core.Model;
-using Core.Model.Join;
+using Core.Model.MediaStorage;
+using Core.Model.Profiles;
+using Core.Model.Users;
 using MongoDB.Bson;
 using MongoDB.Driver;
 
@@ -56,12 +57,17 @@ public class MongoDbInitializer(
         collections = await ListCollectionsAsync();
         await CheckShardingEnabledAsync();
 
+        // User
         await InitializeCollectionAsync(CollectionName.Users, "_id");
         await CreateIndexAsync<User>(CollectionName.Users, "accounts.uid", true);
 
+        // Profile
         await InitializeCollectionAsync(CollectionName.Profiles, "_id");
-        await CreateIndexAsync<Profile>(CollectionName.Profiles, "tag", true);
-        
+
+        await InitializeCollectionAsync(CollectionName.ProfileTags, "_id");
+        await CreateIndexAsync<ProfileTag>(CollectionName.ProfileTags, "tag", true);
+        await CreateIndexAsync<ProfileTag>(CollectionName.ProfileTags, "profileId", true);
+
         await InitializeCollectionAsync(CollectionName.ProfileDetails, "profileId");
 
         await InitializeCollectionAsync(CollectionName.ProfileEvents, "profileId");
@@ -69,13 +75,25 @@ public class MongoDbInitializer(
         await CreateIndexAsync<ProfileEvent>(CollectionName.ProfileEvents, "eventStartTime");
         await CreateIndexAsync<ProfileEvent>(CollectionName.ProfileEvents, "eventEndTime");
 
+        await InitializeCollectionAsync(CollectionName.ProfileCommunities, "profileId");
+        await CreateIndexAsync<ProfileCommunity>(CollectionName.ProfileCommunities, "communityUpdatedAt");
+
+        // Event
         await InitializeCollectionAsync(CollectionName.Events, "_id");
+
         await InitializeCollectionAsync(CollectionName.EventDetails, "eventId");
+
         await InitializeCollectionAsync(CollectionName.EventMedia, "parentId");
-        await CreateIndexAsync<ProfileEvent>(CollectionName.EventMedia, "creationDate");
+        await CreateIndexAsync<Media>(CollectionName.EventMedia, "creationDate");
 
         await InitializeCollectionAsync(CollectionName.EventProfiles, "eventId");
 
+        // Community
+        await InitializeCollectionAsync(CollectionName.Communities, "_id");
+
+        await InitializeCollectionAsync(CollectionName.Groups, "communityId");
+
+        await InitializeCollectionAsync(CollectionName.CommunityProfiles, "communityId");
 
         log("MongoDB collection initialization complete.");
     }
@@ -143,13 +161,14 @@ public class MongoDbInitializer(
     private async Task CreateIndexAsync<TDocument>(
         CollectionName collectionName,
         string fieldName,
-        bool isUnique = false
+        bool isUnique = false,
+        IndexKeysDefinition<TDocument>? indexkey = null
     )
     {
         var name = collectionName.ToString();
         var collection = database.GetCollection<TDocument>(name);
 
-        var indexKeys = Builders<TDocument>.IndexKeys.Ascending(fieldName);
+        var indexKeys = indexkey ?? Builders<TDocument>.IndexKeys.Ascending(fieldName);
         var indexOptions = new CreateIndexOptions { Unique = isUnique };
         var indexModel = new CreateIndexModel<TDocument>(indexKeys, indexOptions);
 

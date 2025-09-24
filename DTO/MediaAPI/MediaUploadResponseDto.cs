@@ -1,6 +1,5 @@
 using Core.Components.ObjectStorage;
-using Core.Model;
-using Core.Model.Enum;
+using Core.Model.MediaStorage;
 
 namespace Core.DTO.MediaAPI;
 

@@ -1,6 +1,6 @@
 using System.Security.Claims;
-using Core.Model;
-using Core.Services.Model;
+using Core.Model.Users;
+using Core.Services.Users;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Primitives;
 

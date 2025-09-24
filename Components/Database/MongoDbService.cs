@@ -1,7 +1,6 @@
 using MongoDB.Driver;
 using MongoDB.Bson;
 using Core.Model.Base;
-using Microsoft.AspNetCore.Razor.Language;
 
 namespace Core.Components.Database;
 
@@ -23,7 +22,7 @@ public class MongoDbService(MongoDbContext dbContext)
         return dbContext.GetCollection<TDocument>(cn.ToString()).Aggregate();
     }
 
-    public async Task<T?> ExecuteInTransactionAsync<T>(Func<IClientSessionHandle, Task<T>> transactionalLogic)
+    public async Task<T> ExecuteInTransactionAsync<T>(Func<IClientSessionHandle, Task<T>> transactionalLogic)
     {
         using var session = await dbContext.GetNewSession();
 
@@ -218,12 +217,13 @@ public class MongoDbService(MongoDbContext dbContext)
         ObjectId objectId,
         UpdateDefinition<TDocument> updateDefinition,
         IClientSessionHandle? session = null,
+        UpdateOptions<TDocument>? options = null,
         bool saveUpdates = true
     )
     where TDocument : BaseEntity
     {
         var filter = Builders<TDocument>.Filter.Eq(doc => doc.Id, objectId);
-        return await UpdateOneAsync(cn, filter, updateDefinition, session, saveUpdates);
+        return await UpdateOneAsync(cn, filter, updateDefinition, session, options,saveUpdates);
     }
 
     public async Task<UpdateResult> UpdateOneAsync<TDocument>(
@@ -231,6 +231,7 @@ public class MongoDbService(MongoDbContext dbContext)
         FilterDefinition<TDocument> filter,
         UpdateDefinition<TDocument> updateDefinition,
         IClientSessionHandle? session = null,
+        UpdateOptions<TDocument>? options = null,
         bool saveUpdates = true
     )
     where TDocument : BaseEntity
@@ -254,13 +255,15 @@ public class MongoDbService(MongoDbContext dbContext)
                 return await collection.UpdateOneAsync(
                     session,
                     filter,
-                    combinedUpdateDefinition
+                    combinedUpdateDefinition,
+                    options: options
                 );
             }
 
             return await collection.UpdateOneAsync(
                 filter,
-                combinedUpdateDefinition
+                combinedUpdateDefinition,
+                options: options
             );
         }
         catch (MongoException ex)
@@ -353,12 +356,12 @@ public class MongoDbService(MongoDbContext dbContext)
     where TDocument : BaseEntity
     {
         var objectIds = stringIds.Select(id => new ObjectId(id)).ToList();
-        return await RetrieveByIdsAsync<TDocument>(cn, objectIds);
+        return await RetrieveByIdsAsync<TDocument>(cn, objectIds.ToHashSet());
     }
 
     public async Task<List<TDocument>> RetrieveByIdsAsync<TDocument>(
         CollectionName collectionName,
-        List<ObjectId> objectIds
+        HashSet<ObjectId> objectIds
     )
     where TDocument : BaseEntity
     {
@@ -368,7 +371,8 @@ public class MongoDbService(MongoDbContext dbContext)
 
     public async Task<List<TDocument>> RetrieveMultipleAsync<TDocument>(
         CollectionName cn,
-        FilterDefinition<TDocument> filter
+        FilterDefinition<TDocument> filter,
+        int? limit = null
     )
      where TDocument : BaseEntity
     {
@@ -377,7 +381,7 @@ public class MongoDbService(MongoDbContext dbContext)
         {
             var collection = dbContext.GetCollection<TDocument>(collectionName);
 
-            return await collection.Find(filter).ToListAsync();
+            return await collection.Find(filter).Limit(limit).ToListAsync();
         }
         catch (MongoException ex)
         {
