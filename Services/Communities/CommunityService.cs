@@ -3,6 +3,7 @@ using Core.DTO.CommunityAPI;
 using Core.Model.Communities;
 using Core.Model.Profiles;
 using Core.Services.Users;
+using DnsClient.Protocol;
 using MongoDB.Driver;
 
 namespace Core.Services.Communities;
@@ -15,33 +16,48 @@ public class CommunityService(MongoDbService dbService, ProfileService profileSe
     {
         HashSet<Profile> profiles = [];
         if (dto.ProfileIds.Count > 0)
-            profiles = await profileService.RetrieveMultipleProfileById([.. dto.ProfileIds]);
+            profiles = await profileService.RetrieveMultiple([.. dto.ProfileIds]);
+
         profiles.Add(ownerProfile);
 
+        if (dto.Type == CommunityType.Personal)
+        {
+            var oldCommunity = await profileCommunityService.FindPersonalCommunity(ownerProfile, profiles.Where(p => p.Id != ownerProfile.Id).First());
+            if (oldCommunity != null)
+                return new RetrieveCommunityResponseDto(oldCommunity);
+        }
+        
         var community = new Community(dto.Name, ownerProfile, dto.Type);
 
-        RetrieveCommunityResponseDto communityDto = await dbService.ExecuteInTransactionAsync(async (session) =>
+        List<ProfileCommunity> profileCommunities = await dbService.ExecuteInTransactionAsync(async (session) =>
             {
                 await dbService.CreateOneAsync(communityCollection, community, session);
-                var group = await AddGroup(community, profiles, ownerProfile, dto.Name, true, session);
-                var profileCommunities = await profileCommunityService.CreateAsync(community, group, ownerProfile, profiles);
-                return profileCommunities
-                    .Where(pc => pc.ProfileId == ownerProfile.Id)
-                    .Select(pc => new RetrieveCommunityResponseDto(pc))
-                    .First();
+                var group = await AddGroup(
+                    community,
+                    profiles,
+                    ownerProfile,
+                    mainGroup: community.Type != CommunityType.Personal,
+                    session: session);
+
+                var profileCommunities = await profileCommunityService.CreateAsync(community, group, ownerProfile, profiles, session);
+
+                return profileCommunities;
             });
-        return communityDto;
+
+        var currentProfileCommunity = profileCommunities.Where(pc => pc.ProfileId == ownerProfile.Id).First();
+
+        return new RetrieveCommunityResponseDto(currentProfileCommunity);
     }
 
     public async Task<Group> AddGroup(
         Community community,
         HashSet<Profile> profiles,
         Profile ownerProfile,
-        string? name = null,
-        bool? mainGroup = null,
+        bool mainGroup = false,
+        string name = "General",
         IClientSessionHandle? session = null)
     {
-        var group = await groupService.CreateAsync(profiles, ownerProfile, community, name, mainGroup, session);
+        var group = await groupService.CreateAsync(profiles, ownerProfile, community, mainGroup, name, session);
 
         var updates = new List<UpdateDefinition<Community>>();
 
@@ -54,8 +70,12 @@ public class CommunityService(MongoDbService dbService, ProfileService profileSe
         return group;
     }
 
-    public HashSet<RetrieveCommunityResponseDto> Retrieve(Profile profile)
+
+    public async Task<HashSet<RetrieveCommunityResponseDto>> Retrieve(Profile profile)
     {
+        var profileCommunities = await profileCommunityService.RetrieveProfileCommunitiesByProfile(profile);
+        var responseDtos = profileCommunities.Select((pc) => new RetrieveCommunityResponseDto(pc)).ToHashSet();
+        return responseDtos;
     }
 
     public Community MakeMultiGroup(Community community)

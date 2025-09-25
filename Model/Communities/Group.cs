@@ -7,7 +7,7 @@ namespace Core.Model.Communities;
 
 
 
-public class Group(Community community, string name, HashSet<GroupProfile> profiles, bool? mainGroup = false) : BaseDateEntity
+public class Group(Community community, string name, HashSet<GroupProfile> profiles, bool mainGroup = false) : BaseDateEntity
 {
     [BsonElement("communityId")]
     public ObjectId? CommmunityId { get; set; } = community.Id;
@@ -17,7 +17,7 @@ public class Group(Community community, string name, HashSet<GroupProfile> profi
 
     [BsonElement("isMainGroup")]
     [BsonIgnoreIfDefault]
-    public bool IsMainGroup = mainGroup ?? false;
+    public bool IsMainGroup = mainGroup;
 
     [BsonElement("profiles")]
     public HashSet<GroupProfile> Profiles { get; set; } = profiles;

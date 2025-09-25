@@ -7,12 +7,14 @@ public class RetrieveCommunityResponseDto(ProfileCommunity profileCommunity)
 {
     public string Id { get; set; } = profileCommunity.CommunityId.ToString();
 
-    public string Name { get; set; } = profileCommunity.Name;
+    public string? Name { get; set; } = profileCommunity.Name;
 
+    public string? OtherProfileId { get; set; } = profileCommunity.OtherProfileId.ToString();
+    
     public CommunityType Type { get; set; } = profileCommunity.Type;
 
-    public DateTimeOffset updatedAt = profileCommunity.CommunityUpdatedAt;
+    public DateTimeOffset UpdatedAt { get; set; } = profileCommunity.CommunityUpdatedAt;
 
-    public HashSet<ProfileGroup> Groups = profileCommunity.Groups;
+    public HashSet<RetrieveGroupResponseDto> Groups { get; set; } = profileCommunity.Groups.Select((g) => new RetrieveGroupResponseDto(g)).ToHashSet();
 
 }

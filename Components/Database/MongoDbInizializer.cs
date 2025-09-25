@@ -77,6 +77,7 @@ public class MongoDbInitializer(
 
         await InitializeCollectionAsync(CollectionName.ProfileCommunities, "profileId");
         await CreateIndexAsync<ProfileCommunity>(CollectionName.ProfileCommunities, "communityUpdatedAt");
+        await CreateIndexAsync<ProfileCommunity>(CollectionName.ProfileCommunities, "otherProfileId");
 
         // Event
         await InitializeCollectionAsync(CollectionName.Events, "_id");
@@ -94,6 +95,7 @@ public class MongoDbInitializer(
         await InitializeCollectionAsync(CollectionName.Groups, "communityId");
 
         await InitializeCollectionAsync(CollectionName.CommunityProfiles, "communityId");
+
 
         log("MongoDB collection initialization complete.");
     }

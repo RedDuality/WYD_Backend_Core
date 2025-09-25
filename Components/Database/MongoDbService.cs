@@ -46,7 +46,7 @@ public class MongoDbService(MongoDbContext dbContext)
         }
         else
         {
-            Console.WriteLine("Transactions are not supported by the current database technology. Executing logic without a transaction.");
+            Console.WriteLine("Transactions are not supported by the current database technology.");
             return await transactionalLogic(session);
         }
     }
@@ -116,14 +116,22 @@ public class MongoDbService(MongoDbContext dbContext)
         }
     }
 
-    public async Task<List<TDocument>> CreateManyAsync<TDocument>(CollectionName cn, List<TDocument> newDocuments)
+    public async Task<List<TDocument>> CreateManyAsync<TDocument>(CollectionName cn, List<TDocument> newDocuments, IClientSessionHandle? session = null)
     where TDocument : BaseEntity
     {
         string collectionName = cn.ToString();
         try
         {
             var collection = dbContext.GetCollection<TDocument>(collectionName);
-            await collection.InsertManyAsync(newDocuments);
+            if (session != null)
+            {
+                await collection.InsertManyAsync(session, newDocuments);
+            }
+            else
+            {
+                await collection.InsertManyAsync(newDocuments);
+            }
+
             return newDocuments;
         }
         catch (MongoException ex)
@@ -223,7 +231,7 @@ public class MongoDbService(MongoDbContext dbContext)
     where TDocument : BaseEntity
     {
         var filter = Builders<TDocument>.Filter.Eq(doc => doc.Id, objectId);
-        return await UpdateOneAsync(cn, filter, updateDefinition, session, options,saveUpdates);
+        return await UpdateOneAsync(cn, filter, updateDefinition, session, options, saveUpdates);
     }
 
     public async Task<UpdateResult> UpdateOneAsync<TDocument>(
@@ -330,15 +338,25 @@ public class MongoDbService(MongoDbContext dbContext)
     )
     where TDocument : BaseEntity
     {
+        return await RetrieveOrNullAsync(cn, filter)
+            ?? throw new KeyNotFoundException(
+                $"Document not found from collection '{cn.ToString()}'."
+            );
+
+    }
+
+    public async Task<TDocument?> RetrieveOrNullAsync<TDocument>(
+        CollectionName cn,
+        FilterDefinition<TDocument> filter
+    )
+    where TDocument : BaseEntity
+    {
         string collectionName = cn.ToString();
         try
         {
             var collection = dbContext.GetCollection<TDocument>(collectionName);
 
-            return await collection.Find(filter).FirstOrDefaultAsync()
-                ?? throw new KeyNotFoundException(
-                    $"Document not found from collection '{collectionName}'."
-                );
+            return await collection.Find(filter).FirstOrDefaultAsync();
         }
         catch (MongoException ex)
         {
@@ -348,7 +366,6 @@ public class MongoDbService(MongoDbContext dbContext)
             );
         }
     }
-
     public async Task<List<TDocument>> RetrieveMultipleByIdAsync<TDocument>(
         CollectionName cn,
         HashSet<string> stringIds

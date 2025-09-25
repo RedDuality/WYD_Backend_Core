@@ -5,10 +5,11 @@ using MongoDB.Bson.Serialization.Attributes;
 
 namespace Core.Model.Communities;
 
-public class Community(string name, Profile owner, CommunityType? type) : BaseDateEntity
+public class Community(string? name, Profile owner, CommunityType? type) : BaseDateEntity
 {
     [BsonElement("name")]
-    public string Name { get; set; } = name;
+    [BsonIgnoreIfNull]
+    public string? Name { get; set; } = name;
 
     [BsonElement("type")]
     [BsonIgnoreIfDefault]

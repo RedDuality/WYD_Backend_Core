@@ -4,7 +4,7 @@ using Core.Model.Users;
 using Core.DTO.ProfileAPI;
 using MongoDB.Bson;
 using Core.Model.Profiles;
-using System.Collections.ObjectModel;
+using Core.DTO.UserAPI;
 
 
 namespace Core.Services.Users;
@@ -34,12 +34,14 @@ public class ProfileService(
         await profileDetailsService.AddUser(profile.Id, user, session);
     }
 
-    public async Task Update(User user, UpdateProfileRequestDto updateDto)
+    public async Task<UpdateProfileResponseDto> Update(User user, UpdateProfileRequestDto updateDto)
     {
         var profileId = new ObjectId(updateDto.ProfileId);
-        await dbService.ExecuteInTransactionAsync<object?>(async (session) =>
+
+        var updatedDto = await dbService.ExecuteInTransactionAsync(async (session) =>
         {
             var updates = new List<UpdateDefinition<Profile>>();
+            Profile? profile = null;
 
             if (updateDto.Name != null)
             {
@@ -55,7 +57,7 @@ public class ProfileService(
             if (updates.Count > 0)
             {
                 var updateDefinition = Builders<Profile>.Update.Combine(updates);
-                await dbService.FindOneByIdAndUpdateAsync(profileCollection, profileId, updateDefinition, session: session);
+                profile = await dbService.FindOneByIdAndUpdateAsync(profileCollection, profileId, updateDefinition, session: session);
             }
 
             if (updateDto.Color != null)
@@ -63,8 +65,10 @@ public class ProfileService(
                 await SetProfileColor(user, profileId, updateDto.Color.Value, session);
             }
 
-            return null;
+            return new UpdateProfileResponseDto(profile, updateDto.Color);
         });
+
+        return updatedDto;
     }
 
     private async Task<bool> SetProfileColor(User user, ObjectId profileId, long color, IClientSessionHandle session)
@@ -99,7 +103,13 @@ public class ProfileService(
         return profile;
     }
 
-    public async Task<HashSet<Profile>> RetrieveMultipleProfileById(HashSet<string> profileIds)
+    public async Task<HashSet<RetrieveProfileResponseDto>> RetrieveMultipleProfileById(HashSet<string> profileIds)
+    {
+        var profiles = await RetrieveMultiple(profileIds);
+        return profiles.Select(p => new RetrieveProfileResponseDto(p)).ToHashSet();
+    }
+
+    public async Task<HashSet<Profile>> RetrieveMultiple(HashSet<string> profileIds)
     {
         var profiles = await dbService.RetrieveMultipleByIdAsync<Profile>(profileCollection, profileIds);
         return [.. profiles];

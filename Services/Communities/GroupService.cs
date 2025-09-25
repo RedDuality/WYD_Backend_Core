@@ -10,12 +10,13 @@ public class GroupService(MongoDbService dbService)
 {
     private readonly CollectionName groupCollection = CollectionName.Groups;
 
+    // use AddGroup from CommunityService
     public async Task<Group> CreateAsync(
         HashSet<Profile> profiles,
         Profile owner,
         Community community,
-        string? name = null,
-        bool? mainGroup = null,
+        bool mainGroup,
+        string name,
         IClientSessionHandle? session = null)
     {
         var groupProfiles = profiles.Select((p) =>
@@ -23,7 +24,7 @@ public class GroupService(MongoDbService dbService)
                 return new GroupProfile(p, p.Id == owner.Id ? GroupRole.Owner : GroupRole.Viewer);
             }).ToHashSet();
 
-        var group = new Group(community, name ?? "General", groupProfiles, mainGroup);
+        var group = new Group(community, name, groupProfiles, mainGroup);
         return await dbService.CreateOneAsync(groupCollection, group, session);
     }
 }
