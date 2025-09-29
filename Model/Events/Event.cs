@@ -2,7 +2,7 @@ using Core.Model.Base;
 using MongoDB.Bson;
 using MongoDB.Bson.Serialization.Attributes;
 
-namespace Core.Model;
+namespace Core.Model.Events;
 
 public class Event : BaseDateEntity
 {
@@ -26,3 +26,4 @@ public class Event : BaseDateEntity
     [BsonIgnoreIfDefault]
     public int TotalConfirmedMinusOne { get; set; } = 0;
 }
+

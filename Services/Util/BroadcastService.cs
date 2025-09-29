@@ -1,5 +1,5 @@
 using Core.Components.Database;
-using Core.Model.Join;
+using Core.Model.Events;
 using Core.Model.Profiles;
 using Core.Model.Users;
 using Core.Model.Util;

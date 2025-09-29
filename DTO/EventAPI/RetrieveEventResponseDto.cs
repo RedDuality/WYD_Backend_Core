@@ -1,4 +1,3 @@
-using Core.Model;
 using Core.Model.Events;
 using Core.Model.Profiles;
 

@@ -1,4 +1,3 @@
-using Core.Model;
 using Core.Components.Database;
 using MongoDB.Driver;
 using MongoDB.Bson;

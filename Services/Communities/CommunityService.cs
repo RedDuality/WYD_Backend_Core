@@ -3,7 +3,6 @@ using Core.DTO.CommunityAPI;
 using Core.Model.Communities;
 using Core.Model.Profiles;
 using Core.Services.Users;
-using DnsClient.Protocol;
 using MongoDB.Driver;
 
 namespace Core.Services.Communities;

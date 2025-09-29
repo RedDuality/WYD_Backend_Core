@@ -1,7 +1,8 @@
 using MongoDB.Driver;
 using MongoDB.Bson;
-using Core.Model.Join;
 using Core.Components.Database;
+using Core.Model.Profiles;
+using Core.Model.Events;
 
 namespace Core.Services.Events;
 
