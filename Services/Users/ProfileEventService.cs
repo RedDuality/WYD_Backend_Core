@@ -1,10 +1,9 @@
-
-using Core.Model.Join;
 using Core.Components.Database;
 using MongoDB.Bson;
 using MongoDB.Driver;
 using Core.Services.Events;
 using Core.Model.Profiles;
+using Core.Model.Events;
 
 
 namespace Core.Services.Users;
@@ -13,13 +12,45 @@ public class ProfileEventService(MongoDbService dbService, EventProfileService e
 {
     private readonly CollectionName profileEventCollection = CollectionName.ProfileEvents;
 
-    public async Task<ProfileEvent> CreateProfileEventAsync(ProfileEvent profileEvent, IClientSessionHandle session)
+    public async Task<ProfileEvent> CreateProfileEventAsync(Event ev, ObjectId profileId, IClientSessionHandle session, bool confirmed = true)
     {
-        profileEvent = await dbService.CreateOneAsync(profileEventCollection, profileEvent, session);
-        var eventProfile = new EventProfile(profileEvent);
-        await eventProfileService.CreateEventProfileAsync(eventProfile, session);
+        ProfileEvent profileEvent = new(
+                ev,
+                profileId
+            )
+        {
+            Confirmed = confirmed,
+        };
+        await dbService.CreateOneAsync(profileEventCollection, profileEvent, session);
+
+        await eventProfileService.CreateEventProfileAsync(profileEvent, session);
         return profileEvent;
     }
+
+    public async Task<List<ProfileEvent>> CreateMultipleProfileEventAsync(Event ev, HashSet<ObjectId> profileIds, IClientSessionHandle session, bool confirmed = false)
+    {
+        var profileEvents = new List<ProfileEvent>();
+
+        // Step 1: Create ProfileEvent objects
+        foreach (var profileId in profileIds)
+        {
+            var profileEvent = new ProfileEvent(ev, profileId)
+            {
+                Confirmed = confirmed
+            };
+            profileEvents.Add(profileEvent);
+        }
+
+        // Step 2: Insert ProfileEvents to get their IDs
+        await dbService.CreateManyAsync(profileEventCollection, profileEvents, session);
+
+        // Step 3: Create EventProfiles using inserted ProfileEvents (with IDs)
+        await eventProfileService.CreateMultipleEventProfileAsync(profileEvents,session);
+
+        return profileEvents;
+    }
+
+
 
 
     public async Task<ProfileEvent> FindByProfileAndEventId(string profileId, string eventId)

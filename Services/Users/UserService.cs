@@ -42,9 +42,9 @@ public class UserService(MongoDbService dbService, ProfileService profileService
 
         return await dbService.ExecuteInTransactionAsync(async (session) =>
         {
-            var newUser = new User(new Account(accountUid, mail));
+            var user = new User(new Account(accountUid, mail));
 
-            var user = await dbService.CreateOneAsync(userCollection, newUser, session);
+            await dbService.CreateOneAsync(userCollection, user, session);
 
             var profile = await profileService.CreateAsync(accountUid, mail, session);
 

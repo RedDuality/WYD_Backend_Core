@@ -10,10 +10,37 @@ public class EventProfileService(MongoDbService dbService)
 {
     private readonly CollectionName eventProfileCollection = CollectionName.EventProfiles;
 
-    public async Task<EventProfile> CreateEventProfileAsync(EventProfile eventProfile, IClientSessionHandle session)
+    public async Task<EventProfile> CreateEventProfileAsync(ProfileEvent profileEvent, IClientSessionHandle session)
     {
-        return await dbService.CreateOneAsync(eventProfileCollection, eventProfile, session);
+        var eventProfile = new EventProfile(profileEvent);
+        await dbService.CreateOneAsync(eventProfileCollection, eventProfile, session);
+        return eventProfile;
     }
+
+    public async Task<List<EventProfile>> CreateMultipleEventProfileAsync(List<ProfileEvent> profileEvents, IClientSessionHandle session)
+    {
+        var eventProfiles = profileEvents
+            .Select(pe => new EventProfile(pe))
+            .ToList();
+
+        return await dbService.CreateManyAsync(eventProfileCollection, eventProfiles, session);
+    }
+
+    public async Task<List<ObjectId>> FindAlreadyExisting(Event ev, HashSet<ObjectId> profileIds)
+    {
+        var filter = Builders<EventProfile>.Filter.And(
+            Builders<EventProfile>.Filter.Eq(ep => ep.EventId, ev.Id),
+            Builders<EventProfile>.Filter.In(ep => ep.ProfileId, profileIds)
+        );
+
+        var existingEventProfiles = await dbService.RetrieveMultipleAsync(eventProfileCollection, filter);
+
+        return existingEventProfiles
+            .Select(ep => ep.ProfileId)
+            .Distinct()
+            .ToList();
+    }
+
 
     public async Task<List<EventProfile>> FindAllByEventId(string eventId)
     {

@@ -88,7 +88,7 @@ public class MongoDbService(MongoDbContext dbContext)
 
     #region create
 
-    public async Task<TDocument> CreateOneAsync<TDocument>(CollectionName cn, TDocument newDocument, IClientSessionHandle? session)
+    public async Task CreateOneAsync<TDocument>(CollectionName cn, TDocument newDocument, IClientSessionHandle? session)
         where TDocument : BaseEntity
     {
         string collectionName = cn.ToString();
@@ -103,9 +103,6 @@ public class MongoDbService(MongoDbContext dbContext)
             {
                 await collection.InsertOneAsync(newDocument);
             }
-
-
-            return newDocument;
         }
         catch (MongoException ex)
         {

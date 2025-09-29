@@ -14,7 +14,8 @@ public class ProfileEvent(Event ev, ObjectId profileId) : BaseDateEntity
     public ObjectId ProfileId { get; set; } = profileId;
 
     [BsonElement("confirmed")]
-    public bool Confirmed { get; set; } = false;
+    [BsonIgnoreIfDefault]
+    public bool Confirmed { get; set; }
 
     [BsonElement("eventUpdatedAt")]
     public DateTimeOffset EventUpdatedAt { get; set; } = ev.UpdatedAt;

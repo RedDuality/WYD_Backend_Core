@@ -1,5 +1,4 @@
 using MongoDB.Bson;
-using Core.Model;
 using Core.Components.Database;
 using MongoDB.Driver;
 using Core.Model.Util;
@@ -10,6 +9,8 @@ using Core.Services.Util;
 using Core.Services.Users;
 using Core.Model.Profiles;
 using Core.Model.Events;
+using Core.DTO.CommunityAPI;
+using Core.Services.Communities;
 
 namespace Core.Services.Events;
 
@@ -18,6 +19,8 @@ public class EventService(
     MongoDbService dbService,
     EventDetailsService eventDetailsService,
     ProfileEventService profileEventService,
+    EventProfileService eventProfileService,
+    GroupService groupService,
     MediaService mediaService,
     BroadcastService broadcastService
 )
@@ -32,7 +35,7 @@ public class EventService(
 
     public async Task<RetrieveEventResponseDto> CreateEventAsync(CreateEventRequestDto newEventDto, string profileId)
     {
-        var newEvent = new Event
+        var ev = new Event
         {
             Title = newEventDto.Title!,
             StartTime = newEventDto.StartTime.ToUniversalTime(),
@@ -41,20 +44,11 @@ public class EventService(
 
         RetrieveEventResponseDto EventDto = await dbService.ExecuteInTransactionAsync(async (session) =>
         {
-            Event createdEvent = await dbService.CreateOneAsync(eventCollection, newEvent, session);
-            EventDetails eventDetails = await eventDetailsService.CreateAsync(createdEvent, newEventDto.Description, session);
+            await dbService.CreateOneAsync(eventCollection, ev, session);
+            EventDetails eventDetails = await eventDetailsService.CreateAsync(ev, newEventDto.Description, session);
+            ProfileEvent profileEvent = await profileEventService.CreateProfileEventAsync(ev, new ObjectId(profileId), session);
 
-            ProfileEvent newProfileEvent = new(
-                createdEvent,
-                new ObjectId(profileId)
-            )
-            {
-                Confirmed = true
-            };
-
-            ProfileEvent profileEvent = await profileEventService.CreateProfileEventAsync(newProfileEvent, session);
-
-            return new RetrieveEventResponseDto(createdEvent, eventDetails, [profileEvent]);
+            return new RetrieveEventResponseDto(ev, eventDetails, [profileEvent]);
         });
 
         _ = broadcastService.BroadcastEventUpdate(EventDto.Hash, UpdateType.CreateEvent, "A new event was just created", "yeee, new events");
@@ -102,6 +96,32 @@ public class EventService(
         return new RetrieveEventResponseDto(ev, details: details);
     }
 
+    public async Task<RetrieveEventResponseDto> ShareAsync(Profile profile, string eventId, List<ShareEventRequestDto> groupIds)
+    {
+
+        var ev = await dbService.RetrieveByIdAsync<Event>(eventCollection, eventId);
+
+        var profiles = await groupService.GetProfilesByGroupIds(groupIds, profile);
+
+        var alreadyExistingProfiles = await eventProfileService.FindAlreadyExisting(ev, profiles);
+        profiles.ExceptWith(alreadyExistingProfiles);
+
+        var updateDefinition = Builders<Event>.Update.Inc(e => e.TotalProfilesMinusOne, profiles.Count);
+
+        await dbService.ExecuteInTransactionAsync<object?>(async (session) =>
+                {
+                    ev = await dbService.FindOneByIdAndUpdateAsync(eventCollection, ev.Id, updateDefinition, session);
+                    await profileEventService.CreateMultipleProfileEventAsync(
+                        ev,
+                        profiles,
+                        session);
+
+                    return null;
+                });
+        return new RetrieveEventResponseDto(ev);
+
+    }
+
     public async Task Confirm(string eventId, string profileId)
     {
         await dbService.ExecuteInTransactionAsync<object?>(async (session) =>
@@ -139,6 +159,7 @@ public class EventService(
         await dbService.ConfirmExists<Event>(eventCollection, id);
     }
 
+    // for RT updates(creation/share of an event)
     public async Task<RetrieveEventResponseDto> RetrieveEventById(string eventId, string profileId)
     {
         var ev = await dbService.RetrieveByIdAsync<Event>(eventCollection, eventId);

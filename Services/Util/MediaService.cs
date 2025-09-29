@@ -83,9 +83,10 @@ public class MediaService(MongoDbService dbService, MinioClient minioClient)
         return dtos.ToList();
     }
 
-    private async Task<Media> CreateMedia(CollectionName mediaCollection, Media newMedia)
+    private async Task<Media> CreateMedia(CollectionName mediaCollection, Media media)
     {
-        return await dbService.CreateOneAsync(mediaCollection, newMedia, null);
+        await dbService.CreateOneAsync(mediaCollection, media, null);
+        return media;
     }
 
     public async Task<List<MediaReadResponseDto>> GetReadUrlsAsync(BucketName bucketName, MediaReadRequestDto mediaReadRequestDto)
