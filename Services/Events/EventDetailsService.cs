@@ -33,11 +33,11 @@ public class EventDetailsService(MongoDbService dbService)
         await dbService.UpdateOneAsync(eventDetailsCollection, detailsFilter, updateDefinition, null);
     }
 
-    public async Task<EventDetails> Update(ObjectId eventId, string description)
+    public async Task<EventDetails> Update(ObjectId eventId, string description, IClientSessionHandle session)
     {
         var detailsFilter = Builders<EventDetails>.Filter.Eq(ed => ed.EventId, eventId);
         var updateDefinition = Builders<EventDetails>.Update.Set(ed => ed.Description, description);
-        return await dbService.FindOneAndUpdateAsync(eventDetailsCollection, detailsFilter, updateDefinition, null);
+        return await dbService.FindOneAndUpdateAsync(eventDetailsCollection, detailsFilter, updateDefinition, session);
     }
 
 }

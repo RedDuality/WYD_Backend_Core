@@ -1,13 +1,9 @@
 using FirebaseAdmin;
 using FirebaseAdmin.Auth;
 using Google.Apis.Auth.OAuth2;
-using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using Core.External.Interfaces;
 using Microsoft.Extensions.Configuration;
-using Newtonsoft.Json.Linq;
-using System.Text.Json;
-using System.Net.Http.Json;
 
 namespace Core.External.Authentication;
 

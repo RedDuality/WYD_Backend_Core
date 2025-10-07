@@ -1,17 +1,17 @@
 using Core.Components.Database;
 using Core.Model.Events;
+using Core.Model.Notifications;
 using Core.Model.Profiles;
 using Core.Model.Users;
-using Core.Model.Util;
 using MongoDB.Bson;
 using MongoDB.Driver;
 
-namespace Core.Services.Util;
+namespace Core.Services.Notifications;
 
 
 public class BroadcastService(MongoDbService dbService, NotificationService notificationService)
 {
-    public async Task BroadcastEventUpdate(string eventId, UpdateType type, string? title = null, string? body = null, string? profileId = null)
+    public async Task BroadcastEventUpdate(string eventId, NotificationType type, string? title = null, string? body = null, string? profileId = null)
     {
         var tokens = await GetEventNotificationTokens(eventId);
         if (tokens.Count > 0)
@@ -42,10 +42,15 @@ public class BroadcastService(MongoDbService dbService, NotificationService noti
         );
         var profileIds = eventProfiles.Select(ep => ep.ProfileId).ToList();
 
+        return await GetProfilesNotificationTokens(profileIds);
+    }
+
+    private async Task<List<string>> GetProfilesNotificationTokens(List<ObjectId> profileIds)
+    {
         var profileDetails = await dbService.RetrieveMultipleAsync(
-            CollectionName.ProfileDetails,
-            Builders<ProfileDetails>.Filter.In(p => p.ProfileId, profileIds)
-        );
+                    CollectionName.ProfileDetails,
+                    Builders<ProfileDetails>.Filter.In(p => p.ProfileId, profileIds)
+                );
         var userIds = profileDetails.SelectMany(pd => pd.Users).Select(pu => pu.UserId).ToHashSet();
 
         var users = await dbService.RetrieveMultipleAsync(

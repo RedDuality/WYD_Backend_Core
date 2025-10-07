@@ -1,6 +1,6 @@
-namespace Core.Model.Util;
+namespace Core.Model.Notifications;
 
-public enum UpdateType
+public enum NotificationType
 {
     CreateEvent,
     ShareEvent,

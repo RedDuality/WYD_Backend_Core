@@ -5,12 +5,13 @@ using Core.Model.Util;
 using Core.Components.ObjectStorage;
 using Core.DTO.MediaAPI;
 using Core.DTO.EventAPI;
-using Core.Services.Util;
 using Core.Services.Users;
 using Core.Model.Profiles;
 using Core.Model.Events;
 using Core.DTO.CommunityAPI;
 using Core.Services.Communities;
+using Core.Services.Notifications;
+using Core.Model.Notifications;
 
 namespace Core.Services.Events;
 
@@ -51,7 +52,7 @@ public class EventService(
             return new RetrieveEventResponseDto(ev, eventDetails, [profileEvent]);
         });
 
-        _ = broadcastService.BroadcastEventUpdate(EventDto.Hash, UpdateType.CreateEvent, "A new event was just created", "yeee, new events");
+        _ = broadcastService.BroadcastEventUpdate(EventDto.Hash, NotificationType.CreateEvent, "A new event was just created", "yeee, new events");
         return EventDto;
     }
 
@@ -77,23 +78,30 @@ public class EventService(
             updates.Add(Builders<Event>.Update.Set(e => e.EndTime, updateDto.EndTime));
         }
 
-        // Check if there are any updates to perform
-        if (updates.Count != 0)
-        {
-            var combinedUpdate = Builders<Event>.Update.Combine(updates);
-
-            ev = await dbService.FindOneByIdAndUpdateAsync(eventCollection, ev.Id, combinedUpdate);
-
-            _ = broadcastService.BroadcastEventUpdate(ev.Id.ToString(), UpdateType.UpdateEssentialsEvent, "Un evento è stato aggiornato", "Better not be the medic visit");
-        }
-
         EventDetails? details = null;
-        if (updateDto.Description != null)
-        {
-            details = await eventDetailsService.Update(ev.Id, updateDto.Description);
-        }
 
-        return new RetrieveEventResponseDto(ev, details: details);
+        var upatedEvent = await dbService.ExecuteInTransactionAsync(async (session) =>
+        {
+            // Check if there are any updates to perform
+            if (updates.Count != 0)
+            {
+                var combinedUpdate = Builders<Event>.Update.Combine(updates);
+
+                ev = await dbService.FindOneByIdAndUpdateAsync(eventCollection, ev.Id, combinedUpdate, session);
+
+                _ = broadcastService.BroadcastEventUpdate(ev.Id.ToString(), NotificationType.UpdateEssentialsEvent, "Un evento è stato aggiornato", "Better not be the medic visit");
+            }
+
+
+            if (updateDto.Description != null)
+            {
+                details = await eventDetailsService.Update(ev.Id, updateDto.Description, session);
+            }
+            return ev;
+        });
+
+
+        return new RetrieveEventResponseDto(upatedEvent, details: details);
     }
 
     public async Task<RetrieveEventResponseDto> ShareAsync(Profile profile, string eventId, List<ShareEventRequestDto> groupIds)
@@ -131,7 +139,7 @@ public class EventService(
             var increaseUpdate = Builders<Event>.Update.Inc(ev => ev.TotalConfirmedMinusOne, 1);
             var ev = await dbService.FindOneByIdAndUpdateAsync(eventCollection, new ObjectId(eventId), increaseUpdate, session);
 
-            _ = broadcastService.BroadcastEventUpdate(eventId, UpdateType.ConfirmEvent, profileId: profileId);
+            _ = broadcastService.BroadcastEventUpdate(eventId, NotificationType.ConfirmEvent, profileId: profileId);
             return null;
         });
     }
@@ -145,7 +153,7 @@ public class EventService(
             var decreaseUpdate = Builders<Event>.Update.Inc(ev => ev.TotalConfirmedMinusOne, -1);
             var ev = await dbService.FindOneByIdAndUpdateAsync(eventCollection, new ObjectId(eventId), decreaseUpdate, session);
 
-            _ = broadcastService.BroadcastEventUpdate(eventId, UpdateType.DeclineEvent, profileId: profileId);
+            _ = broadcastService.BroadcastEventUpdate(eventId, NotificationType.DeclineEvent, profileId: profileId);
             return null;
         });
     }
