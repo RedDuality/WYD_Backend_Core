@@ -12,7 +12,7 @@ public class Notification(string objectId, NotificationType type)
     public Dictionary<string, string> ToDictionary()
     {
         Dictionary<string, string> data = new() {
-                { "type", type.ToString() },
+                { "type", Type.ToString() },
                 { "hash", ObjectId }
             };
 

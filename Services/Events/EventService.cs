@@ -10,8 +10,8 @@ using Core.Model.Profiles;
 using Core.Model.Events;
 using Core.DTO.CommunityAPI;
 using Core.Services.Communities;
-using Core.Services.Notifications;
 using Core.Model.Notifications;
+using Core.Components.MessageQueue;
 
 namespace Core.Services.Events;
 
@@ -23,7 +23,7 @@ public class EventService(
     EventProfileService eventProfileService,
     GroupService groupService,
     MediaService mediaService,
-    BroadcastService broadcastService
+    MessageQueueService messageService
 )
 {
     private readonly CollectionName eventCollection = CollectionName.Events;
@@ -52,7 +52,15 @@ public class EventService(
             return new RetrieveEventResponseDto(ev, eventDetails, [profileEvent]);
         });
 
-        _ = broadcastService.BroadcastEventUpdate(EventDto.Hash, NotificationType.CreateEvent, "A new event was just created", "yeee, new events");
+        var notification = new Notification(
+            EventDto.Hash,
+            NotificationType.CreateEvent
+        )
+        {
+            Title = "A new event was just created",
+            Body = "yeee, new events",
+        };
+        await messageService.SendNotificationAsync(notification);
         return EventDto;
     }
 
@@ -89,7 +97,16 @@ public class EventService(
 
                 ev = await dbService.FindOneByIdAndUpdateAsync(eventCollection, ev.Id, combinedUpdate, session);
 
-                _ = broadcastService.BroadcastEventUpdate(ev.Id.ToString(), NotificationType.UpdateEssentialsEvent, "Un evento è stato aggiornato", "Better not be the medic visit");
+                var notification = new Notification(
+                    ev.Id.ToString(),
+                    NotificationType.UpdateEssentialsEvent
+                )
+                {
+                    Title = "Un evento è stato aggiornato",
+                    Body = "Better not be the medic visit",
+                };
+                await messageService.SendNotificationAsync(notification);
+
             }
 
 
@@ -139,7 +156,15 @@ public class EventService(
             var increaseUpdate = Builders<Event>.Update.Inc(ev => ev.TotalConfirmedMinusOne, 1);
             var ev = await dbService.FindOneByIdAndUpdateAsync(eventCollection, new ObjectId(eventId), increaseUpdate, session);
 
-            _ = broadcastService.BroadcastEventUpdate(eventId, NotificationType.ConfirmEvent, profileId: profileId);
+            var notification = new Notification(
+                eventId,
+                NotificationType.ConfirmEvent
+            )
+            {
+                ProfileId = profileId
+            };
+            await messageService.SendNotificationAsync(notification);
+
             return null;
         });
     }
@@ -153,7 +178,15 @@ public class EventService(
             var decreaseUpdate = Builders<Event>.Update.Inc(ev => ev.TotalConfirmedMinusOne, -1);
             var ev = await dbService.FindOneByIdAndUpdateAsync(eventCollection, new ObjectId(eventId), decreaseUpdate, session);
 
-            _ = broadcastService.BroadcastEventUpdate(eventId, NotificationType.DeclineEvent, profileId: profileId);
+            var notification = new Notification(
+                eventId,
+                NotificationType.DeclineEvent
+            )
+            {
+                ProfileId = profileId
+            };
+            await messageService.SendNotificationAsync(notification);
+
             return null;
         });
     }

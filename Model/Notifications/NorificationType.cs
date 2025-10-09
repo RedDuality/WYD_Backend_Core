@@ -10,6 +10,6 @@ public enum NotificationType
     ConfirmEvent,
     DeclineEvent,
     DeleteEvent,
-    DeleteForAll,
+    DeleteEventForAll,
     UpdateProfile,
 }

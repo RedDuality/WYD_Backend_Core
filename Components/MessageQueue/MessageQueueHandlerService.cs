@@ -1,4 +1,6 @@
+using Core.Model.Events;
 using Core.Model.QueueMessages;
+using Core.Services.Events;
 
 namespace Core.Components.MessageQueue;
 
@@ -10,16 +12,15 @@ public interface IMessageQueueHandlerService
 public class MessageQueueHandlerService : IMessageQueueHandlerService
 {
 
-
     private readonly Dictionary<MessageType, Func<object?, Task>> _handlers;
 
-    public MessageQueueHandlerService()
+    public MessageQueueHandlerService(EventService eventService)
     {
         _handlers = new Dictionary<MessageType, Func<object?, Task>>
         {
             [MessageType.eventUpdate] = async payload =>
             {
-                if (payload is EventUpdatedEvent eventEvent)
+                if (payload is Event eventEvent)
                 {
                     await eventService.ApplyEventUpdateAsync(eventEvent);
                 }

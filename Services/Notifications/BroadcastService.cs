@@ -11,38 +11,20 @@ namespace Core.Services.Notifications;
 
 public class BroadcastService(MongoDbService dbService, NotificationService notificationService)
 {
-    public async Task BroadcastEventUpdate(string eventId, NotificationType type, string? title = null, string? body = null, string? profileId = null)
+    private readonly ProfileIdResolverFactory _resolverFactory = new();
+
+    public async Task BroadcastUpdate(Notification notification)
     {
-        var tokens = await GetEventNotificationTokens(eventId);
+        var tokens = await GetNotificationTokens(notification);
         if (tokens.Count > 0)
-        {
-            Dictionary<string, string> data = new() {
-                { "type", type.ToString() },
-                { "hash", eventId }
-            };
-
-            if (title != null)
-                data.Add("title", title);
-
-            if (body != null)
-                data.Add("body", body);
-
-            if (profileId != null)
-                data.Add("profileHash", profileId);
-
-            await notificationService.SendNotification(tokens, data);
-        }
+            await notificationService.SendNotification(tokens, notification.ToDictionary());
     }
 
-    private async Task<List<string>> GetEventNotificationTokens(string eventId)
+    public async Task<List<string>> GetNotificationTokens(Notification notification)
     {
-        var eventProfiles = await dbService.RetrieveMultipleAsync(
-            CollectionName.EventProfiles,
-            Builders<EventProfile>.Filter.Where(ep => ep.EventId == new ObjectId(eventId))
-        );
-        var profileIds = eventProfiles.Select(ep => ep.ProfileId).ToList();
-
-        return await GetProfilesNotificationTokens(profileIds);
+        var profileFinder = _resolverFactory.Resolve(notification.Type);
+        var affectedProfileIds = await profileFinder.GetProfileIdsAsync(dbService, notification);
+        return await GetProfilesNotificationTokens(affectedProfileIds);
     }
 
     private async Task<List<string>> GetProfilesNotificationTokens(List<ObjectId> profileIds)
