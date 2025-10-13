@@ -1,13 +1,20 @@
 using Core.Components.Database;
+using Core.Components.MessageQueue;
 using Core.DTO.CommunityAPI;
 using Core.Model.Communities;
+using Core.Model.Notifications;
 using Core.Model.Profiles;
 using Core.Services.Users;
 using MongoDB.Driver;
 
 namespace Core.Services.Communities;
 
-public class CommunityService(MongoDbService dbService, ProfileService profileService, GroupService groupService, ProfileCommunityService profileCommunityService)
+public class CommunityService(
+    MongoDbService dbService,
+    ProfileService profileService,
+    GroupService groupService,
+    ProfileCommunityService profileCommunityService,
+    MessageQueueService messageService)
 {
     private readonly CollectionName communityCollection = CollectionName.Communities;
 
@@ -16,22 +23,23 @@ public class CommunityService(MongoDbService dbService, ProfileService profileSe
         HashSet<Profile> profiles = [];
         if (dto.ProfileIds.Count > 0)
             profiles = await profileService.RetrieveMultiple([.. dto.ProfileIds]);
-
+            
         profiles.Add(ownerProfile);
 
+        // check community does not already exists
         if (dto.Type == CommunityType.Personal)
         {
             var oldCommunity = await profileCommunityService.FindPersonalCommunity(ownerProfile, profiles.Where(p => p.Id != ownerProfile.Id).First());
             if (oldCommunity != null)
                 return new RetrieveCommunityResponseDto(oldCommunity);
         }
-        
         var community = new Community(dto.Name, ownerProfile, dto.Type);
 
         List<ProfileCommunity> profileCommunities = await dbService.ExecuteInTransactionAsync(async (session) =>
             {
                 await dbService.CreateOneAsync(communityCollection, community, session);
-                var group = await AddGroup(
+
+                var group = await CreateAndAddGroup(
                     community,
                     profiles,
                     ownerProfile,
@@ -42,13 +50,20 @@ public class CommunityService(MongoDbService dbService, ProfileService profileSe
 
                 return profileCommunities;
             });
-
         var currentProfileCommunity = profileCommunities.Where(pc => pc.ProfileId == ownerProfile.Id).First();
+
+
+        var notification = new Notification(
+            community.Id,
+            NotificationType.CreateCommunity,
+            community.UpdatedAt
+        );
+        await messageService.SendNotificationAsync(notification);
 
         return new RetrieveCommunityResponseDto(currentProfileCommunity);
     }
 
-    public async Task<Group> AddGroup(
+    public async Task<Group> CreateAndAddGroup(
         Community community,
         HashSet<Profile> profiles,
         Profile ownerProfile,

@@ -4,22 +4,15 @@ using Core.Services.Notifications;
 
 namespace Core.Components.MessageQueue;
 
-
-public interface IMessageQueueService
-{
-    Task SendPropagationMessageAsync<T>(QueueMessage<T> message);
-    Task SendNotificationAsync(Notification notification);
-}
-
-public class MessageQueueService(IMessageQueueHandlerService handlerService, BroadcastService broadcastService) : IMessageQueueService
+public class MessageQueueService(IMessageQueueHandlerService handlerService, BroadcastService broadcastService)
 {
 
     public async Task SendPropagationMessageAsync<T>(QueueMessage<T> message)
     {
         // In a real system, this would enqueue to Kafka/RabbitMQ/etc.
-        // Here we simulate async delivery.
+        // Here we simulate the time to add the message to the queue delivery.
         await Task.Delay(1);
-        await handlerService.HandleMessageAsync(message);
+        _ = handlerService.HandleMessageAsync(message);
     }
 
     public async Task SendNotificationAsync(Notification notification)

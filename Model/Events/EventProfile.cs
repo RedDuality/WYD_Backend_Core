@@ -12,8 +12,5 @@ public class EventProfile(ProfileEvent profileEvent) : BaseEntity
 
     [BsonElement("profileId")]
     public ObjectId ProfileId { get; set; } = profileEvent.ProfileId;
-
-    [BsonElement("profileEventId")]
-    public ObjectId ProfileEventId { get; set; } = profileEvent.Id;
 }
 

@@ -1,29 +1,34 @@
+using MongoDB.Bson;
+
 namespace Core.Model.Notifications;
 
-public class Notification(string objectId, NotificationType type)
+public class Notification(
+    ObjectId objectId,
+    NotificationType type,
+    DateTimeOffset updatedAt)
 {
-    public string ObjectId { get; set; } = objectId;
+    public ObjectId ObjectId { get; set; } = objectId;
     public NotificationType Type { get; set; } = type;
-
+    public DateTimeOffset? UpdatedAt { get; set; } = updatedAt;
+    
     public string? Title { get; set; } = null;
     public string? Body { get; set; } = null;
-    public string? ProfileId { get; set; } = null;
+    public string? ActorId { get; set; } = null;
 
     public Dictionary<string, string> ToDictionary()
     {
         Dictionary<string, string> data = new() {
                 { "type", Type.ToString() },
-                { "hash", ObjectId }
+                { "id", ObjectId.ToString() }
             };
 
-        if (Title != null)
-            data.Add("title", Title);
+        if (UpdatedAt != null) data.Add("time",UpdatedAt.Value.ToString("o")); // "o" = ISO 8601 format
 
-        if (Body != null)
-            data.Add("body", Body);
+        if (Title != null) data.Add("title", Title);
 
-        if (ProfileId != null)
-            data.Add("profileHash", ProfileId);
+        if (Body != null) data.Add("body", Body);
+
+        if (ActorId != null) data.Add("profileId", ActorId);
 
         return data;
     }

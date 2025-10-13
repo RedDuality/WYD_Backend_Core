@@ -3,14 +3,15 @@ using MongoDB.Bson;
 using Core.Components.Database;
 using Core.Model.Profiles;
 using Core.Model.Events;
+using Core.Services.Notifications;
 
 namespace Core.Services.Events;
 
-public class EventProfileService(MongoDbService dbService)
+public class EventProfileService(MongoDbService dbService) : IProfileFinder
 {
     private readonly CollectionName eventProfileCollection = CollectionName.EventProfiles;
 
-    public async Task<EventProfile> CreateEventProfileAsync(ProfileEvent profileEvent, IClientSessionHandle session)
+    public async Task<EventProfile> CreateEventProfileAsync(ProfileEvent profileEvent, IClientSessionHandle? session)
     {
         var eventProfile = new EventProfile(profileEvent);
         await dbService.CreateOneAsync(eventProfileCollection, eventProfile, session);
@@ -42,11 +43,11 @@ public class EventProfileService(MongoDbService dbService)
     }
 
 
-    public async Task<List<EventProfile>> FindAllByEventId(string eventId)
+    private async Task<List<EventProfile>> FindAllByEventId(ObjectId eventId)
     {
         var result = await dbService.RetrieveMultipleAsync(
             eventProfileCollection,
-            Builders<EventProfile>.Filter.Eq(ep => ep.EventId, new ObjectId(eventId)));
+            Builders<EventProfile>.Filter.Eq(ep => ep.EventId, eventId));
 
         var eventProfiles = result?.ToList();
         if (eventProfiles == null || eventProfiles.Count == 0)
@@ -55,6 +56,12 @@ public class EventProfileService(MongoDbService dbService)
         }
 
         return eventProfiles;
+    }
+
+    public async Task<List<ObjectId>> GetProfileIdsAsync(ObjectId eventId)
+    {
+        var eps = await FindAllByEventId(eventId);
+        return eps.Select(ep => ep.ProfileId).ToList();
     }
 
 }

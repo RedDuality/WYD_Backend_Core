@@ -1,7 +1,10 @@
+using Core.Services.Users;
 using FirebaseAdmin;
 using FirebaseAdmin.Messaging;
+using Google;
 using Google.Apis.Auth.OAuth2;
 using Microsoft.Extensions.Configuration;
+using MongoDB.Bson;
 
 namespace Core.Services.Notifications;
 
@@ -9,10 +12,12 @@ public class NotificationService
 {
 
     private readonly Lazy<FirebaseMessaging> _messagingInstance;
+    private readonly UserService _userService;
 
-    public NotificationService(IConfiguration configuration)
+
+    public NotificationService(IConfiguration configuration, UserService userService)
     {
-
+        _userService = userService;
         _messagingInstance = new Lazy<FirebaseMessaging>(() =>
         {
             if (FirebaseApp.DefaultInstance == null)
@@ -32,8 +37,10 @@ public class NotificationService
 
     private FirebaseMessaging Messaging => _messagingInstance.Value;
 
-    public async Task SendNotification(List<string> tokens, Dictionary<string, string>? data = null)
+    public async Task SendNotification(Dictionary<string, ObjectId> tokensWithUserIds, Dictionary<string, string>? data = null)
     {
+        var tokens = tokensWithUserIds.Keys.ToList();
+
         var message = new MulticastMessage()
         {
             Notification = null,
@@ -41,93 +48,91 @@ public class NotificationService
             Data = data,
         };
 
-        // Send the message
         BatchResponse response = await Messaging.SendEachForMulticastAsync(message);
-        var failed = response.Responses.Where(r => r.IsSuccess == false).ToList();
-        //TODO failed.forEach( check error message -> delete token);
+
+        await HandleFailedNotifications(response, tokensWithUserIds); 
     }
 
-    /*
-    https://firebase.flutter.dev/docs/messaging/server-integration/
-    Data-only messages are sent as low priority on both Android and iOS and will not trigger the background handler by default. 
-    To enable this functionality, you must set the "priority" to high on Android and enable the content-available flag for iOS in the message payload.
-    */
-    /*
-    public async Task SendEventNotifications(Event ev, Profile currentProfile, UpdateType type)
+    private async Task HandleFailedNotifications(BatchResponse response, Dictionary<string, ObjectId> tokensWithUserIds)
     {
-        //TODO add control over roles
-        var eventUserHashes = ev
-            .Profiles.SelectMany(profile => profile.Users.Select(user => user.Hash))
-            .ToHashSet();
-
-        await Send(
-            eventUserHashes,
-            type,
-            ev.Hash,
-            (type == UpdateType.ConfirmEvent || type == UpdateType.DeclineEvent)
-                ? currentProfile
-                : null
-        );
-    }
-
-    public async Task SendEventNotifications(
-        Event? ev,
-        Profile currentProfile,
-        UpdateType type,
-        string hash
-    )
-    {
-        //TODO add control over roles
-        HashSet<Profile> profiles = [currentProfile];
-        if (ev != null)
-            profiles.UnionWith(ev.Profiles);
-
-        var eventUserHashes = profiles
-            .SelectMany(profile => profile.Users.Select(user => user.Hash))
-            .ToHashSet();
-
-        await Send(
-            eventUserHashes,
-            type,
-            ev?.Hash ?? hash,
-            (
-                type == UpdateType.ConfirmEvent
-                || type == UpdateType.DeclineEvent
-                || type == UpdateType.DeleteEvent
-            )
-                ? currentProfile
-                : null
-        );
-    }
-
-    public async Task Send(
-        IEnumerable<string> userHashes,
-        UpdateType type,
-        string objectHash,
-        Profile? profile
-    )
-    {
-        Dictionary<string, object> update = new()
+        for (int i = 0; i < response.Responses.Count; i++)
         {
-            { "timestamp", Timestamp.GetCurrentTimestamp() },
-            { "type", type },
-            { "hash", objectHash },
-            { "v", "1.0" },
-        };
+            var fcmResponse = response.Responses[i];
 
-        if (profile != null)
-        {
-            update.Add("phash", profile.Hash);
-        }
+            if (!fcmResponse.IsSuccess)
+            {
+                var failedToken = tokensWithUserIds.Keys.ElementAt(i);
+                var userId = tokensWithUserIds[failedToken];
 
-        foreach (string hash in userHashes)
-        {
-            await firestoreDb.Collection(hash).AddAsync(update);
+                if (IsTokenInvalidOrExpired(fcmResponse))
+                {
+                    await _userService.RemoveDevice(userId, failedToken);
+                }
+                else
+                {
+                    // This is a transient error (e.g., server unavailable, resource exhausted).
+                    Console.WriteLine($"[FCM TRANSIENT] Notification failed for token '{failedToken}' (User: {userId}). Error: {fcmResponse.Exception?.Message}. Token retained for retry.");
+                }
+            }
         }
     }
 
-    public async Task SendMockNotification(string hash)
+    /// <summary>
+    /// Checks the response exception to determine if the error is permanent (token should be deleted).
+    /// </summary>
+    /// <param name="response">The SendResponse from the batch operation.</param>
+    /// <returns>True if the token is permanently invalid or expired.</returns>
+    private static bool IsTokenInvalidOrExpired(SendResponse response)
     {
-        await Send([hash], UpdateType.UpdateEvent, "prova", null);
-    }*/
+        if (response.Exception is null)
+        {
+            return false;
+        }
+
+        // Look for the inner FirebaseMessagingException
+        var innerException = response.Exception.InnerException;
+        if (innerException is null)
+        {
+            return false;
+        }
+
+        // 1. Check for the specific 'messaging/not-registered' message/code.
+        // This is the most common reason to delete a token.
+        if (innerException.Message.Contains("messaging/not-registered") ||
+            innerException.Message.Contains("messaging/invalid-argument"))
+        {
+            return true;
+        }
+
+        // 2. Check for specific status codes indicating permanent failure.
+        // This usually requires casting to a Google.Apis.Requests.RequestError,
+        // though the Firebase Admin SDK often wraps it. We'll look for specific HTTP status codes
+        // that indicate a non-recoverable client-side error (HTTP 400).
+        if (innerException is FirebaseMessagingException fcmEx)
+        {
+            // The FirebaseMessagingException often contains the detailed error.
+            // Check for specific error codes defined by Firebase/GCP.
+            if (fcmEx.MessagingErrorCode.HasValue)
+            {
+                var errorCode = fcmEx.MessagingErrorCode.Value.ToString();
+
+                // Codes indicating the token is bad and should be removed:
+                if (errorCode == "UNREGISTERED" || // The token is no longer valid.
+                    errorCode == "INVALID_ARGUMENT" || // Invalid token format or size.
+                    errorCode == "SENDER_ID_MISMATCH") // Token belongs to another project.
+                {
+                    return true;
+                }
+            }
+        }
+
+        // 3. Fallback check for HTTP 400 status (Bad Request/Permanent client-side issue)
+        // This is less common but serves as a generic safety net for bad tokens.
+        if (innerException is GoogleApiException googleEx && googleEx.HttpStatusCode == System.Net.HttpStatusCode.BadRequest)
+        {
+            return true;
+        }
+
+        return false;
+    }
 }

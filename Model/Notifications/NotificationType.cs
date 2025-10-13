@@ -2,14 +2,16 @@ namespace Core.Model.Notifications;
 
 public enum NotificationType
 {
-    CreateEvent,
-    ShareEvent,
+    //CreateEvent,
+    // ShareEvent,
     UpdateEssentialsEvent,
-    UpdateDetailsEvent,
+    // UpdateDetailsEvent,
     UpdatePhotos,
     ConfirmEvent,
     DeclineEvent,
     DeleteEvent,
     DeleteEventForAll,
     UpdateProfile,
+
+    CreateCommunity,
 }

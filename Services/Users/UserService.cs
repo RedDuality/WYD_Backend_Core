@@ -4,7 +4,6 @@ using Core.DTO.UserAPI;
 using MongoDB.Bson;
 using Core.Model.Users;
 using Core.Model.Profiles;
-using Core.Model.Communities;
 
 namespace Core.Services.Users;
 
@@ -84,7 +83,7 @@ public class UserService(MongoDbService dbService, ProfileService profileService
     {
         var device = new Device(platform: requestDto.Platform, fcmToken: requestDto.FcmToken);
         var deviceUpdate = Builders<User>.Update.AddToSet(u => u.Devices, device);
-        await dbService.UpdateOneByIdAsync(userCollection, user.Id, deviceUpdate, saveUpdates: false);
+        await dbService.UpdateOneByIdAsync(userCollection, user.Id, deviceUpdate, setUpdatedAtDate: false);
     }
 
     public async Task RemoveDevice(ObjectId userId, string fcmToken)
@@ -93,7 +92,7 @@ public class UserService(MongoDbService dbService, ProfileService profileService
             u => u.Devices,
             d => d.FcmToken.Equals(fcmToken, StringComparison.CurrentCultureIgnoreCase)
         );
-        await dbService.UpdateOneByIdAsync(userCollection, userId, deviceUpdate, saveUpdates: false);
+        await dbService.UpdateOneByIdAsync(userCollection, userId, deviceUpdate, setUpdatedAtDate: false);
     }
 
     #endregion

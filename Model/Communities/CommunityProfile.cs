@@ -12,8 +12,5 @@ public class CommunityProfile(ProfileCommunity profileCommunity) : BaseEntity
 
     [BsonElement("profileId")]
     public ObjectId ProfileId { get; set; } = profileCommunity.ProfileId;
-
-    [BsonElement("profileCommunityId")]
-    public ObjectId ProfileCommunityId { get; set; } = profileCommunity.Id;
 }
 

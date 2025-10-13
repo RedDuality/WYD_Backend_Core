@@ -45,21 +45,44 @@ public class ProfileEventService(MongoDbService dbService, EventProfileService e
         await dbService.CreateManyAsync(profileEventCollection, profileEvents, session);
 
         // Step 3: Create EventProfiles using inserted ProfileEvents (with IDs)
-        await eventProfileService.CreateMultipleEventProfileAsync(profileEvents,session);
+        await eventProfileService.CreateMultipleEventProfileAsync(profileEvents, session);
 
         return profileEvents;
+
     }
 
 
 
+    public async Task PropagateEventUpdatesAsync(
+        Event ev,
+        IEnumerable<ObjectId> profileIds,
+        IClientSessionHandle? session = null)
+    {
+        var filter = Builders<ProfileEvent>.Filter.And(
+            Builders<ProfileEvent>.Filter.In(pe => pe.ProfileId, profileIds),
+            Builders<ProfileEvent>.Filter.Eq(pe => pe.EventId, ev.Id),
+            // given the asyncronicity, another later update could have already happened
+            Builders<ProfileEvent>.Filter.Lt(pe => pe.EventUpdatedAt, ev.UpdatedAt)
+        );
 
-    public async Task<ProfileEvent> FindByProfileAndEventId(string profileId, string eventId)
+        var update = Builders<ProfileEvent>.Update
+            .Set(pe => pe.EventUpdatedAt, ev.UpdatedAt)
+            .Set(pe => pe.EventStartTime, ev.StartTime)
+            .Set(pe => pe.EventEndTime, ev.EndTime);
+
+        var result = await dbService.UpdateManyAsync(profileEventCollection, filter, update, session: session);
+
+        Console.WriteLine($"Matched {result.MatchedCount}, Modified {result.ModifiedCount}");
+    }
+
+
+    public async Task<ProfileEvent?> FindByProfileAndEventId(string profileId, string eventId)
     {
         var filter = Builders<ProfileEvent>.Filter.And(
             Builders<ProfileEvent>.Filter.Eq(doc => doc.ProfileId, new ObjectId(profileId)),
             Builders<ProfileEvent>.Filter.Eq(doc => doc.EventId, new ObjectId(eventId))
         );
-        return await dbService.RetrieveAsync(profileEventCollection, filter);
+        return await dbService.RetrieveOrNullAsync(profileEventCollection, filter);
     }
 
     public async Task Confirm(string profileId, string eventId, IClientSessionHandle session)

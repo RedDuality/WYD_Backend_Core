@@ -151,12 +151,12 @@ public class MongoDbService(MongoDbContext dbContext)
         UpdateDefinition<TDocument> updateDefinition,
         IClientSessionHandle? session = null,
         FindOneAndUpdateOptions<TDocument>? options = null,
-        bool saveUpdates = true
+        bool setUpdatedAtDate = true
     )
     where TDocument : BaseEntity
     {
         var filter = Builders<TDocument>.Filter.Eq(doc => doc.Id, objectId);
-        return await FindOneAndUpdateAsync(collectionName, filter, updateDefinition, session, options, saveUpdates)
+        return await FindOneAndUpdateAsync(collectionName, filter, updateDefinition, session, options, setUpdatedAtDate)
             ?? throw new KeyNotFoundException(
                 $"Document with id '{objectId}' not found in collection '{collectionName}' for patch update."
             );
@@ -171,7 +171,7 @@ public class MongoDbService(MongoDbContext dbContext)
         UpdateDefinition<TDocument> updateDefinition,
         IClientSessionHandle? session = null,
         FindOneAndUpdateOptions<TDocument>? options = null,
-        bool saveUpdates = true
+        bool setUpdatedAtDate = true
     )
     where TDocument : BaseEntity
     {
@@ -181,7 +181,7 @@ public class MongoDbService(MongoDbContext dbContext)
             var collection = dbContext.GetCollection<TDocument>(collectionName);
             var combinedUpdateDefinition = updateDefinition;
 
-            if (typeof(BaseDateEntity).IsAssignableFrom(typeof(TDocument)) && saveUpdates)
+            if (typeof(BaseDateEntity).IsAssignableFrom(typeof(TDocument)) && setUpdatedAtDate)
             {
                 combinedUpdateDefinition = Builders<TDocument>.Update.Combine(
                     updateDefinition,
@@ -223,12 +223,12 @@ public class MongoDbService(MongoDbContext dbContext)
         UpdateDefinition<TDocument> updateDefinition,
         IClientSessionHandle? session = null,
         UpdateOptions<TDocument>? options = null,
-        bool saveUpdates = true
+        bool setUpdatedAtDate = true
     )
     where TDocument : BaseEntity
     {
         var filter = Builders<TDocument>.Filter.Eq(doc => doc.Id, objectId);
-        return await UpdateOneAsync(cn, filter, updateDefinition, session, options, saveUpdates);
+        return await UpdateOneAsync(cn, filter, updateDefinition, session, options, setUpdatedAtDate);
     }
 
     public async Task<UpdateResult> UpdateOneAsync<TDocument>(
@@ -237,7 +237,7 @@ public class MongoDbService(MongoDbContext dbContext)
         UpdateDefinition<TDocument> updateDefinition,
         IClientSessionHandle? session = null,
         UpdateOptions<TDocument>? options = null,
-        bool saveUpdates = true
+        bool setUpdatedAtDate = true
     )
     where TDocument : BaseEntity
     {
@@ -247,7 +247,7 @@ public class MongoDbService(MongoDbContext dbContext)
             var collection = dbContext.GetCollection<TDocument>(collectionName);
             var combinedUpdateDefinition = updateDefinition;
 
-            if (typeof(BaseDateEntity).IsAssignableFrom(typeof(TDocument)) && saveUpdates)
+            if (typeof(BaseDateEntity).IsAssignableFrom(typeof(TDocument)) && setUpdatedAtDate)
             {
                 combinedUpdateDefinition = Builders<TDocument>.Update.Combine(
                     updateDefinition,
@@ -284,8 +284,9 @@ public class MongoDbService(MongoDbContext dbContext)
         CollectionName cn,
         FilterDefinition<TDocument> filterDefinition,
         UpdateDefinition<TDocument> updateDefinition,
+        IClientSessionHandle? session = null,
         UpdateOptions<TDocument>? options = null,
-        bool saveUpdates = true
+        bool setUpdatedAtDate = true
     ) where TDocument : BaseEntity
     {
         string collectionName = cn.ToString();
@@ -294,13 +295,15 @@ public class MongoDbService(MongoDbContext dbContext)
             var collection = dbContext.GetCollection<TDocument>(collectionName);
             var combinedUpdateDefinition = updateDefinition;
 
-            if (typeof(BaseDateEntity).IsAssignableFrom(typeof(TDocument)) && saveUpdates)
+            if (typeof(BaseDateEntity).IsAssignableFrom(typeof(TDocument)) && setUpdatedAtDate)
             {
                 combinedUpdateDefinition = Builders<TDocument>.Update.Combine(
                     updateDefinition,
                     Builders<TDocument>.Update.Set("updatedAt", DateTimeOffset.UtcNow)
                 );
             }
+            if (session != null)
+                return await collection.UpdateManyAsync(session, filterDefinition, combinedUpdateDefinition, options: options);
 
             return await collection.UpdateManyAsync(filterDefinition, combinedUpdateDefinition, options: options);
 

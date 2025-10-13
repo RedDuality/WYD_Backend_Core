@@ -74,10 +74,21 @@ public class MongoDbInitializer(
         await CreateIndexAsync<ProfileEvent>(CollectionName.ProfileEvents, "eventUpdatedAt");
         await CreateIndexAsync<ProfileEvent>(CollectionName.ProfileEvents, "eventStartTime");
         await CreateIndexAsync<ProfileEvent>(CollectionName.ProfileEvents, "eventEndTime");
+        await CreateCompoundIndexAsync<ProfileEvent>(
+            CollectionName.ProfileEvents,
+            [("profileId", 1), ("eventId", 1), ("eventUpdatedAt", -1)]
+        );
+        await CreateCompoundIndexAsync<ProfileEvent>(
+            CollectionName.ProfileEvents,
+            [("profileId", 1), ("eventId", 1)],
+            isUnique: true
+        );
+
 
         await InitializeCollectionAsync(CollectionName.ProfileCommunities, "profileId");
         await CreateIndexAsync<ProfileCommunity>(CollectionName.ProfileCommunities, "communityUpdatedAt");
         await CreateIndexAsync<ProfileCommunity>(CollectionName.ProfileCommunities, "otherProfileId");
+        await CreateIndexAsync<ProfileEvent>(CollectionName.ProfileEvents, "communityId");
 
         // Event
         await InitializeCollectionAsync(CollectionName.Events, "_id");
@@ -88,6 +99,11 @@ public class MongoDbInitializer(
         await CreateIndexAsync<Media>(CollectionName.EventMedia, "creationDate");
 
         await InitializeCollectionAsync(CollectionName.EventProfiles, "eventId");
+        await CreateCompoundIndexAsync<ProfileEvent>(
+            CollectionName.EventProfiles,
+            [("eventId", 1), ("profileId", 1)],
+            isUnique: true
+        );
 
         // Community
         await InitializeCollectionAsync(CollectionName.Communities, "_id");
@@ -199,5 +215,56 @@ public class MongoDbInitializer(
             );
         }
     }
+
+    private async Task CreateCompoundIndexAsync<TDocument>(
+    CollectionName collectionName,
+    IEnumerable<(string FieldName, int Order)> fields,
+    bool isUnique = false
+)
+    {
+        var name = collectionName.ToString();
+        var collection = database.GetCollection<TDocument>(name);
+
+        // Build compound index keys
+        var indexKeysList = new List<IndexKeysDefinition<TDocument>>();
+        foreach (var (fieldName, order) in fields)
+        {
+            var key = order >= 0
+                ? Builders<TDocument>.IndexKeys.Ascending(fieldName)
+                : Builders<TDocument>.IndexKeys.Descending(fieldName);
+
+            indexKeysList.Add(key);
+        }
+
+        var indexKeys = Builders<TDocument>.IndexKeys.Combine(indexKeysList);
+        var indexOptions = new CreateIndexOptions { Unique = isUnique };
+        var indexModel = new CreateIndexModel<TDocument>(indexKeys, indexOptions);
+
+        try
+        {
+            await collection.Indexes.CreateOneAsync(indexModel);
+            log($"Compound index created on [{string.Join(", ", fields.Select(f => f.FieldName))}] in collection '{name}' (Unique: {isUnique}).");
+        }
+        catch (MongoWriteException ex) when (
+            ex.Message.Contains("Index already exists", StringComparison.OrdinalIgnoreCase))
+        {
+            log($"Compound index on [{string.Join(", ", fields.Select(f => f.FieldName))}] in collection '{name}' already exists. Skipping.");
+        }
+        catch (MongoException ex)
+        {
+            throw new Exception(
+                $"MongoDB error while creating compound index on [{string.Join(", ", fields.Select(f => f.FieldName))}] in collection '{name}': {ex.Message}",
+                ex
+            );
+        }
+        catch (Exception ex)
+        {
+            throw new Exception(
+                $"Unexpected error while creating compound index on [{string.Join(", ", fields.Select(f => f.FieldName))}] in collection '{name}': {ex.Message}",
+                ex
+            );
+        }
+    }
+
 
 }
