@@ -1,9 +1,9 @@
 using Core.Components.Database;
 using MongoDB.Driver;
 using Core.DTO.UserAPI;
-using MongoDB.Bson;
 using Core.Model.Users;
 using Core.Model.Profiles;
+using Core.Services.Profiles;
 
 namespace Core.Services.Users;
 
@@ -74,29 +74,6 @@ public class UserService(MongoDbService dbService, ProfileService profileService
         var userProfiles = profiles.Select(p => new Tuple<Profile, UserProfile>(p, userProfilesDictionary[p.Id])).ToList();
         return new RetrieveUserRequestDto(user, userProfiles);
     }
-
-
-
-    #region devices
-
-    public async Task AddDevice(User user, StoreFcmTokenRequestDto requestDto)
-    {
-        var device = new Device(platform: requestDto.Platform, fcmToken: requestDto.FcmToken);
-        var deviceUpdate = Builders<User>.Update.AddToSet(u => u.Devices, device);
-        await dbService.UpdateOneByIdAsync(userCollection, user.Id, deviceUpdate, setUpdatedAtDate: false);
-    }
-
-    public async Task RemoveDevice(ObjectId userId, string fcmToken)
-    {
-        var deviceUpdate = Builders<User>.Update.PullFilter(
-            u => u.Devices,
-            d => d.FcmToken.Equals(fcmToken, StringComparison.CurrentCultureIgnoreCase)
-        );
-        await dbService.UpdateOneByIdAsync(userCollection, userId, deviceUpdate, setUpdatedAtDate: false);
-    }
-
-    #endregion
-
 }
 /*
     public static async Task<List<EventDto>> RetrieveEventsAsync(User user)

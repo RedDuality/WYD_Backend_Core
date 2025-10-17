@@ -1,6 +1,6 @@
-using Core.Model.Events;
 using Core.Model.QueueMessages;
 using Core.Services.Events;
+using Core.Services.Profiles;
 
 namespace Core.Components.MessageQueue;
 
@@ -13,16 +13,22 @@ public class MessageQueueHandlerService : IMessageQueueHandlerService
 {
     private readonly Dictionary<MessageType, Func<object?, Task>> _handlers;
     private readonly EventUpdatePropagationService _eventService;
+    private readonly ProfileUpdatePropagationService _profileService;
 
-    public MessageQueueHandlerService(EventUpdatePropagationService eventService)
+    public MessageQueueHandlerService(EventUpdatePropagationService eventService, ProfileUpdatePropagationService profileService)
     {
         _eventService = eventService;
+        _profileService = profileService;
 
         _handlers = new Dictionary<MessageType, Func<object?, Task>>
         {
             [MessageType.eventUpdate] = WrapHandler<UpdateEventPayload>(async p =>
             {
                 await _eventService.PropagateUpdateEffects(p.Event, p.Type, p.ActorId);
+            }),
+            [MessageType.profileUpdate] = WrapHandler<UpdateProfilePayload>(async p =>
+            {
+                await _profileService.PropagateUpdateEffects(p.ProfileId, p.Type, p.ActorId);
             }),
         };
     }

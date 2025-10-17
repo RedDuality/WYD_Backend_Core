@@ -5,7 +5,6 @@ using Core.Model.Util;
 using Core.Components.ObjectStorage;
 using Core.DTO.MediaAPI;
 using Core.DTO.EventAPI;
-using Core.Services.Users;
 using Core.Model.Profiles;
 using Core.Model.Events;
 using Core.DTO.CommunityAPI;
@@ -13,6 +12,7 @@ using Core.Services.Communities;
 using Core.Model.Notifications;
 using Core.Components.MessageQueue;
 using Core.Model.QueueMessages;
+using Core.Services.Profiles;
 
 namespace Core.Services.Events;
 
@@ -79,7 +79,7 @@ public class EventService(
                 var updateDefinition = Builders<Event>.Update.Inc(e => e.TotalProfilesMinusOne, 1);
                 ev = await dbService.FindOneByIdAndUpdateAsync(eventCollection, ev.Id, updateDefinition, session);
 
-                var propagationMessage = new QueueMessage<UpdateEventPayload>(MessageType.eventUpdate, new(ev, UpdateType.update));
+                var propagationMessage = new QueueMessage<UpdateEventPayload>(MessageType.eventUpdate, new(ev, Model.QueueMessages.EventUpdateType.update));
                 await messageService.SendPropagationMessageAsync(propagationMessage);
 
                 return createdPe;
@@ -104,7 +104,7 @@ public class EventService(
 
                 ev = await dbService.FindOneByIdAndUpdateAsync(eventCollection, ev.Id, updateDefinition, session);
 
-                var propagationMessage = new QueueMessage<UpdateEventPayload>(MessageType.eventUpdate, new(ev, UpdateType.share));
+                var propagationMessage = new QueueMessage<UpdateEventPayload>(MessageType.eventUpdate, new(ev, Model.QueueMessages.EventUpdateType.share));
                 await messageService.SendPropagationMessageAsync(propagationMessage);
 
                 return ev;
@@ -149,7 +149,7 @@ public class EventService(
 
                 ev = await dbService.FindOneByIdAndUpdateAsync(eventCollection, ev.Id, combinedUpdate, session);
 
-                var propagationMessage = new QueueMessage<UpdateEventPayload>(MessageType.eventUpdate, new(ev, UpdateType.update));
+                var propagationMessage = new QueueMessage<UpdateEventPayload>(MessageType.eventUpdate, new(ev, Model.QueueMessages.EventUpdateType.update));
                 await messageService.SendPropagationMessageAsync(propagationMessage);
             }
 
@@ -218,7 +218,7 @@ public class EventService(
             var increaseUpdate = Builders<Event>.Update.Inc(ev => ev.TotalConfirmedMinusOne, 1);
             var ev = await dbService.FindOneByIdAndUpdateAsync(eventCollection, new ObjectId(eventId), increaseUpdate, session);
 
-            var propagationMessage = new QueueMessage<UpdateEventPayload>(MessageType.eventUpdate, new(ev, UpdateType.confirm, profileId));
+            var propagationMessage = new QueueMessage<UpdateEventPayload>(MessageType.eventUpdate, new(ev, Model.QueueMessages.EventUpdateType.confirm, profileId));
             await messageService.SendPropagationMessageAsync(propagationMessage);
 
             return null;
@@ -234,7 +234,7 @@ public class EventService(
             var decreaseUpdate = Builders<Event>.Update.Inc(ev => ev.TotalConfirmedMinusOne, -1);
             var ev = await dbService.FindOneByIdAndUpdateAsync(eventCollection, new ObjectId(eventId), decreaseUpdate, session);
 
-            var propagationMessage = new QueueMessage<UpdateEventPayload>(MessageType.eventUpdate, new(ev, UpdateType.decline, profileId));
+            var propagationMessage = new QueueMessage<UpdateEventPayload>(MessageType.eventUpdate, new(ev, Model.QueueMessages.EventUpdateType.decline, profileId));
             await messageService.SendPropagationMessageAsync(propagationMessage);
 
             return null;

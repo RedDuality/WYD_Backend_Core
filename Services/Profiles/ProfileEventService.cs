@@ -6,7 +6,7 @@ using Core.Model.Profiles;
 using Core.Model.Events;
 
 
-namespace Core.Services.Users;
+namespace Core.Services.Profiles;
 
 public class ProfileEventService(MongoDbService dbService, EventProfileService eventProfileService)
 {

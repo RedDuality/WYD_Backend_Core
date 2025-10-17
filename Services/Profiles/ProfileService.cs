@@ -4,15 +4,17 @@ using Core.Model.Users;
 using Core.DTO.ProfileAPI;
 using MongoDB.Bson;
 using Core.Model.Profiles;
-using Core.DTO.UserAPI;
+using Core.Components.MessageQueue;
+using Core.Model.Notifications;
 
 
-namespace Core.Services.Users;
+namespace Core.Services.Profiles;
 
 public class ProfileService(
     MongoDbService dbService,
     ProfileDetailsService profileDetailsService,
-    ProfileTagService profileTagService)
+    ProfileTagService profileTagService,
+    MessageQueueService messageService)
 {
     private readonly CollectionName profileCollection = CollectionName.Profiles;
 
@@ -63,6 +65,12 @@ public class ProfileService(
             if (updateDto.Color != null)
             {
                 await SetProfileColor(user, profileId, updateDto.Color.Value, session);
+            }
+
+            if (updates.Count > 0 || updateDto.Color != null) // something has been change
+            {
+                var notification = new Notification(profileId, NotificationType.UpdateProfile);
+                await messageService.SendNotificationAsync(notification);
             }
 
             return new UpdateProfileResponseDto(profile, updateDto.Color);

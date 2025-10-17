@@ -5,7 +5,7 @@ namespace Core.Model.Notifications;
 public class Notification(
     ObjectId objectId,
     NotificationType type,
-    DateTimeOffset updatedAt)
+    DateTimeOffset? updatedAt = null)
 {
     public ObjectId ObjectId { get; set; } = objectId;
     public NotificationType Type { get; set; } = type;

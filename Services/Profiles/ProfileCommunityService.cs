@@ -4,7 +4,7 @@ using Core.Model.Profiles;
 using Core.Services.Communities;
 using MongoDB.Driver;
 
-namespace Core.Services.Users;
+namespace Core.Services.Profiles;
 
 public class ProfileCommunityService(MongoDbService dbService, CommunityProfileService communityProfileService)
 {

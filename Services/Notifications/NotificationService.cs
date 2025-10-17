@@ -12,12 +12,12 @@ public class NotificationService
 {
 
     private readonly Lazy<FirebaseMessaging> _messagingInstance;
-    private readonly UserService _userService;
+    private readonly DeviceService _deviceService;
 
 
-    public NotificationService(IConfiguration configuration, UserService userService)
+    public NotificationService(IConfiguration configuration, DeviceService deviceService)
     {
-        _userService = userService;
+        _deviceService = deviceService;
         _messagingInstance = new Lazy<FirebaseMessaging>(() =>
         {
             if (FirebaseApp.DefaultInstance == null)
@@ -66,7 +66,7 @@ public class NotificationService
 
                 if (IsTokenInvalidOrExpired(fcmResponse))
                 {
-                    await _userService.RemoveDevice(userId, failedToken);
+                    await _deviceService.RemoveDevice(userId, failedToken);
                 }
                 else
                 {

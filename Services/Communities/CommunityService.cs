@@ -4,7 +4,7 @@ using Core.DTO.CommunityAPI;
 using Core.Model.Communities;
 using Core.Model.Notifications;
 using Core.Model.Profiles;
-using Core.Services.Users;
+using Core.Services.Profiles;
 using MongoDB.Driver;
 
 namespace Core.Services.Communities;

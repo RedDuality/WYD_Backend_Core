@@ -5,7 +5,7 @@ using System.Text.RegularExpressions;
 using MongoDB.Bson;
 using Core.Model.Profiles;
 
-namespace Core.Services.Users;
+namespace Core.Services.Profiles;
 
 public class ProfileTagService(MongoDbService dbService)
 {

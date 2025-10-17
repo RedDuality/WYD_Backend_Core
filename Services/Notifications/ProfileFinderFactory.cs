@@ -1,6 +1,7 @@
 using Core.Model.Notifications;
 using Core.Services.Communities;
 using Core.Services.Events;
+using Core.Services.Profiles;
 using MongoDB.Bson;
 
 namespace Core.Services.Notifications;
@@ -16,7 +17,8 @@ public class ProfileIdResolverFactory
 
     public ProfileIdResolverFactory(
         EventProfileService eventProfileService,
-        CommunityProfileService communityProfileService)
+        CommunityProfileService communityProfileService,
+        ProfileProfileService profileService)
     {
         _resolvers = new()
         {
@@ -30,6 +32,10 @@ public class ProfileIdResolverFactory
 
             { NotificationType.DeleteEvent, eventProfileService },
             { NotificationType.DeleteEventForAll, eventProfileService },
+
+
+            { NotificationType.UpdateProfile, profileService },
+
             //{ NotificationType.GroupUpdate, new GroupProfileFinder() }
             { NotificationType.CreateCommunity, communityProfileService }
 

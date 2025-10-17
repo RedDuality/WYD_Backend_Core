@@ -2,7 +2,7 @@ using Core.Model.Events;
 
 namespace Core.Model.QueueMessages;
 
-public enum UpdateType
+public enum EventUpdateType
 {
     share,
 
@@ -13,11 +13,11 @@ public enum UpdateType
     decline,
 }
 
-public class UpdateEventPayload(Event ev, UpdateType type, string? actorId = null)
+public class UpdateEventPayload(Event ev, EventUpdateType type, string? actorId = null)
 {
     public Event Event { get; set; } = ev;
 
-    public UpdateType Type { get; set; } = type;
+    public EventUpdateType Type { get; set; } = type;
 
     public string? ActorId { get; set; } = actorId;
 }

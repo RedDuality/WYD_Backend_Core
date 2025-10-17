@@ -4,7 +4,7 @@ using MongoDB.Driver;
 using Core.Model.Users;
 using Core.Model.Profiles;
 
-namespace Core.Services.Users;
+namespace Core.Services.Profiles;
 
 public class ProfileDetailsService(MongoDbService dbService)
 {

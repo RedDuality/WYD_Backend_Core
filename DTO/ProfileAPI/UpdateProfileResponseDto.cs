@@ -1,8 +1,8 @@
 using Core.Model.Profiles;
-using Core.Model.Users;
 
 namespace Core.DTO.ProfileAPI;
 
+// TODO use only RetrieveUserProfileResponseDto
 public class UpdateProfileResponseDto(Profile? profile, long? color)
 {
     public string? Tag { get; set; } = profile?.Tag;

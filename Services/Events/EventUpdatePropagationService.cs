@@ -1,8 +1,8 @@
-using Core.Services.Users;
 using Core.Model.Events;
 using Core.Model.Notifications;
 using Core.Model.QueueMessages;
 using Core.Services.Notifications;
+using Core.Services.Profiles;
 
 namespace Core.Services.Events;
 
@@ -11,10 +11,10 @@ public class EventUpdatePropagationService(
     ProfileEventService profileEventService,
     EventProfileService eventProfileService,
     BroadcastService broadcastService
-//MessageQueueService messageService
+    //MessageQueueService messageService
 )
 {
-    public async Task PropagateUpdateEffects(Event ev, UpdateType type, string? actorId = null)
+    public async Task PropagateUpdateEffects(Event ev, EventUpdateType type, string? actorId = null)
     {
         var profileIds = await eventProfileService.GetProfileIdsAsync(ev.Id);
         if (profileIds.Count > 0)
@@ -28,14 +28,14 @@ public class EventUpdatePropagationService(
         }
     }
 
-    private static Notification GetUpdateNotification(UpdateType type, Event ev, string? actorId = null)
+    private static Notification GetUpdateNotification(EventUpdateType type, Event ev, string? actorId = null)
     {
         return type switch
         {
-            UpdateType.share => new Notification(ev.Id, NotificationType.UpdateEssentialsEvent, ev.UpdatedAt),
-            UpdateType.update => new Notification(ev.Id, NotificationType.UpdateEssentialsEvent, ev.UpdatedAt),
-            UpdateType.confirm => new Notification(ev.Id, NotificationType.ConfirmEvent, ev.UpdatedAt) { ActorId = actorId },
-            UpdateType.decline => new Notification(ev.Id, NotificationType.DeclineEvent, ev.UpdatedAt) { ActorId = actorId },
+            EventUpdateType.share => new Notification(ev.Id, NotificationType.UpdateEssentialsEvent, ev.UpdatedAt),
+            EventUpdateType.update => new Notification(ev.Id, NotificationType.UpdateEssentialsEvent, ev.UpdatedAt),
+            EventUpdateType.confirm => new Notification(ev.Id, NotificationType.ConfirmEvent, ev.UpdatedAt) { ActorId = actorId },
+            EventUpdateType.decline => new Notification(ev.Id, NotificationType.DeclineEvent, ev.UpdatedAt) { ActorId = actorId },
             _ => new Notification(ev.Id, NotificationType.UpdateEssentialsEvent, ev.UpdatedAt),
         };
     }
