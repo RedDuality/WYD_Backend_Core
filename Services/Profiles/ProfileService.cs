@@ -13,8 +13,8 @@ namespace Core.Services.Profiles;
 public class ProfileService(
     MongoDbService dbService,
     ProfileDetailsService profileDetailsService,
-    ProfileTagService profileTagService,
-    MessageQueueService messageService)
+    ProfileTagService profileTagService)
+//MessageQueueService messageService)
 {
     private readonly CollectionName profileCollection = CollectionName.Profiles;
 
@@ -36,7 +36,7 @@ public class ProfileService(
         await profileDetailsService.AddUser(profile.Id, user, session);
     }
 
-    public async Task<UpdateProfileResponseDto> Update(User user, UpdateProfileRequestDto updateDto)
+    public async Task<RetrieveProfileResponseDto> Update(User user, UpdateProfileRequestDto updateDto)
     {
         var profileId = new ObjectId(updateDto.ProfileId);
 
@@ -44,6 +44,7 @@ public class ProfileService(
         {
             var updates = new List<UpdateDefinition<Profile>>();
             Profile? profile = null;
+            User? updatedUser = null;
 
             if (updateDto.Name != null)
             {
@@ -64,42 +65,47 @@ public class ProfileService(
 
             if (updateDto.Color != null)
             {
-                await SetProfileColor(user, profileId, updateDto.Color.Value, session);
+                updatedUser = await SetProfileColor(user, profileId, updateDto.Color.Value, session);
             }
 
-            if (updates.Count > 0 || updateDto.Color != null) // something has been change
+            if (updates.Count > 0 || updateDto.Color != null) // something has been changed
             {
                 var notification = new Notification(profileId, NotificationType.UpdateProfile);
-                await messageService.SendNotificationAsync(notification);
+                //await messageService.SendNotificationAsync(notification);
             }
 
-            return new UpdateProfileResponseDto(profile, updateDto.Color);
+            var userProfile = updatedUser?.Profiles.FirstOrDefault(p => p.ProfileId == profileId);
+
+            return profile != null
+                ? new RetrieveProfileResponseDto(profile, userProfile)
+                : new RetrieveProfileResponseDto(profileId, userProfile!);
         });
 
         return updatedDto;
     }
 
-    private async Task<bool> SetProfileColor(User user, ObjectId profileId, long color, IClientSessionHandle session)
+    private async Task<User> SetProfileColor(User user, ObjectId profileId, long color, IClientSessionHandle session)
     {
 
-        var options = new UpdateOptions<User>
+        var options = new FindOneAndUpdateOptions<User>
         {
             ArrayFilters =
             [
                 new JsonArrayFilterDefinition<BsonDocument>(
                     $"{{ 'profile.profileId': ObjectId('{profileId}') }}")
             ],
-            IsUpsert = false
+            IsUpsert = false,
+            ReturnDocument = ReturnDocument.After
         };
 
-        var result = await dbService.UpdateOneByIdAsync(
+        var result = await dbService.FindOneByIdAndUpdateAsync(
             CollectionName.Users,
             user.Id,
             Builders<User>.Update.Set("profiles.$[profile].color", color),
             session: session,
             options: options);
 
-        return result.ModifiedCount > 0;
+        return result;
     }
 
     #endregion

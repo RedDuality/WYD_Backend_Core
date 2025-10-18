@@ -26,11 +26,12 @@ public class MessageQueueHandlerService : IMessageQueueHandlerService
             {
                 await _eventService.PropagateUpdateEffects(p.Event, p.Type, p.ActorId);
             }),
+/*
             [MessageType.profileUpdate] = WrapHandler<UpdateProfilePayload>(async p =>
             {
-                await _profileService.PropagateUpdateEffects(p.ProfileId, p.Type, p.ActorId);
+                _profileService.PropagateUpdateEffects(p.ProfileId, p.Type, p.ActorId);
             }),
-        };
+*/        };
     }
 
     private Func<object?, Task> WrapHandler<T>(Func<T, Task> handlerLogic) where T : class

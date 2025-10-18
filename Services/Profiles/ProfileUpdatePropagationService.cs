@@ -7,17 +7,19 @@ namespace Core.Services.Profiles;
 
 // move this to Profileservice after having created the actual message service
 public class ProfileUpdatePropagationService(
-    BroadcastService broadcastService
+    //BroadcastService broadcastService
 //MessageQueueService messageService
 )
 {
+
+    /*
     //currently not called by anyone
-    public async Task PropagateUpdateEffects(ObjectId profileId, ProfileUpdateType type, string? actorId = null)
+    public void PropagateUpdateEffects(ObjectId profileId, ProfileUpdateType type, string? actorId = null)
     {
         var notification = GetUpdateNotification(type, profileId, actorId);
         //await messageService.SendNotificationAsync(notification);
         _ = broadcastService.BroadcastUpdate(notification);
-    }
+    }*/
 
     private static Notification GetUpdateNotification(ProfileUpdateType type, ObjectId profileId, string? actorId = null)
     {

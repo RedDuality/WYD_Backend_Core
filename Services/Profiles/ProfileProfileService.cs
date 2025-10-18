@@ -8,6 +8,6 @@ public class ProfileProfileService() : IProfileFinder
     // for notifications, to avoid circular injection
     public async Task<List<ObjectId>> GetProfileIdsAsync(ObjectId profileId)
     {
-        return [profileId];
+        return await Task.FromResult(new List<ObjectId> { profileId });
     }
 }

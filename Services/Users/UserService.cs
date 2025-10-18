@@ -64,7 +64,7 @@ public class UserService(MongoDbService dbService, ProfileService profileService
         return user;
     }
 
-    public async Task<RetrieveUserRequestDto> RetrieveProfilesAsync(User user)
+    public async Task<RetrieveUserResponseDto> RetrieveProfilesAsync(User user)
     {
         var profileIds = user.Profiles.Select(up => up.ProfileId).ToHashSet();
         var profiles = await dbService.RetrieveMultipleByIdAsync<Profile>(CollectionName.Profiles, profileIds);
@@ -72,7 +72,8 @@ public class UserService(MongoDbService dbService, ProfileService profileService
         // Map the results together
         var userProfilesDictionary = user.Profiles.ToDictionary(d => d.ProfileId);
         var userProfiles = profiles.Select(p => new Tuple<Profile, UserProfile>(p, userProfilesDictionary[p.Id])).ToList();
-        return new RetrieveUserRequestDto(user, userProfiles);
+        
+        return new RetrieveUserResponseDto(user, userProfiles);
     }
 }
 /*
