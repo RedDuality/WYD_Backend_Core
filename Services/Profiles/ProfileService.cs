@@ -6,6 +6,7 @@ using MongoDB.Bson;
 using Core.Model.Profiles;
 using Core.Components.MessageQueue;
 using Core.Model.Notifications;
+using System.Reflection;
 
 
 namespace Core.Services.Profiles;
@@ -13,8 +14,8 @@ namespace Core.Services.Profiles;
 public class ProfileService(
     MongoDbService dbService,
     ProfileDetailsService profileDetailsService,
-    ProfileTagService profileTagService)
-//MessageQueueService messageService)
+    ProfileTagService profileTagService,
+    MessageQueueService messageService)
 {
     private readonly CollectionName profileCollection = CollectionName.Profiles;
 
@@ -71,7 +72,7 @@ public class ProfileService(
             if (updates.Count > 0 || updateDto.Color != null) // something has been changed
             {
                 var notification = new Notification(profileId, NotificationType.UpdateProfile);
-                //await messageService.SendNotificationAsync(notification);
+                await messageService.SendNotificationAsync(notification);
             }
 
             var userProfile = updatedUser?.Profiles.FirstOrDefault(p => p.ProfileId == profileId);
@@ -115,6 +116,12 @@ public class ProfileService(
     {
         var profile = await dbService.RetrieveByIdAsync<Profile>(profileCollection, id);
         return profile;
+    }
+    public async Task<RetrieveProfileResponseDto> RetrieveDetailedProfileById(User user, string profileId)
+    {
+        var profile = await dbService.RetrieveByIdAsync<Profile>(profileCollection, profileId);
+        var userProfile = user.Profiles.First((up) => up.ProfileId == new ObjectId(profileId));
+        return new RetrieveProfileResponseDto(profile, userProfile);
     }
 
     public async Task<HashSet<RetrieveProfileResponseDto>> RetrieveMultipleProfileById(HashSet<string> profileIds)
