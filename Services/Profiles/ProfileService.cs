@@ -6,8 +6,6 @@ using MongoDB.Bson;
 using Core.Model.Profiles;
 using Core.Components.MessageQueue;
 using Core.Model.Notifications;
-using System.Reflection;
-
 
 namespace Core.Services.Profiles;
 

@@ -213,14 +213,15 @@ public class EventService(
     {
         await dbService.ExecuteInTransactionAsync<object?>(async (session) =>
         {
-            await profileEventService.Confirm(profileId, eventId, session);
+            var changed = await profileEventService.Confirm(profileId, eventId, session);
+            if (changed)
+            {
+                var increaseUpdate = Builders<Event>.Update.Inc(ev => ev.TotalConfirmedMinusOne, 1);
+                var ev = await dbService.FindOneByIdAndUpdateAsync(eventCollection, new ObjectId(eventId), increaseUpdate, session);
 
-            var increaseUpdate = Builders<Event>.Update.Inc(ev => ev.TotalConfirmedMinusOne, 1);
-            var ev = await dbService.FindOneByIdAndUpdateAsync(eventCollection, new ObjectId(eventId), increaseUpdate, session);
-
-            var propagationMessage = new QueueMessage<UpdateEventPayload>(MessageType.eventUpdate, new(ev, Model.QueueMessages.EventUpdateType.confirm, profileId));
-            await messageService.SendPropagationMessageAsync(propagationMessage);
-
+                var propagationMessage = new QueueMessage<UpdateEventPayload>(MessageType.eventUpdate, new(ev, Model.QueueMessages.EventUpdateType.confirm, profileId));
+                await messageService.SendPropagationMessageAsync(propagationMessage);
+            }
             return null;
         });
     }
@@ -229,13 +230,15 @@ public class EventService(
     {
         await dbService.ExecuteInTransactionAsync<object?>(async (session) =>
         {
-            await profileEventService.Decline(profileId, eventId, session);
+            var changed = await profileEventService.Decline(profileId, eventId, session);
+            if (changed)
+            {
+                var decreaseUpdate = Builders<Event>.Update.Inc(ev => ev.TotalConfirmedMinusOne, -1);
+                var ev = await dbService.FindOneByIdAndUpdateAsync(eventCollection, new ObjectId(eventId), decreaseUpdate, session);
 
-            var decreaseUpdate = Builders<Event>.Update.Inc(ev => ev.TotalConfirmedMinusOne, -1);
-            var ev = await dbService.FindOneByIdAndUpdateAsync(eventCollection, new ObjectId(eventId), decreaseUpdate, session);
-
-            var propagationMessage = new QueueMessage<UpdateEventPayload>(MessageType.eventUpdate, new(ev, Model.QueueMessages.EventUpdateType.decline, profileId));
-            await messageService.SendPropagationMessageAsync(propagationMessage);
+                var propagationMessage = new QueueMessage<UpdateEventPayload>(MessageType.eventUpdate, new(ev, Model.QueueMessages.EventUpdateType.decline, profileId));
+                await messageService.SendPropagationMessageAsync(propagationMessage);
+            }
 
             return null;
         });

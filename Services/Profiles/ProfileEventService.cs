@@ -85,24 +85,32 @@ public class ProfileEventService(MongoDbService dbService, EventProfileService e
         return await dbService.RetrieveOrNullAsync(profileEventCollection, filter);
     }
 
-    public async Task Confirm(string profileId, string eventId, IClientSessionHandle session)
+    public async Task<bool> Confirm(string profileId, string eventId, IClientSessionHandle session)
     {
         var filter = Builders<ProfileEvent>.Filter.And(
             Builders<ProfileEvent>.Filter.Eq(doc => doc.ProfileId, new ObjectId(profileId)),
-            Builders<ProfileEvent>.Filter.Eq(doc => doc.EventId, new ObjectId(eventId))
+            Builders<ProfileEvent>.Filter.Eq(doc => doc.EventId, new ObjectId(eventId)),
+            Builders<ProfileEvent>.Filter.Ne(doc => doc.Confirmed, true) // Only update if not already confirmed
         );
+
         var confirmUpdate = Builders<ProfileEvent>.Update.Set(pe => pe.Confirmed, true);
-        await dbService.UpdateOneAsync(CollectionName.ProfileEvents, filter, confirmUpdate, session);
+        
+        var result = await dbService.UpdateOneAsync(CollectionName.ProfileEvents, filter, confirmUpdate, session);
+        return result.ModifiedCount > 0;
     }
 
-    public async Task Decline(string profileId, string eventId, IClientSessionHandle session)
+    public async Task<bool> Decline(string profileId, string eventId, IClientSessionHandle session)
     {
         var filter = Builders<ProfileEvent>.Filter.And(
             Builders<ProfileEvent>.Filter.Eq(doc => doc.ProfileId, new ObjectId(profileId)),
-            Builders<ProfileEvent>.Filter.Eq(doc => doc.EventId, new ObjectId(eventId))
+            Builders<ProfileEvent>.Filter.Eq(doc => doc.EventId, new ObjectId(eventId)),
+            Builders<ProfileEvent>.Filter.Ne(doc => doc.Confirmed, false)
         );
+
         var confirmUpdate = Builders<ProfileEvent>.Update.Set(pe => pe.Confirmed, false);
-        await dbService.UpdateOneAsync(CollectionName.ProfileEvents, filter, confirmUpdate, session);
+
+        var result = await dbService.UpdateOneAsync(CollectionName.ProfileEvents, filter, confirmUpdate, session);
+        return result.ModifiedCount > 0;
     }
 
 
