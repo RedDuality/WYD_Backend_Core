@@ -51,8 +51,6 @@ public class ProfileEventService(MongoDbService dbService, EventProfileService e
 
     }
 
-
-
     public async Task PropagateEventUpdatesAsync(
         Event ev,
         IEnumerable<ObjectId> profileIds,
@@ -85,6 +83,13 @@ public class ProfileEventService(MongoDbService dbService, EventProfileService e
         return await dbService.RetrieveOrNullAsync(profileEventCollection, filter);
     }
 
+    public async Task<ProfileEvent?> FindByEventId(string eventId)
+    {
+        var filter = Builders<ProfileEvent>.Filter.Eq(doc => doc.EventId, new ObjectId(eventId));
+
+        return await dbService.RetrieveOrNullAsync(profileEventCollection, filter);
+    }
+
     public async Task<bool> Confirm(string profileId, string eventId, IClientSessionHandle session)
     {
         var filter = Builders<ProfileEvent>.Filter.And(
@@ -94,7 +99,7 @@ public class ProfileEventService(MongoDbService dbService, EventProfileService e
         );
 
         var confirmUpdate = Builders<ProfileEvent>.Update.Set(pe => pe.Confirmed, true);
-        
+
         var result = await dbService.UpdateOneAsync(CollectionName.ProfileEvents, filter, confirmUpdate, session);
         return result.ModifiedCount > 0;
     }
@@ -113,6 +118,29 @@ public class ProfileEventService(MongoDbService dbService, EventProfileService e
         return result.ModifiedCount > 0;
     }
 
+    public async Task<HashSet<ProfileEvent>> GetProfileEvents(IEnumerable<(string profileId, string eventId)> profileEventPairs)
+    {
+        var filters = new List<FilterDefinition<ProfileEvent>>();
+
+        foreach (var (profileId, eventId) in profileEventPairs)
+        {
+            var profileObjectId = new ObjectId(profileId);
+            var eventObjectId = new ObjectId(eventId);
+
+            var filter = Builders<ProfileEvent>.Filter.And(
+                Builders<ProfileEvent>.Filter.Eq("profileId", profileObjectId),
+                Builders<ProfileEvent>.Filter.Eq("eventId", eventObjectId)
+            );
+
+            filters.Add(filter);
+        }
+
+        var combinedFilter = Builders<ProfileEvent>.Filter.Or(filters);
+
+        var results = await dbService.RetrieveMultipleAsync(profileEventCollection, combinedFilter);
+
+        return results.ToHashSet();
+    }
 
     /*
         public async Task<ProfileEvent> ConfirmProfileEventById(string id)

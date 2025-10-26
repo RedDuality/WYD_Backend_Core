@@ -43,7 +43,7 @@ public class EventProfileService(MongoDbService dbService) : IProfileFinder
     }
 
 
-    private async Task<List<EventProfile>> FindAllByEventId(ObjectId eventId)
+    public async Task<List<EventProfile>> FindAllByEventId(ObjectId eventId)
     {
         var result = await dbService.RetrieveMultipleAsync(
             eventProfileCollection,
