@@ -2,4 +2,4 @@
 
 Core code for wyd backend
 
-See WYD_Server
+For docs, see [WYD_Server](https://github.com/RedDuality/WYD_Server)
