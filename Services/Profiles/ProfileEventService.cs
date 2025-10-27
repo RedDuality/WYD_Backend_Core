@@ -69,6 +69,7 @@ public class ProfileEventService(MongoDbService dbService, EventProfileService e
             .Set(pe => pe.EventStartTime, ev.StartTime)
             .Set(pe => pe.EventEndTime, ev.EndTime);
 
+        // also updated updatedAt date
         var result = await dbService.UpdateManyAsync(profileEventCollection, filter, update, session: session);
 
         Console.WriteLine($"Matched {result.MatchedCount}, Modified {result.ModifiedCount}");
@@ -82,6 +83,36 @@ public class ProfileEventService(MongoDbService dbService, EventProfileService e
             Builders<ProfileEvent>.Filter.Eq(doc => doc.EventId, new ObjectId(eventId))
         );
         return await dbService.RetrieveOrNullAsync(profileEventCollection, filter);
+    }
+
+    public async Task<HashSet<ProfileEventDto>> FindMultipleByProfileAndEventIds(IEnumerable<(string profileId, string eventId)> profileEventPairs)
+    {
+        var filters = new List<FilterDefinition<ProfileEvent>>();
+        foreach (var (profileId, eventId) in profileEventPairs)
+        {
+            var profileObjectId = new ObjectId(profileId);
+            var eventObjectId = new ObjectId(eventId);
+
+            var filter = Builders<ProfileEvent>.Filter.And(
+                Builders<ProfileEvent>.Filter.Eq(doc => doc.ProfileId, profileObjectId),
+                Builders<ProfileEvent>.Filter.Eq(doc => doc.EventId, eventObjectId)
+            );
+
+            filters.Add(filter);
+        }
+        var combinedFilter = Builders<ProfileEvent>.Filter.Or(filters);
+
+        var projection = Builders<ProfileEvent>.Projection.Expression(pe => new ProfileEventDto
+        {
+            ProfileHash = pe.ProfileId.ToString(),
+            Role = pe.Role,
+            Confirmed = pe.Confirmed,
+            Trusted = false
+        });
+
+        var results = await dbService.RetrieveProjectedAsync(profileEventCollection, combinedFilter, projection);
+
+        return results.ToHashSet();
     }
 
     public async Task<ProfileEvent?> FindByEventId(string eventId)
@@ -119,35 +150,7 @@ public class ProfileEventService(MongoDbService dbService, EventProfileService e
         return result.ModifiedCount > 0;
     }
 
-    public async Task<HashSet<ProfileEventDto>> GetProfileEvents(IEnumerable<(string profileId, string eventId)> profileEventPairs)
-    {
-        var filters = new List<FilterDefinition<ProfileEvent>>();
-        foreach (var (profileId, eventId) in profileEventPairs)
-        {
-            var profileObjectId = new ObjectId(profileId);
-            var eventObjectId = new ObjectId(eventId);
 
-            var filter = Builders<ProfileEvent>.Filter.And(
-                Builders<ProfileEvent>.Filter.Eq("profileId", profileObjectId),
-                Builders<ProfileEvent>.Filter.Eq("eventId", eventObjectId)
-            );
-
-            filters.Add(filter);
-        }
-        var combinedFilter = Builders<ProfileEvent>.Filter.Or(filters);
-
-        var projection = Builders<ProfileEvent>.Projection.Expression(pe => new ProfileEventDto
-        {
-            ProfileHash = pe.ProfileId.ToString(),
-            Role = pe.Role,
-            Confirmed = pe.Confirmed,
-            Trusted = false
-        });
-
-        var results = await dbService.RetrieveProjectedAsync(profileEventCollection, combinedFilter, projection);
-
-        return results.ToHashSet();
-    }
 
     /*
         public async Task<ProfileEvent> ConfirmProfileEventById(string id)

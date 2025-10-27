@@ -344,6 +344,66 @@ public class EventService(
 
     }
 
+    public async Task<List<RetrieveEventResponseDto>> RetrieveUpdatesByProfileIds(RetrieveMultipleEventsRequestDto requestDto)
+    {
+        var aggregate = dbService.GetAggregate<ProfileEvent>(CollectionName.ProfileEvents);
+
+        var objectIds = requestDto.ProfileHashes.Select(ph => new ObjectId(ph)).ToList();
+
+        var filterBuilder = Builders<ProfileEvent>.Filter;
+        var filter = filterBuilder.And(
+            filterBuilder.In(pe => pe.ProfileId, objectIds),
+            filterBuilder.Gte(pe => pe.UpdatedAt, requestDto.StartTime.ToUniversalTime())
+         );
+
+        // Apply the filter to the aggregate pipeline
+        var matchStage = aggregate.Match(filter);
+
+        // Step 3: Lookup the corresponding Event for each ProfileEvent
+        // Join the two collecions in a ProfileEventWithCEvents object
+        var lookupStage = matchStage.Lookup<ProfileEvent, Event, ProfileEventWithCorrespondingEvents>(
+            dbService.GetCollection<Event>(eventCollection),
+            pe => pe.EventId,
+            e => e.Id,
+            pewce => pewce.Events);
+
+        //flat out the results on a new projected object
+        var projected = lookupStage
+            .Project(pe => new
+            {
+                Event = pe.Events[0],
+                pe.ProfileId,
+                pe.Role,
+                pe.Confirmed
+            });
+
+
+        //var intermediateResults = await projected.ToListAsync();
+
+        var grouped = projected.Group(
+            pe => pe.Event.Id,
+            group => new
+            {
+                ev = group.First().Event,
+                ProfileEvents = group.Select(pe => new ProfileEventDto
+                {
+                    ProfileHash = pe.ProfileId.ToString(),
+                    Role = pe.Role,
+                    Confirmed = pe.Confirmed,
+                    Trusted = false
+                }).ToList()
+            }
+        );
+
+        var result = await grouped.ToListAsync();
+
+        // Map the results over EventDto objects
+        var finalResult = result.Select(g => new RetrieveEventResponseDto(g.ev, profileEventDtos: g.ProfileEvents)).ToList();
+
+        return finalResult;
+
+    }
+
     public async Task<HashSet<ProfileEventDto>> GetProfileEventsAsync(string eventId)
     {
         var eps = await eventProfileService.FindAllByEventId(new ObjectId(eventId));
@@ -353,7 +413,7 @@ public class EventService(
             .Select(ep => (ep.ProfileId.ToString(), eventId))
             .ToList();
 
-        return await profileEventService.GetProfileEvents(profileEventPairs);
+        return await profileEventService.FindMultipleByProfileAndEventIds(profileEventPairs);
     }
 
     #endregion

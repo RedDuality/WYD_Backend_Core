@@ -71,24 +71,32 @@ public class MongoDbInitializer(
         await InitializeCollectionAsync(CollectionName.ProfileDetails, "profileId");
 
         await InitializeCollectionAsync(CollectionName.ProfileEvents, "profileId");
-        await CreateIndexAsync<ProfileEvent>(CollectionName.ProfileEvents, "eventUpdatedAt");
-        await CreateIndexAsync<ProfileEvent>(CollectionName.ProfileEvents, "eventStartTime");
-        await CreateIndexAsync<ProfileEvent>(CollectionName.ProfileEvents, "eventEndTime");
+        // retrieveEvents
         await CreateCompoundIndexAsync<ProfileEvent>(
             CollectionName.ProfileEvents,
-            [("profileId", 1), ("eventId", 1), ("eventUpdatedAt", -1)]
+            [("profileId", 1), ("eventEndTime", 1), ("eventStartTime", 1)]
         );
+        // create profileEvent, ensure uniqueness
         await CreateCompoundIndexAsync<ProfileEvent>(
             CollectionName.ProfileEvents,
             [("profileId", 1), ("eventId", 1)],
             isUnique: true
         );
-
+        // propagate updates
+        await CreateCompoundIndexAsync<ProfileEvent>(
+            CollectionName.ProfileEvents,
+            [("profileId", 1), ("eventId", 1), ("eventUpdatedAt", -1)]
+        );
+        // retrieve updates
+        await CreateCompoundIndexAsync<ProfileEvent>(
+            CollectionName.ProfileEvents,
+            [("profileId", 1), ("updatedAt", 1)]
+        );
 
         await InitializeCollectionAsync(CollectionName.ProfileCommunities, "profileId");
         await CreateIndexAsync<ProfileCommunity>(CollectionName.ProfileCommunities, "communityUpdatedAt");
         await CreateIndexAsync<ProfileCommunity>(CollectionName.ProfileCommunities, "otherProfileId");
-        await CreateIndexAsync<ProfileEvent>(CollectionName.ProfileEvents, "communityId");
+        await CreateIndexAsync<ProfileCommunity>(CollectionName.ProfileCommunities, "communityId");
 
         // Event
         await InitializeCollectionAsync(CollectionName.Events, "_id");
