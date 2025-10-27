@@ -4,6 +4,7 @@ using MongoDB.Driver;
 using Core.Services.Events;
 using Core.Model.Profiles;
 using Core.Model.Events;
+using Core.DTO.EventAPI;
 
 
 namespace Core.Services.Profiles;
@@ -118,10 +119,9 @@ public class ProfileEventService(MongoDbService dbService, EventProfileService e
         return result.ModifiedCount > 0;
     }
 
-    public async Task<HashSet<ProfileEvent>> GetProfileEvents(IEnumerable<(string profileId, string eventId)> profileEventPairs)
+    public async Task<HashSet<ProfileEventDto>> GetProfileEvents(IEnumerable<(string profileId, string eventId)> profileEventPairs)
     {
         var filters = new List<FilterDefinition<ProfileEvent>>();
-
         foreach (var (profileId, eventId) in profileEventPairs)
         {
             var profileObjectId = new ObjectId(profileId);
@@ -134,10 +134,17 @@ public class ProfileEventService(MongoDbService dbService, EventProfileService e
 
             filters.Add(filter);
         }
-
         var combinedFilter = Builders<ProfileEvent>.Filter.Or(filters);
 
-        var results = await dbService.RetrieveMultipleAsync(profileEventCollection, combinedFilter);
+        var projection = Builders<ProfileEvent>.Projection.Expression(pe => new ProfileEventDto
+        {
+            ProfileHash = pe.ProfileId.ToString(),
+            Role = pe.Role,
+            Confirmed = pe.Confirmed,
+            Trusted = false
+        });
+
+        var results = await dbService.RetrieveProjectedAsync(profileEventCollection, combinedFilter, projection);
 
         return results.ToHashSet();
     }

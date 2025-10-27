@@ -391,7 +391,7 @@ public class MongoDbService(MongoDbContext dbContext)
         FilterDefinition<TDocument> filter,
         int? limit = null
     )
-     where TDocument : BaseEntity
+    where TDocument : BaseEntity
     {
         string collectionName = cn.ToString();
         try
@@ -409,6 +409,38 @@ public class MongoDbService(MongoDbContext dbContext)
         }
     }
 
+    public async Task<List<TProjected>> RetrieveProjectedAsync<TDocument, TProjected>(
+        CollectionName cn,
+        FilterDefinition<TDocument> filter,
+        ProjectionDefinition<TDocument, TProjected> projection,
+        int? limit = null
+    )
+    where TDocument : BaseEntity
+    {
+        string collectionName = cn.ToString();
+        try
+        {
+            var collection = dbContext.GetCollection<TDocument>(collectionName);
+            var findFluent = collection.Find(filter).Project(projection);
+
+            if (limit.HasValue)
+            {
+                findFluent = findFluent.Limit(limit.Value);
+            }
+
+            return await findFluent.ToListAsync();
+        }
+        catch (MongoException ex)
+        {
+            throw new Exception(
+                $"MongoDB operation failed while retrieving documents from collection '{collectionName}'.",
+                ex
+            );
+        }
+    }
+
+
+
     public async Task<List<TDocument>> FindForPaginationAsync<TDocument>(
         CollectionName cn,
         FilterDefinition<TDocument> filter,
@@ -416,7 +448,7 @@ public class MongoDbService(MongoDbContext dbContext)
         int? pageNumber,
         int? pageSize
     )
-     where TDocument : BaseEntity
+    where TDocument : BaseEntity
     {
         string collectionName = cn.ToString();
         try

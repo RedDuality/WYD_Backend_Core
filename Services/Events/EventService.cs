@@ -344,7 +344,7 @@ public class EventService(
 
     }
 
-    public async Task<HashSet<ProfileEvent>> GetProfileEventsAsync(string eventId)
+    public async Task<HashSet<ProfileEventDto>> GetProfileEventsAsync(string eventId)
     {
         var eps = await eventProfileService.FindAllByEventId(new ObjectId(eventId));
 
@@ -352,7 +352,7 @@ public class EventService(
         var profileEventPairs = eps
             .Select(ep => (ep.ProfileId.ToString(), eventId))
             .ToList();
-        
+
         return await profileEventService.GetProfileEvents(profileEventPairs);
     }
 
