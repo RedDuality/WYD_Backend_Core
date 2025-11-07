@@ -11,11 +11,11 @@ public class DeviceService(MongoDbService dbService)
 {
     private readonly CollectionName userCollection = CollectionName.Users;
 
-    public async Task AddDevice(User user, StoreFcmTokenRequestDto requestDto)
+    public async Task AddDevice(ObjectId userId, StoreFcmTokenRequestDto requestDto)
     {
         var device = new Device(platform: requestDto.Platform, fcmToken: requestDto.FcmToken);
         var deviceUpdate = Builders<User>.Update.AddToSet(u => u.Devices, device);
-        await dbService.UpdateOneByIdAsync(userCollection, user.Id, deviceUpdate, setUpdatedAtDate: false);
+        await dbService.UpdateOneByIdAsync(userCollection, userId, deviceUpdate, setUpdatedAtDate: false);
     }
 
     public async Task RemoveDevice(ObjectId userId, string fcmToken)

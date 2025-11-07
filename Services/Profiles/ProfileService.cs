@@ -35,7 +35,7 @@ public class ProfileService(
         await profileDetailsService.AddUser(profile.Id, user, session);
     }
 
-    public async Task<RetrieveProfileResponseDto> Update(User user, UpdateProfileRequestDto updateDto)
+    public async Task<RetrieveProfileResponseDto> Update(ObjectId userId, UpdateProfileRequestDto updateDto)
     {
         var profileId = new ObjectId(updateDto.ProfileId);
 
@@ -64,7 +64,7 @@ public class ProfileService(
 
             if (updateDto.Color != null)
             {
-                updatedUser = await SetProfileColor(user, profileId, updateDto.Color.Value, session);
+                updatedUser = await SetProfileColor(userId, profileId, updateDto.Color.Value, session);
             }
 
             if (updates.Count > 0 || updateDto.Color != null) // something has been changed
@@ -83,7 +83,7 @@ public class ProfileService(
         return updatedDto;
     }
 
-    private async Task<User> SetProfileColor(User user, ObjectId profileId, long color, IClientSessionHandle session)
+    private async Task<User> SetProfileColor(ObjectId userId, ObjectId profileId, long color, IClientSessionHandle session)
     {
 
         var options = new FindOneAndUpdateOptions<User>
@@ -99,7 +99,7 @@ public class ProfileService(
 
         var result = await dbService.FindOneByIdAndUpdateAsync(
             CollectionName.Users,
-            user.Id,
+            userId,
             Builders<User>.Update.Set("profiles.$[profile].color", color),
             session: session,
             options: options);
