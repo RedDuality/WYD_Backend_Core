@@ -22,7 +22,7 @@ public class ProfileUser(User user)
     public ObjectId UserId { get; set; } = user.Id;
 
     [BsonElement("role")]
-    public UserRole Role { get; set; } = UserRole.Owner;
+    public UserProfileRole Role { get; set; } = UserProfileRole.SuperAdmin;
 
     [BsonElement("receivesNotifications")]
     [BsonIgnoreIfDefault]

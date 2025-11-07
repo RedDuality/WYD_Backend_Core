@@ -1,9 +1,8 @@
 namespace Core.Model.Users;
-public enum UserRole
+
+public enum UserProfileRole
 {
-    Owner,
-    External,
-    Admin,
-    Viewer,
-    TicketChecker
+    SuperAdmin, // Delete
+    Admin, // Modify
+    Viewer // View
 }

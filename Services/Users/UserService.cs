@@ -47,13 +47,13 @@ public class UserService(MongoDbService dbService, ProfileService profileService
 
             var profile = await profileService.CreateAsync(accountUid, mail, session);
 
-            await AddProfileAsync(profile, user, session, UserRole.Owner, true);
+            await AddProfileAsync(profile, user, session, UserProfileRole.SuperAdmin, true);
 
             return user;
         });
     }
 
-    public async Task<User> AddProfileAsync(Profile profile, User user, IClientSessionHandle session, UserRole userRole = UserRole.Viewer, bool mainProfile = false)
+    public async Task<User> AddProfileAsync(Profile profile, User user, IClientSessionHandle session, UserProfileRole userRole = UserProfileRole.Viewer, bool mainProfile = false)
     {
         var userProfile = new UserProfile(profile, userRole, mainProfile);
 

@@ -2,8 +2,8 @@ namespace Core.Model.Profiles
 {
     public enum EventRole
     {
-        Owner,
-        Viewer,
-        TicketChecker
+        Partecipant, // Confirm, minor interactions
+        Owner, // Delete
+        Admin, // Modify
     }
 }

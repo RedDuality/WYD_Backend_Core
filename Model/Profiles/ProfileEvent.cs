@@ -26,7 +26,7 @@ public class ProfileEvent(Event ev, ObjectId profileId) : BaseDateEntity
     public DateTimeOffset EventEndTime { get; set; } = ev.EndTime.ToUniversalTime();
 
     [BsonElement("role")]
-    public EventRole Role { get; set; } = EventRole.Viewer;
+    public EventRole Role { get; set; } = EventRole.Partecipant;
 
 }
 
