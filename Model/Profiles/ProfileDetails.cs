@@ -21,9 +21,6 @@ public class ProfileUser(User user)
     [BsonElement("userId")]
     public ObjectId UserId { get; set; } = user.Id;
 
-    [BsonElement("role")]
-    public UserProfileRole Role { get; set; } = UserProfileRole.SuperAdmin;
-
     [BsonElement("receivesNotifications")]
     [BsonIgnoreIfDefault]
     public bool ReceivesNotifications { get; set; } = true;

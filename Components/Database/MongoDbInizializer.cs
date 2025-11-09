@@ -40,7 +40,11 @@ public class MongoDbInitializer(
             var result = await client.GetDatabase("admin").RunCommandAsync<BsonDocument>(new BsonDocument("hello", 1));
 
             // If the server is a mongos (sharded cluster router), it will return "isdbgrid"
-            _isShardingEnabled = result.Contains("msg") && result["msg"] == "isdbgrid";
+            if (result.TryGetValue("msg", out var msg) && msg == "isdbgrid")
+                _isShardingEnabled = true;
+            else
+                _isShardingEnabled = false;
+
         }
         catch (Exception ex)
         {
@@ -59,12 +63,25 @@ public class MongoDbInitializer(
 
         // User
         await InitializeCollectionAsync(CollectionName.Users, "_id");
-        await CreateIndexAsync<User>(CollectionName.Users, "accounts.uid", true);
+        // create and retrieve accounts/users
+        await CreateCompoundIndexAsync<User>(
+            CollectionName.Users,
+            [("_id", 1), ("accounts.uid", 1)],
+            isUnique: true
+        );
+
+        await InitializeCollectionAsync(CollectionName.UserClaims, "userId");
+        // save and retrieve the user's claims
+        await CreateCompoundIndexAsync<UserClaims>(
+            CollectionName.UserClaims,
+            [("userId", 1), ("profileId", 1)],
+            isUnique: true
+        );
 
         // Profile
         await InitializeCollectionAsync(CollectionName.Profiles, "_id");
 
-        await InitializeCollectionAsync(CollectionName.ProfileTags, "_id");
+        await InitializeCollectionAsync(CollectionName.ProfileTags, "_id", doNotShard: true);
         await CreateIndexAsync<ProfileTag>(CollectionName.ProfileTags, "tag", true);
         await CreateIndexAsync<ProfileTag>(CollectionName.ProfileTags, "profileId", true);
 
@@ -124,12 +141,12 @@ public class MongoDbInitializer(
         log("MongoDB collection initialization complete.");
     }
 
-    private async Task InitializeCollectionAsync(CollectionName cn, string partitionKey)
+    private async Task InitializeCollectionAsync(CollectionName cn, string partitionKey, bool doNotShard = false)
     {
         string name = cn.ToString();
         if (!collections.Contains(name))
         {
-            if (_isShardingEnabled == true)
+            if (_isShardingEnabled == true && !doNotShard)
                 await CreateShardedCollectionAsync(name, partitionKey);
             else
                 await CreateUnshardedCollectionAsync(name);
@@ -228,7 +245,7 @@ public class MongoDbInitializer(
     CollectionName collectionName,
     IEnumerable<(string FieldName, int Order)> fields,
     bool isUnique = false
-)
+    )
     {
         var name = collectionName.ToString();
         var collection = database.GetCollection<TDocument>(name);

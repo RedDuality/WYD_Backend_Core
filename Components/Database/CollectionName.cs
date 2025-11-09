@@ -6,6 +6,7 @@ public sealed class CollectionName
     private CollectionName(string name) => Name = name;
 
     public static readonly CollectionName Users = new("Users");
+        public static readonly CollectionName UserClaims = new("UserClaims");
     public static readonly CollectionName Profiles = new("Profiles");
     public static readonly CollectionName ProfileDetails = new("ProfileDetails");
     public static readonly CollectionName ProfileEvents = new("ProfileEvents");

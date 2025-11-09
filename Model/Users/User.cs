@@ -20,13 +20,10 @@ public class User(Account account) : BaseDateEntity
     public HashSet<Device> Devices { get; set; } = [];
 }
 
-public class UserProfile(Profile profile, UserProfileRole userRole = UserProfileRole.Viewer, bool mainProfile = false)
+public class UserProfile(Profile profile, bool mainProfile = false)
 {
     [BsonElement("profileId")]
     public ObjectId ProfileId { get; set; } = profile.Id;
-
-    [BsonElement("role")]
-    public UserProfileRole Role { get; set; } = userRole;
 
     [BsonElement("color")]
     public long Color { get; set; } = 4278190080; //black

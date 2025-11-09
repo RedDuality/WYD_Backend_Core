@@ -38,4 +38,24 @@ public class FirebaseAuthService : IAuthenticationService
 
     public FirebaseAuth GetInstance() => _authInstance.Value;
 
+    /// <summary>
+    /// Safely adds or updates the "userId" custom claim for a Firebase user.
+    /// </summary>
+    /// <param name="firebaseUid">The Firebase UID of the user.</param>
+    /// <param name="userId">Your internal userId to attach as a claim.</param>
+    public async Task AddOrUpdateUserIdClaimAsync(string firebaseUid, string userId)
+    {
+        var auth = GetInstance();
+
+        var user = await auth.GetUserAsync(firebaseUid);
+        var currentClaims = user.CustomClaims ?? new Dictionary<string, object>();
+
+        var updatedClaims = new Dictionary<string, object>(currentClaims)
+        {
+            ["userId"] = userId
+        };
+
+        await auth.SetCustomUserClaimsAsync(firebaseUid, updatedClaims);
+    }
+
 }

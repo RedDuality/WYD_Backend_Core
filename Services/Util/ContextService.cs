@@ -1,22 +1,27 @@
 using System.Security.Claims;
-using Core.Model.Users;
-using Core.Services.Users;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Primitives;
 
 namespace Core.Services.Util;
 
-public class ContextService(UserService userService)
+public class ContextService()
 {
-    public async Task<User> GetUser(ClaimsPrincipal? user)
+    public static string GetAccountId(ClaimsPrincipal? userPrincipal)
     {
-        // Retrieve the user ID from the claims
-        string uid = user?.FindFirstValue(ClaimTypes.NameIdentifier) ??
-            throw new UnauthorizedAccessException("No Id in the claims");
+        return userPrincipal?.FindFirstValue(ClaimTypes.NameIdentifier) ??
+            throw new UnauthorizedAccessException("No Account Id in the claims");
+    }
 
-        string? email = user?.FindFirstValue(ClaimTypes.Email);
+    public static string GetEmail(ClaimsPrincipal? userPrincipal)
+    {
+        return userPrincipal?.FindFirstValue(ClaimTypes.Email) ??
+            throw new UnauthorizedAccessException("No Email in the claims"); ;
+    }
 
-        return await userService.GetOrCreateAsync(uid, email);
+    public static string GetUserId(ClaimsPrincipal? userPrincipal)
+    {
+        return userPrincipal?.FindFirstValue("userId") ?? 
+            throw new UnauthorizedAccessException("No User Id in the claims");
     }
 
     public static string RetrieveFromHeaders(HttpRequest req, string headerKey)

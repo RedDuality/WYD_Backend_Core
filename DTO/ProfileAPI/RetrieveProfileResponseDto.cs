@@ -13,7 +13,6 @@ public class RetrieveProfileResponseDto
     public string? Name { get; set; }
     public DateTimeOffset? UpdatedAt { get; set; }
     public long? Color { get; set; }
-    public UserProfileRole? Role { get; set; }
     public bool? MainProfile { get; set; }
 
     // Constructor using Profile and optional UserProfile
@@ -24,7 +23,6 @@ public class RetrieveProfileResponseDto
         Name = profile.Name;
         UpdatedAt = profile.UpdatedAt;
         Color = userProfile?.Color;
-        Role = userProfile?.Role;
         MainProfile = userProfile?.MainProfile;
     }
 
@@ -33,7 +31,6 @@ public class RetrieveProfileResponseDto
     {
         Id = profileId.ToString();
         Color = userProfile.Color;
-        Role = userProfile.Role;
         MainProfile = userProfile.MainProfile;
     }
 }
