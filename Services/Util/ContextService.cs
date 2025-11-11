@@ -18,9 +18,14 @@ public class ContextService()
             throw new UnauthorizedAccessException("No Email in the claims"); ;
     }
 
+    public static string? TryGetUserId(ClaimsPrincipal? userPrincipal)
+    {
+        return userPrincipal?.FindFirstValue("userId");
+    }
+
     public static string GetUserId(ClaimsPrincipal? userPrincipal)
     {
-        return userPrincipal?.FindFirstValue("userId") ?? 
+        return userPrincipal?.FindFirstValue("userId") ??
             throw new UnauthorizedAccessException("No User Id in the claims");
     }
 

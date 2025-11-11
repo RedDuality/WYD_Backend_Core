@@ -6,19 +6,42 @@ using Core.Model.Profiles;
 using Core.Services.Profiles;
 using Core.External.Authentication;
 using MongoDB.Bson;
+using Core.Services.Util;
 
 namespace Core.Services.Users;
 
 
-public class UserService(MongoDbService dbService, ProfileService profileService, UserClaimService userClaimService, FirebaseAuthService authService)
+public class UserService(
+    MongoDbService dbService, ProfileService profileService, UserClaimService userClaimService, FirebaseAuthService authService, IContextManager contextManager)
 {
 
     private readonly CollectionName userCollection = CollectionName.Users;
 
-
-    public async Task<User> Retrieve(string userId, string accountUid)
+    public async Task<RetrieveUserResponseDto> Login()
     {
+        var accountUid = contextManager.GetAccountId();
+        var userId = contextManager.TryGetUserId();
 
+        if (userId == null)
+        {
+            return await Register(accountUid);
+        }
+
+        var user = await Retrieve(userId, accountUid);
+
+        return await RetrieveProfilesAsync(user);
+    }
+
+    public async Task<User> Retrieve()
+    {
+        var accountUid = contextManager.GetAccountId();
+        var userId = contextManager.GetUserId();
+
+        return await Retrieve(userId, accountUid);
+    }
+
+    private async Task<User> Retrieve(string userId, string accountUid)
+    {
         var filter = Builders<User>.Filter.And(
             Builders<User>.Filter.Eq(u => u.Id, new ObjectId(userId)),
             Builders<User>.Filter.ElemMatch(
@@ -32,13 +55,7 @@ public class UserService(MongoDbService dbService, ProfileService profileService
         return users.FirstOrDefault() ?? throw new UnauthorizedAccessException("The account has no associated user");
     }
 
-    public async Task<RetrieveUserResponseDto> RetrieveWithProfiles(string userId, string accountUid)
-    {
 
-        var user = await Retrieve(userId, accountUid);
-
-        return await RetrieveProfilesAsync(user);
-    }
 
     private async Task<RetrieveUserResponseDto> RetrieveProfilesAsync(User user)
     {
@@ -53,23 +70,32 @@ public class UserService(MongoDbService dbService, ProfileService profileService
     }
 
 
-    public async Task<User> CreateUserAsync(string accountUid, string email)
+    public async Task<RetrieveUserResponseDto> Register()
     {
+        string accountUid = contextManager.GetAccountId();
+        return await Register(accountUid);
+    }
+
+    private async Task<RetrieveUserResponseDto> Register(string accountUid)
+    {
+        string email = contextManager.GetEmail();
+
         return await dbService.ExecuteInTransactionAsync(async (session) =>
         {
             var user = new User(new Account(accountUid, email));
-
             await dbService.CreateOneAsync(userCollection, user, session);
 
             var profile = await profileService.CreateAsync(accountUid, email, session);
-
             await AddProfileAsync(profile, user, session, true);
 
-            var useClaims = await userClaimService.SetAdmin(user, profile);
-
+            var userClaims = await userClaimService.SetAdmin(user, profile);
+            // updates the Auth Provider to include the userId in the claims
             await authService.AddOrUpdateUserIdClaimAsync(accountUid, user.Id.ToString());
 
-            return user;
+            var userProfile = user.Profiles.First();
+            Tuple<Profile, UserProfile> userProfiles = new(profile, userProfile);
+
+            return new RetrieveUserResponseDto(user, [userProfiles]);
         });
     }
 

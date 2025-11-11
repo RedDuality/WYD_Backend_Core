@@ -6,6 +6,8 @@ public interface IContextManager
 
     string GetEmail();
 
+    string? TryGetUserId();
+
     string GetUserId();
 
     string GetCurrentProfileId();
