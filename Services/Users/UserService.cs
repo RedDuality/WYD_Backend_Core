@@ -4,15 +4,19 @@ using Core.DTO.UserAPI;
 using Core.Model.Users;
 using Core.Model.Profiles;
 using Core.Services.Profiles;
-using Core.External.Authentication;
 using MongoDB.Bson;
 using Core.Services.Util;
+using Core.External.Interfaces;
 
 namespace Core.Services.Users;
 
 
 public class UserService(
-    MongoDbService dbService, ProfileService profileService, UserClaimService userClaimService, FirebaseAuthService authService, IContextManager contextManager)
+    MongoDbService dbService,
+    ProfileService profileService,
+    UserClaimService userClaimService,
+    IAuthService authService,
+    IContextManager contextManager)
 {
 
     private readonly CollectionName userCollection = CollectionName.Users;
@@ -86,11 +90,16 @@ public class UserService(
             await dbService.CreateOneAsync(userCollection, user, session);
 
             var profile = await profileService.CreateAsync(accountUid, email, session);
-            await AddProfileAsync(profile, user, session, true);
+            user = await AddProfileAsync(profile, user, session, true);
 
             var userClaims = await userClaimService.SetAdmin(user, profile);
+
             // updates the Auth Provider to include the userId in the claims
-            await authService.AddOrUpdateUserIdClaimAsync(accountUid, user.Id.ToString());
+            var claims = new Dictionary<string, string>
+            {
+                ["userId"] = user.Id.ToString()
+            };
+            await authService.AddOrUpdateClaimsAsync(accountUid, claims);
 
             var userProfile = user.Profiles.First();
             Tuple<Profile, UserProfile> userProfiles = new(profile, userProfile);

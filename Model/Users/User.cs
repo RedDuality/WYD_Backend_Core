@@ -8,7 +8,6 @@ namespace Core.Model.Users;
 public class User(Account account) : BaseDateEntity
 {
     [BsonElement("profiles")]
-    [BsonIgnoreIfDefault]
     public List<UserProfile> Profiles { get; set; } = [];
 
     [BsonElement("accounts")]
