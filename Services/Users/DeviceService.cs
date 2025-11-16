@@ -4,22 +4,30 @@ using Core.DTO.UserAPI;
 using MongoDB.Bson;
 using Core.Model.Users;
 using Core.Model.Profiles;
+using Core.Services.Util;
 
 namespace Core.Services.Users;
 
-public class DeviceService(MongoDbService dbService)
+public class DeviceService(MongoDbService dbService, IContextManager contextManager)
 {
     private readonly CollectionName userCollection = CollectionName.Users;
 
-    public async Task AddDevice(ObjectId userId, StoreFcmTokenRequestDto requestDto)
+    public async Task AddDevice(StoreFcmTokenRequestDto requestDto)
     {
+        var userId = new ObjectId(contextManager.GetUserId());
         var device = new Device(platform: requestDto.Platform, fcmToken: requestDto.FcmToken);
         var deviceUpdate = Builders<User>.Update.AddToSet(u => u.Devices, device);
         await dbService.UpdateOneByIdAsync(userCollection, userId, deviceUpdate, setUpdatedAtDate: false);
     }
+    public async Task RemoveDevice(string fcmToken)
+    {
+        var userId = new ObjectId(contextManager.GetUserId());
+        await RemoveDevice(userId, fcmToken);
+    }
 
     public async Task RemoveDevice(ObjectId userId, string fcmToken)
     {
+
         var deviceUpdate = Builders<User>.Update.PullFilter(
             u => u.Devices,
             d => d.FcmToken.Equals(fcmToken, StringComparison.CurrentCultureIgnoreCase)
