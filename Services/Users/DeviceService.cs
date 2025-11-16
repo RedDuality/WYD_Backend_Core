@@ -30,7 +30,7 @@ public class DeviceService(MongoDbService dbService, IContextManager contextMana
 
         var deviceUpdate = Builders<User>.Update.PullFilter(
             u => u.Devices,
-            d => d.FcmToken.Equals(fcmToken, StringComparison.CurrentCultureIgnoreCase)
+            d => d.FcmToken.ToLower() == fcmToken.ToLower()
         );
         await dbService.UpdateOneByIdAsync(userCollection, userId, deviceUpdate, setUpdatedAtDate: false);
     }
