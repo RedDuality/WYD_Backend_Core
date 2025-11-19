@@ -6,6 +6,9 @@ using MongoDB.Bson;
 using Core.Model.Profiles;
 using Core.Components.MessageQueue;
 using Core.Model.Notifications;
+using Core.DTO.UserAPI;
+using Core.Services.Util;
+using Core.Services.Users;
 
 namespace Core.Services.Profiles;
 
@@ -13,7 +16,10 @@ public class ProfileService(
     MongoDbService dbService,
     ProfileDetailsService profileDetailsService,
     ProfileTagService profileTagService,
-    MessageQueueService messageService)
+    MessageQueueService messageService,
+    UserClaimService userClaimService,
+    UserProfileService userProfileService,
+    IContextManager contextManager)
 {
     private readonly CollectionName profileCollection = CollectionName.Profiles;
 
@@ -35,76 +41,55 @@ public class ProfileService(
         await profileDetailsService.AddUser(profile.Id, user, session);
     }
 
-    public async Task<RetrieveProfileResponseDto> Update(ObjectId userId, UpdateProfileRequestDto updateDto)
+    public async Task<RetrieveDetailedProfileResponseDto> Update(UpdateProfileRequestDto updateDto)
     {
+        var userId = new ObjectId(contextManager.GetUserId());
         var profileId = new ObjectId(updateDto.ProfileId);
 
         var updatedDto = await dbService.ExecuteInTransactionAsync(async (session) =>
         {
-            var updates = new List<UpdateDefinition<Profile>>();
-            Profile? profile = null;
-            User? updatedUser = null;
-
-            if (updateDto.Name != null)
-            {
-                updates.Add(Builders<Profile>.Update.Set(p => p.Name, updateDto.Name));
-            }
+            UserProfile? userProfile = null;
+            Profile? updatedProfile = await UpdateProfileAsync(updateDto, profileId, session);
 
             if (updateDto.Tag != null)
-            {
-                updates.Add(Builders<Profile>.Update.Set(p => p.Tag, updateDto.Tag));
                 await profileTagService.Update(profileId, updateDto.Tag, session);
-            }
-
-            if (updates.Count > 0)
-            {
-                var updateDefinition = Builders<Profile>.Update.Combine(updates);
-                profile = await dbService.FindOneByIdAndUpdateAsync(profileCollection, profileId, updateDefinition, session: session);
-            }
 
             if (updateDto.Color != null)
-            {
-                updatedUser = await SetProfileColor(userId, profileId, updateDto.Color.Value, session);
-            }
+                userProfile = await userProfileService.Update(userId, profileId, updateDto.Color.Value, session);
 
-            if (updates.Count > 0 || updateDto.Color != null) // something has been changed
+            var somethingChanged = updatedProfile != null || updateDto.Color != null;
+            if (somethingChanged)
             {
                 var notification = new Notification(profileId, NotificationType.UpdateProfile);
                 await messageService.SendNotificationAsync(notification);
-            }
+            } // else throw nothingChangedException
 
-            var userProfile = updatedUser?.Profiles.FirstOrDefault(p => p.ProfileId == profileId);
-
-            return profile != null
-                ? new RetrieveProfileResponseDto(profile, userProfile)
-                : new RetrieveProfileResponseDto(profileId, userProfile!);
+            updatedProfile ??= await RetrieveProfileById(updateDto.ProfileId);
+            return new RetrieveDetailedProfileResponseDto(updatedProfile, userProfile, null);
         });
 
         return updatedDto;
     }
 
-    private async Task<User> SetProfileColor(ObjectId userId, ObjectId profileId, long color, IClientSessionHandle session)
+    private async Task<Profile?> UpdateProfileAsync(UpdateProfileRequestDto updateDto, ObjectId profileId, IClientSessionHandle session)
     {
+        Profile? profile = null;
 
-        var options = new FindOneAndUpdateOptions<User>
+        var updates = new List<UpdateDefinition<Profile>>();
+
+        if (updateDto.Name != null)
+            updates.Add(Builders<Profile>.Update.Set(p => p.Name, updateDto.Name));
+
+        if (updateDto.Tag != null)
+            updates.Add(Builders<Profile>.Update.Set(p => p.Tag, updateDto.Tag));
+
+        if (updates.Count > 0)
         {
-            ArrayFilters =
-            [
-                new JsonArrayFilterDefinition<BsonDocument>(
-                    $"{{ 'profile.profileId': ObjectId('{profileId}') }}")
-            ],
-            IsUpsert = false,
-            ReturnDocument = ReturnDocument.After
-        };
+            var updateDefinition = Builders<Profile>.Update.Combine(updates);
+            profile = await dbService.FindOneByIdAndUpdateAsync(profileCollection, profileId, updateDefinition, session: session);
+        }
 
-        var result = await dbService.FindOneByIdAndUpdateAsync(
-            CollectionName.Users,
-            userId,
-            Builders<User>.Update.Set("profiles.$[profile].color", color),
-            session: session,
-            options: options);
-
-        return result;
+        return profile;
     }
 
     #endregion
@@ -115,11 +100,17 @@ public class ProfileService(
         var profile = await dbService.RetrieveByIdAsync<Profile>(profileCollection, id);
         return profile;
     }
-    public async Task<RetrieveProfileResponseDto> RetrieveDetailedProfileById(User user, string profileId)
+
+    // for rtupdates
+    public async Task<RetrieveDetailedProfileResponseDto> RetrieveDetailedProfileById(string profileId)
     {
+        var userId = new ObjectId(contextManager.GetUserId());
+
         var profile = await dbService.RetrieveByIdAsync<Profile>(profileCollection, profileId);
-        var userProfile = user.Profiles.First((up) => up.ProfileId == new ObjectId(profileId));
-        return new RetrieveProfileResponseDto(profile, userProfile);
+        var userProfile = await userProfileService.RetrieveFromUserAndProfile(userId, profile.Id);
+        var userClaims = await userClaimService.RetrieveFromUserAndProfile(userId, profile.Id);
+
+        return new RetrieveDetailedProfileResponseDto(profile, userProfile, userClaims);
     }
 
     public async Task<HashSet<RetrieveProfileResponseDto>> RetrieveMultipleProfileById(HashSet<string> profileIds)
@@ -136,38 +127,3 @@ public class ProfileService(
 
     #endregion
 }
-/*
-
-
-    public Profile UpdateAsync(ProfileDto dto)
-    {
-        Profile profileToUpdate;
-        try
-        {
-            profileToUpdate = RetrieveByHash(dto.Hash!);
-            profileToUpdate.Update(dto);
-            db.SaveChanges();
-        }
-        catch (Exception ex)
-        {
-            throw new InvalidOperationException("Error updating event", ex);
-        }
-
-        //TODO check for removed images
-
-        return profileToUpdate;
-
-    }
-
-    public void SetEventRole(Event ev, Profile profile, EventRole role)
-    {
-        var profileEvent = profile.ProfileEvents.Find(pe => pe.Event.Id == ev.Id) ?? throw new KeyNotFoundException("ProfileEvent");
-
-        profileEvent.Role = role;
-
-        db.SaveChanges();
-    }
-
-
-
-} */

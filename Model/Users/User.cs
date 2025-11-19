@@ -1,5 +1,4 @@
 using Core.Model.Base;
-using Core.Model.Profiles;
 using MongoDB.Bson;
 using MongoDB.Bson.Serialization.Attributes;
 
@@ -7,8 +6,11 @@ namespace Core.Model.Users;
 
 public class User(Account account) : BaseDateEntity
 {
-    [BsonElement("profiles")]
-    public List<UserProfile> Profiles { get; set; } = [];
+    [BsonElement("mainProfileId")]
+    public ObjectId MainProfileId { get; set; }
+
+    [BsonElement("profileIds")]
+    public HashSet<ObjectId> ProfileIds { get; set; } = [];
 
     [BsonElement("accounts")]
     [BsonIgnoreIfDefault]
@@ -17,17 +19,4 @@ public class User(Account account) : BaseDateEntity
     [BsonElement("devices")]
     [BsonIgnoreIfDefault]
     public HashSet<Device> Devices { get; set; } = [];
-}
-
-public class UserProfile(Profile profile, bool mainProfile = false)
-{
-    [BsonElement("profileId")]
-    public ObjectId ProfileId { get; set; } = profile.Id;
-
-    [BsonElement("color")]
-    public long Color { get; set; } = 4278190080; //black
-
-    [BsonElement("MainProfile")]
-    [BsonIgnoreIfDefault]
-    public bool MainProfile { get; set; } = mainProfile;
 }

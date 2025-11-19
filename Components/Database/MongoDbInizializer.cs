@@ -70,6 +70,14 @@ public class MongoDbInitializer(
             isUnique: true
         );
 
+        await InitializeCollectionAsync(CollectionName.UserProfiles, "userId");
+        // save and retrieve the user profiles
+        await CreateCompoundIndexAsync<UserProfile>(
+            CollectionName.UserProfiles,
+            [("userId", 1), ("profileId", 1)],
+            isUnique: true
+        );
+
         await InitializeCollectionAsync(CollectionName.UserClaims, "userId");
         // save and retrieve the user's claims
         await CreateCompoundIndexAsync<UserClaims>(

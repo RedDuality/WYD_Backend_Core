@@ -32,43 +32,39 @@ public class UserClaimService(MongoDbService dbService)
     }
 
 
-    public async Task<UserClaims> SetAdmin(User user, Profile profile)
+    public async Task<List<UserClaims>> RetrieveFromUser(User user)
     {
-        // 1. Get the admin claim types
-        var adminClaimTypes = GetAdminClaims();
+        var filter = Builders<UserClaims>.Filter.Eq(uc => uc.UserId, user.Id);
 
-        // 2. Wrap them into UserClaim objects
+        return await dbService.RetrieveMultipleAsync(userClaimCollection, filter);
+    }
+
+    public async Task<UserClaims?> RetrieveFromUserAndProfile(ObjectId userId, ObjectId profileId)
+    {
+        var filter = Builders<UserClaims>.Filter.And(
+            Builders<UserClaims>.Filter.Eq(uc => uc.UserId, userId),
+            Builders<UserClaims>.Filter.Eq(uc => uc.ProfileId, profileId)
+        );
+
+        return await dbService.RetrieveOrNullAsync(userClaimCollection, filter);
+    }
+
+    public async Task<UserClaims> SetRole(User user, Profile profile, PresetClaimRole role, IClientSessionHandle session)
+    {
+        var adminClaimTypes = PresetClaimRoleMapper.GetClaimsForRole(role);
+
         var adminClaims = adminClaimTypes
             .Select(claimType => new UserClaim(claimType))
             .ToHashSet();
 
-        // 3. Build the UserClaims document
         var userClaims = new UserClaims(user, profile)
         {
             Claims = adminClaims
         };
 
-        // 4. Persist to MongoDB
-        await dbService.CreateOneAsync(userClaimCollection, userClaims, session: null);
+        await dbService.CreateOneAsync(userClaimCollection, userClaims, session);
 
-        // 5. Return the created document
         return userClaims;
-    }
-
-
-    private static HashSet<UserClaimType> GetAdminClaims()
-    {
-        return [
-            UserClaimType.CanViewProfileDetails,
-            UserClaimType.CanImpersonateProfile,
-            UserClaimType.CanViewCommunity,
-            UserClaimType.CanCreateCommunity,
-            UserClaimType.CanEditCommunity,
-            UserClaimType.CanReadEvents,
-            UserClaimType.CanCreateEvents,
-            UserClaimType.CanEditEvents,
-            UserClaimType.CanShareEvents
-        ];
     }
 
 

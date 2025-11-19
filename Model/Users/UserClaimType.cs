@@ -5,6 +5,7 @@ public enum UserClaimType
     // Profile
     CanViewProfileDetails,
     CanImpersonateProfile,
+    CanEditProfile,
     // Community
     CanViewCommunity,
     CanCreateCommunity,

@@ -85,19 +85,21 @@ public class CommunityService(
     }
 
 
-    public async Task<HashSet<RetrieveCommunityResponseDto>> Retrieve(Profile profile)
+    public async Task<HashSet<RetrieveCommunityResponseDto>> RetrieveCommunities(Profile profile)
     {
         var profileCommunities = await profileCommunityService.RetrieveProfileCommunitiesByProfile(profile);
         var responseDtos = profileCommunities.Select((pc) => new RetrieveCommunityResponseDto(pc)).ToHashSet();
         return responseDtos;
     }
 
-    public Community MakeMultiGroup(Community community)
+    public async Task<Community> MakeMultiGroupAsync(Community community)
     {
         if (community.Type == CommunityType.Personal)
             throw new Exception("Cannot transform this chat into a community");
 
-        community.Type = CommunityType.Community;
+        var update = Builders<Community>.Update.Set(c => c.Type, CommunityType.Community);
+        await dbService.UpdateOneByIdAsync(communityCollection, community.Id, update);
+
         return community;
     }
 
