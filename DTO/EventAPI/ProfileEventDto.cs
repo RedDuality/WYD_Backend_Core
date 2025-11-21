@@ -4,7 +4,7 @@ namespace Core.DTO.EventAPI;
 
 public class ProfileEventDto
 {
-    public string? ProfileHash { get; set; }
+    public string? ProfileId { get; set; }
     public EventRole Role { get; set; }
     public bool Confirmed { get; set; }
     public bool Trusted { get; set; }
@@ -12,7 +12,7 @@ public class ProfileEventDto
     // Parameterized constructor for custom initialization
     public ProfileEventDto(ProfileEvent pe)
     {
-        ProfileHash = pe.ProfileId.ToString();
+        ProfileId = pe.ProfileId.ToString();
         Role = pe.Role;
         Confirmed = pe.Confirmed;
         //TODO

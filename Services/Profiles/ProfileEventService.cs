@@ -104,7 +104,7 @@ public class ProfileEventService(MongoDbService dbService, EventProfileService e
 
         var projection = Builders<ProfileEvent>.Projection.Expression(pe => new ProfileEventDto
         {
-            ProfileHash = pe.ProfileId.ToString(),
+            ProfileId = pe.ProfileId.ToString(),
             Role = pe.Role,
             Confirmed = pe.Confirmed,
             Trusted = false

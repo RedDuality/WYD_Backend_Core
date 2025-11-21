@@ -327,7 +327,7 @@ public class EventService(
                 ev = group.First().Event,
                 ProfileEvents = group.Select(pe => new ProfileEventDto
                 {
-                    ProfileHash = pe.ProfileId.ToString(),
+                    ProfileId = pe.ProfileId.ToString(),
                     Role = pe.Role,
                     Confirmed = pe.Confirmed,
                     Trusted = false
@@ -387,7 +387,7 @@ public class EventService(
                 ev = group.First().Event,
                 ProfileEvents = group.Select(pe => new ProfileEventDto
                 {
-                    ProfileHash = pe.ProfileId.ToString(),
+                    ProfileId = pe.ProfileId.ToString(),
                     Role = pe.Role,
                     Confirmed = pe.Confirmed,
                     Trusted = false
