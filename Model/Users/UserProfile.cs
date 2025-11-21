@@ -13,7 +13,7 @@ public class UserProfile( User user, Profile profile) : BaseDateEntity
     public ObjectId ProfileId { get; set; } = profile.Id;
 
     [BsonElement("color")]
-    public long Color { get; set; } = 4278190080; //black
+    public long Color { get; set; } = 4280391411; //blue
 
     [BsonElement("viewSettings")]
     [BsonIgnoreIfDefault]
