@@ -20,7 +20,7 @@ public class EventUpdatePropagationService(
         if (profileIds.Count > 0)
         {
             await profileEventService.PropagateEventUpdatesAsync(ev, profileIds);
-
+            Console.WriteLine("ciao-1");
             var notification = GetUpdateNotification(type, ev, actorId);
             //await messageService.SendNotificationAsync(notification);
             _ = broadcastService.BroadcastUpdate(notification);

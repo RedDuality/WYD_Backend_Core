@@ -1,5 +1,4 @@
 using Core.Model.Notifications;
-using Core.Services.Users;
 using MongoDB.Bson;
 
 namespace Core.Services.Notifications;
@@ -7,22 +6,21 @@ namespace Core.Services.Notifications;
 
 public class BroadcastService(
     NotificationService notificationService,
-    ProfileIdResolverFactory resolverFactory,
-    DeviceService deviceService)
+    ProfileIdResolverFactory resolverFactory)
 {
 
     public async Task BroadcastUpdate(Notification notification)
     {
-        var tokens = await GetNotificationTokens(notification);
-        if (tokens.Count > 0)
-            await notificationService.SendNotification(tokens, notification.ToDictionary());
+        var profileIds = await GetProfileIds(notification);
+        Console.WriteLine($"ciao{profileIds.Count}");
+        if (profileIds.Count > 0)
+            await notificationService.SendNotification(profileIds, notification.ToDictionary());
     }
 
-    public async Task<Dictionary<string, ObjectId>> GetNotificationTokens(Notification notification)
+    public async Task<List<ObjectId>> GetProfileIds(Notification notification)
     {
         var profileFinder = resolverFactory.Resolve(notification.Type);
-        var affectedProfileIds = await profileFinder.GetProfileIdsAsync(notification.ObjectId);
-        return await deviceService.GetProfilesDevicesTokens(affectedProfileIds);
+        return await profileFinder.GetProfileIdsAsync(notification.ObjectId);
     }
 
 }

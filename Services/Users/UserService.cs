@@ -84,7 +84,6 @@ public class UserService(
         return resultList;
     }
 
-
     public async Task<RetrieveUserResponseDto> Register()
     {
         string accountUid = contextManager.GetAccountId();

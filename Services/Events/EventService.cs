@@ -220,6 +220,7 @@ public class EventService(
                 var ev = await dbService.FindOneByIdAndUpdateAsync(eventCollection, new ObjectId(eventId), increaseUpdate, session);
 
                 var propagationMessage = new QueueMessage<UpdateEventPayload>(MessageType.eventUpdate, new(ev, Model.QueueMessages.EventUpdateType.confirm, profileId));
+                Console.WriteLine("ciao-2");
                 await messageService.SendPropagationMessageAsync(propagationMessage);
             }
             return null;

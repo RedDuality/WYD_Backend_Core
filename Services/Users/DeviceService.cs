@@ -30,24 +30,13 @@ public class DeviceService(MongoDbService dbService, IContextManager contextMana
 
         var deviceUpdate = Builders<User>.Update.PullFilter(
             u => u.Devices,
-            d => d.FcmToken.ToLower() == fcmToken.ToLower()
+            d => d.FcmToken.Equals(fcmToken, StringComparison.CurrentCultureIgnoreCase)
         );
         await dbService.UpdateOneByIdAsync(userCollection, userId, deviceUpdate, setUpdatedAtDate: false);
     }
 
-    public async Task<Dictionary<string, ObjectId>> GetProfilesDevicesTokens(List<ObjectId> profileIds)
+    public static Dictionary<string, ObjectId> GetProfilesDevicesTokens(List<User> users)
     {
-        var profileDetails = await dbService.RetrieveMultipleAsync(
-                    CollectionName.ProfileDetails,
-                    Builders<ProfileDetails>.Filter.In(p => p.ProfileId, profileIds)
-                );
-        var userIds = profileDetails.SelectMany(pd => pd.Users).Select(pu => pu.UserId).ToHashSet();
-
-        var users = await dbService.RetrieveMultipleAsync(
-            userCollection,
-            Builders<User>.Filter.In(u => u.Id, userIds)
-        );
-
         // Create the Token -> User ID Dictionary
         var tokensWithUserIds = new Dictionary<string, ObjectId>();
 
