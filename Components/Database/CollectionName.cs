@@ -17,10 +17,14 @@ public sealed class CollectionName
 
     public static readonly CollectionName ProfileTags = new("ProfileTags");
 
+    public static readonly CollectionName Masks = new("Masks");
+    
     public static readonly CollectionName Events = new("Events");
     public static readonly CollectionName EventDetails = new("EventDetails");
     public static readonly CollectionName EventMedia = new("EventMedia");
     public static readonly CollectionName EventProfiles = new("EventProfiles");
+
+
 
     public static readonly CollectionName Communities = new("Communities");
     public static readonly CollectionName Groups = new("Groups");

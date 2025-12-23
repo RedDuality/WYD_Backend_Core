@@ -15,5 +15,7 @@ public enum UserClaimType
     CanCreateEvents,
     CanEditEvents,
     CanShareEvents,
+    // Masks
+    CanCreateMasks,
 
 }

@@ -1,3 +1,4 @@
+using Core.Model.Masks;
 using Core.Model.MediaStorage;
 using Core.Model.Profiles;
 using Core.Model.Users;
@@ -122,6 +123,13 @@ public class MongoDbInitializer(
         await CreateIndexAsync<ProfileCommunity>(CollectionName.ProfileCommunities, "communityUpdatedAt");
         await CreateIndexAsync<ProfileCommunity>(CollectionName.ProfileCommunities, "otherProfileId");
         await CreateIndexAsync<ProfileCommunity>(CollectionName.ProfileCommunities, "communityId");
+
+        // Masks
+        await InitializeCollectionAsync(CollectionName.Masks, "profileId");
+        await CreateCompoundIndexAsync<Mask>(
+            CollectionName.Masks,
+            [("profileId", 1), ("endTime", 1), ("startTime", 1)]
+        );
 
         // Event
         await InitializeCollectionAsync(CollectionName.Events, "_id");

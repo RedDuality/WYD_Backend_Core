@@ -27,6 +27,7 @@ public static class PresetClaimRoleMapper
                         UserClaimType.CanCreateEvents,
                         UserClaimType.CanEditEvents,
                         UserClaimType.CanShareEvents,
+                        UserClaimType.CanCreateMasks,
                     }.AsReadOnly()
                 },
                 {
