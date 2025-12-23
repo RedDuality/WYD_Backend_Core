@@ -4,19 +4,19 @@ using MongoDB.Bson.Serialization.Attributes;
 
 namespace Core.Model.Events;
 
-public class Event : BaseDateEntity
+public class Event(string title, DateTimeOffset startTime, DateTimeOffset endTime) : BaseDateEntity
 {
     [BsonElement("title")]
-    public required string Title { get; set; } = "Untitled";
+    public string Title { get; set; } = title;
 
     [BsonElement("timestamp")]
     public DateTimeOffset Timestamp { get; set; } = DateTimeOffset.UtcNow;
-
+    
     [BsonElement("startTime")]
-    public required DateTimeOffset StartTime { get; set; }
+    public DateTimeOffset StartTime { get; set; } = startTime.ToUniversalTime();
 
     [BsonElement("endTime")]
-    public required DateTimeOffset EndTime { get; set; }
+    public DateTimeOffset EndTime { get; set; } = endTime.ToUniversalTime();
 
     [BsonElement("TotalProfiles")]
     [BsonIgnoreIfDefault]

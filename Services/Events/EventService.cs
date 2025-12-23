@@ -36,12 +36,7 @@ public class EventService(
 
     public async Task<RetrieveEventResponseDto> CreateEventAsync(CreateEventRequestDto newEventDto, string profileId)
     {
-        var ev = new Event
-        {
-            Title = newEventDto.Title!,
-            StartTime = newEventDto.StartTime.ToUniversalTime(),
-            EndTime = newEventDto.EndTime.ToUniversalTime(),
-        };
+        var ev = new Event(newEventDto.Title!, newEventDto.StartTime, newEventDto.EndTime);
 
         RetrieveEventResponseDto EventDto = await dbService.ExecuteInTransactionAsync(async (session) =>
         {
@@ -273,7 +268,7 @@ public class EventService(
     {
         var aggregate = dbService.GetAggregate<ProfileEvent>(CollectionName.ProfileEvents);
 
-        var objectIds = requestDto.ProfileHashes.Select(ph => new ObjectId(ph)).ToList();
+        var objectIds = requestDto.ProfileIds.Select(ph => new ObjectId(ph)).ToList();
 
         // Step 1: Define the filter using Builders
         var filterBuilder = Builders<ProfileEvent>.Filter;
@@ -349,7 +344,7 @@ public class EventService(
     {
         var aggregate = dbService.GetAggregate<ProfileEvent>(CollectionName.ProfileEvents);
 
-        var objectIds = requestDto.ProfileHashes.Select(ph => new ObjectId(ph)).ToList();
+        var objectIds = requestDto.ProfileIds.Select(ph => new ObjectId(ph)).ToList();
 
         var filterBuilder = Builders<ProfileEvent>.Filter;
         var filter = filterBuilder.And(
