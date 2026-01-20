@@ -9,7 +9,6 @@ using Core.Model.Profiles;
 using Core.Model.Events;
 using Core.DTO.CommunityAPI;
 using Core.Services.Communities;
-using Core.Model.Notifications;
 using Core.Components.MessageQueue;
 using Core.Model.QueueMessages;
 using Core.Services.Profiles;
@@ -44,19 +43,23 @@ public class EventService(
             EventDetails eventDetails = await eventDetailsService.CreateAsync(ev, newEventDto.Description, session);
             ProfileEvent profileEvent = await profileEventService.CreateProfileEventAsync(ev, new ObjectId(profileId), session);
 
+            var propagationMessage = new QueueMessage<UpdateEventPayload>(MessageType.eventUpdate, new(ev, Model.QueueMessages.EventUpdateType.create));
+            await messageService.SendPropagationMessageAsync(propagationMessage);
+
             return new RetrieveEventResponseDto(ev, eventDetails, [profileEvent]);
         });
 
-        var notification = new Notification(
-            ev.Id,
-            NotificationType.UpdateEssentialsEvent,
-            ev.UpdatedAt
-        )
-        {
-            //ActorId = profileId,
-        };
-        await messageService.SendNotificationAsync(notification);
-
+        /*
+                var notification = new Notification(
+                    ev.Id,
+                    NotificationType.UpdateEssentialsEvent,
+                    ev.UpdatedAt
+                )
+                {
+                    //ActorId = profileId,
+                };
+                await messageService.SendNotificationAsync(notification);
+        */
         return EventDto;
     }
 
@@ -215,7 +218,6 @@ public class EventService(
                 var ev = await dbService.FindOneByIdAndUpdateAsync(eventCollection, new ObjectId(eventId), increaseUpdate, session);
 
                 var propagationMessage = new QueueMessage<UpdateEventPayload>(MessageType.eventUpdate, new(ev, Model.QueueMessages.EventUpdateType.confirm, profileId));
-                Console.WriteLine("ciao-2");
                 await messageService.SendPropagationMessageAsync(propagationMessage);
             }
             return null;

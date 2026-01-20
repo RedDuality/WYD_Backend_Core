@@ -17,7 +17,6 @@ public class NotificationService(ISseService sseService, FCMService fcmService, 
         ? System.Text.Json.JsonSerializer.Serialize(data)
         : string.Empty;
 
-        Console.WriteLine($"ciao{message}");
         sseService.SendToUsers([.. userIds.Select((id) => id.ToString())], message);
 
         await fcmService.Send(users, data);

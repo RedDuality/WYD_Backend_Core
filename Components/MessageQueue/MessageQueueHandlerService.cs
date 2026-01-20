@@ -34,7 +34,7 @@ public class MessageQueueHandlerService : IMessageQueueHandlerService
 */        };
     }
 
-    private Func<object?, Task> WrapHandler<T>(Func<T, Task> handlerLogic) where T : class
+    private static Func<object?, Task> WrapHandler<T>(Func<T, Task> handlerLogic) where T : class
     {
         return async message =>
         {

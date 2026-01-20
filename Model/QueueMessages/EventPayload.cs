@@ -4,6 +4,8 @@ namespace Core.Model.QueueMessages;
 
 public enum EventUpdateType
 {
+    create,
+    
     share,
 
     update,

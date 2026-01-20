@@ -19,9 +19,6 @@ public static class ExceptionService
                 invalidOperationException.Message
             ),
 
-            ArgumentNullException argumentNullException => new BadRequestObjectResult(
-                "Expected a value but none was given: " + argumentNullException.ParamName
-            ),
             KeyNotFoundException keyNotFoundEx => new NotFoundObjectResult(
                 keyNotFoundEx.Message
             ),

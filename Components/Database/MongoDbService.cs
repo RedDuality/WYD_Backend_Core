@@ -476,4 +476,35 @@ public class MongoDbService(MongoDbContext dbContext)
 
     #endregion
 
+    #region delete
+    public async Task<DeleteResult> DeleteOneAsync<TDocument>(CollectionName cn, FilterDefinition<TDocument> filter, IClientSessionHandle? session)
+    where TDocument : BaseEntity
+    {
+        string collectionName = cn.ToString();
+        try
+        {
+            var collection = dbContext.GetCollection<TDocument>(collectionName);
+            if (session != null)
+            {
+                return await collection.DeleteOneAsync(
+                    session,
+                    filter
+                );
+            }
+
+            return await collection.DeleteOneAsync(
+                filter
+            );
+        }
+        catch (MongoException ex)
+        {
+            throw new Exception(
+                $"MongoDB operation failed for document in collection '{collectionName}'.",
+                ex
+            );
+        }
+
+
+    }
+    #endregion
 }

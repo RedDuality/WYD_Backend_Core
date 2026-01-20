@@ -1,4 +1,3 @@
-
 using Core.Model.Masks;
 using MongoDB.Bson;
 
@@ -11,6 +10,6 @@ public class RetrieveMaskResponseDto(Mask mask)
     public DateTimeOffset StartTime {get; set; } =  mask.StartTime;
     public DateTimeOffset EndTime {get; set; } = mask.EndTime;
     public string? Title {get; set; } = mask.Title;
-    public ObjectId? EventId {get; set;} = mask.EventId;
+    public string? EventId {get; set;} = mask.EventId?.ToString();
 }
 

@@ -61,7 +61,7 @@ public class EventProfileService(MongoDbService dbService) : IProfileFinder
     public async Task<List<ObjectId>> GetProfileIdsAsync(ObjectId eventId)
     {
         var eps = await FindAllByEventId(eventId);
-        return eps.Select(ep => ep.ProfileId).ToList();
+        return [.. eps.Select(ep => ep.ProfileId)];
     }
 
 }

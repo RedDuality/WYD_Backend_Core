@@ -12,7 +12,6 @@ public class BroadcastService(
     public async Task BroadcastUpdate(Notification notification)
     {
         var profileIds = await GetProfileIds(notification);
-        Console.WriteLine($"ciao{profileIds.Count}");
         if (profileIds.Count > 0)
             await notificationService.SendNotification(profileIds, notification.ToDictionary());
     }

@@ -1,6 +1,7 @@
 using Core.Model.Events;
 using Core.Model.Notifications;
 using Core.Model.QueueMessages;
+using Core.Services.Masks;
 using Core.Services.Notifications;
 using Core.Services.Profiles;
 
@@ -10,8 +11,9 @@ namespace Core.Services.Events;
 public class EventUpdatePropagationService(
     ProfileEventService profileEventService,
     EventProfileService eventProfileService,
+    MaskService maskService,
     BroadcastService broadcastService
-    //MessageQueueService messageService
+//MessageQueueService messageService
 )
 {
     public async Task PropagateUpdateEffects(Event ev, EventUpdateType type, string? actorId = null)
@@ -19,8 +21,12 @@ public class EventUpdatePropagationService(
         var profileIds = await eventProfileService.GetProfileIdsAsync(ev.Id);
         if (profileIds.Count > 0)
         {
-            await profileEventService.PropagateEventUpdatesAsync(ev, profileIds);
-            Console.WriteLine("ciao-1");
+            var profileTask = profileEventService.PropagateEventUpdatesAsync(ev, profileIds);
+            var maskTask = maskService.PropagateEventUpdateAsync(ev, type, profileIds, actorId);
+
+            await Task.WhenAll(profileTask, maskTask);
+
+
             var notification = GetUpdateNotification(type, ev, actorId);
             //await messageService.SendNotificationAsync(notification);
             _ = broadcastService.BroadcastUpdate(notification);
@@ -32,6 +38,7 @@ public class EventUpdatePropagationService(
     {
         return type switch
         {
+            EventUpdateType.create => new Notification(ev.Id, NotificationType.UpdateEssentialsEvent, ev.UpdatedAt),
             EventUpdateType.share => new Notification(ev.Id, NotificationType.UpdateEssentialsEvent, ev.UpdatedAt),
             EventUpdateType.update => new Notification(ev.Id, NotificationType.UpdateEssentialsEvent, ev.UpdatedAt),
             EventUpdateType.confirm => new Notification(ev.Id, NotificationType.ConfirmEvent, ev.UpdatedAt) { ActorId = actorId },

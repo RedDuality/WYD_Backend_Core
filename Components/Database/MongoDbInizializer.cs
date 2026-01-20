@@ -119,17 +119,12 @@ public class MongoDbInitializer(
             [("profileId", 1), ("updatedAt", 1)]
         );
 
+
+
         await InitializeCollectionAsync(CollectionName.ProfileCommunities, "profileId");
         await CreateIndexAsync<ProfileCommunity>(CollectionName.ProfileCommunities, "communityUpdatedAt");
         await CreateIndexAsync<ProfileCommunity>(CollectionName.ProfileCommunities, "otherProfileId");
         await CreateIndexAsync<ProfileCommunity>(CollectionName.ProfileCommunities, "communityId");
-
-        // Masks
-        await InitializeCollectionAsync(CollectionName.Masks, "profileId");
-        await CreateCompoundIndexAsync<Mask>(
-            CollectionName.Masks,
-            [("profileId", 1), ("endTime", 1), ("startTime", 1)]
-        );
 
         // Event
         await InitializeCollectionAsync(CollectionName.Events, "_id");
@@ -144,6 +139,23 @@ public class MongoDbInitializer(
             CollectionName.EventProfiles,
             [("eventId", 1), ("profileId", 1)],
             isUnique: true
+        );
+
+        // Masks
+        await InitializeCollectionAsync(CollectionName.Masks, "profileId");
+
+        // retrieve
+        await CreateCompoundIndexAsync<Mask>(
+            CollectionName.Masks,
+            [("profileId", 1), ("endTime", 1), ("startTime", 1)]
+        );
+
+        // create/update/retrieve/delete Event's Mask
+        await CreateCompoundIndexAsync<Mask>(
+            CollectionName.Masks,
+            [("profileId", 1), ("eventId", 1)],
+            isUnique: true,
+            partialFilter: new BsonDocument("eventId", new BsonDocument("$exists", true))
         );
 
         // Community
@@ -221,6 +233,7 @@ public class MongoDbInitializer(
         CollectionName collectionName,
         string fieldName,
         bool isUnique = false,
+        BsonDocument? partialFilter = null,
         IndexKeysDefinition<TDocument>? indexkey = null
     )
     {
@@ -228,7 +241,7 @@ public class MongoDbInitializer(
         var collection = database.GetCollection<TDocument>(name);
 
         var indexKeys = indexkey ?? Builders<TDocument>.IndexKeys.Ascending(fieldName);
-        var indexOptions = new CreateIndexOptions { Unique = isUnique };
+        var indexOptions = new CreateIndexOptions<TDocument> { Unique = isUnique, PartialFilterExpression = partialFilter };
         var indexModel = new CreateIndexModel<TDocument>(indexKeys, indexOptions);
 
         try
@@ -260,7 +273,8 @@ public class MongoDbInitializer(
     private async Task CreateCompoundIndexAsync<TDocument>(
     CollectionName collectionName,
     IEnumerable<(string FieldName, int Order)> fields,
-    bool isUnique = false
+    bool isUnique = false,
+    BsonDocument? partialFilter = null
     )
     {
         var name = collectionName.ToString();
@@ -278,7 +292,7 @@ public class MongoDbInitializer(
         }
 
         var indexKeys = Builders<TDocument>.IndexKeys.Combine(indexKeysList);
-        var indexOptions = new CreateIndexOptions { Unique = isUnique };
+        var indexOptions = new CreateIndexOptions<TDocument> { Unique = isUnique, PartialFilterExpression = partialFilter };
         var indexModel = new CreateIndexModel<TDocument>(indexKeys, indexOptions);
 
         try
