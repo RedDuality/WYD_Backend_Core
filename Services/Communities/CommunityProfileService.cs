@@ -1,5 +1,6 @@
 using Core.Components.Database;
 using Core.Model.Communities;
+using Core.Model.Notifications;
 using Core.Model.Profiles;
 using Core.Services.Notifications;
 using MongoDB.Bson;
@@ -7,7 +8,7 @@ using MongoDB.Driver;
 
 namespace Core.Services.Communities;
 
-public class CommunityProfileService(MongoDbService dbService) : IProfileFinder
+public class CommunityProfileService(MongoDbService dbService) : INotificationProfileFinder
 {
     private readonly CollectionName communityProfileCollection = CollectionName.CommunityProfiles;
     public async Task CreateAsync(List<ProfileCommunity> profileCommunities, IClientSessionHandle session)
@@ -36,9 +37,9 @@ public class CommunityProfileService(MongoDbService dbService) : IProfileFinder
         return eventProfiles;
     }
 
-    public async Task<List<ObjectId>> GetProfileIdsAsync(ObjectId communityId)
+    public async Task<HashSet<ObjectId>> GetNotificationProfileIdsAsync(Notification notification)
     {
-        var eps = await FindAllByCommunityId(communityId);
-        return eps.Select(ep => ep.ProfileId).ToList();
+        var eps = await FindAllByCommunityId(notification.ObjectId);
+        return eps.Select(ep => ep.ProfileId).ToHashSet();
     }
 }

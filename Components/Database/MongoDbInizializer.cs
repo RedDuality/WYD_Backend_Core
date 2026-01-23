@@ -126,7 +126,7 @@ public class MongoDbInitializer(
         await CreateIndexAsync<ProfileCommunity>(CollectionName.ProfileCommunities, "otherProfileId");
         await CreateIndexAsync<ProfileCommunity>(CollectionName.ProfileCommunities, "communityId");
 
-        // Event
+        // Events
         await InitializeCollectionAsync(CollectionName.Events, "_id");
 
         await InitializeCollectionAsync(CollectionName.EventDetails, "eventId");
@@ -144,10 +144,17 @@ public class MongoDbInitializer(
         // Masks
         await InitializeCollectionAsync(CollectionName.Masks, "profileId");
 
-        // retrieve
+        // retrieve all
         await CreateCompoundIndexAsync<Mask>(
             CollectionName.Masks,
             [("profileId", 1), ("endTime", 1), ("startTime", 1)]
+        );
+
+        // retrieve, update and delete one
+        await CreateCompoundIndexAsync<Mask>(
+            CollectionName.Masks,
+            [("profileId", 1), ("_id", 1)],
+            isUnique: true
         );
 
         // create/update/retrieve/delete Event's Mask

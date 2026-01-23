@@ -1,14 +1,18 @@
+
 using Core.Model.Notifications;
 using Core.Services.Notifications;
 using MongoDB.Bson;
 
-namespace Core.Services.Profiles;
+namespace Core.Services.Masks;
 
-public class ProfileProfileService() : INotificationProfileFinder
+public class MaskProfileService(
+) : INotificationProfileFinder
 {
     // for notifications, to avoid circular injection
     public async Task<HashSet<ObjectId>> GetNotificationProfileIdsAsync(Notification notification)
     {
-        return await Task.FromResult(new HashSet<ObjectId> { notification.ObjectId });
+        var profileId = new ObjectId(notification.ActorId); // non-event masks are related to only one profile
+        return [profileId];
     }
+
 }

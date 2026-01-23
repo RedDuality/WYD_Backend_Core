@@ -24,7 +24,7 @@ public class Mask : BaseDateEntity
     [BsonIgnoreIfNull]
     public ObjectId? EventId;
 
-    public Mask(ObjectId profileId,DateTimeOffset startTime, DateTimeOffset endTime, string? title = null)
+    public Mask(ObjectId profileId, DateTimeOffset startTime, DateTimeOffset endTime, string? title = null)
     {
         ProfileId = profileId;
         StartTime = startTime.ToUniversalTime();

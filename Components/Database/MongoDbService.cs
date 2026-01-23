@@ -477,7 +477,11 @@ public class MongoDbService(MongoDbContext dbContext)
     #endregion
 
     #region delete
-    public async Task<DeleteResult> DeleteOneAsync<TDocument>(CollectionName cn, FilterDefinition<TDocument> filter, IClientSessionHandle? session)
+    public async Task<DeleteResult> DeleteOneAsync<TDocument>(
+        CollectionName cn,
+        FilterDefinition<TDocument> filter,
+        IClientSessionHandle? session = null
+    )
     where TDocument : BaseEntity
     {
         string collectionName = cn.ToString();

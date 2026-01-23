@@ -11,18 +11,20 @@ namespace Core.Services.Events;
 public class EventUpdatePropagationService(
     ProfileEventService profileEventService,
     EventProfileService eventProfileService,
-    MaskService maskService,
+    EventMaskService eventMaskService,
     BroadcastService broadcastService
 //MessageQueueService messageService
 )
 {
     public async Task PropagateUpdateEffects(Event ev, EventUpdateType type, string? actorId = null)
     {
-        var profileIds = await eventProfileService.GetProfileIdsAsync(ev.Id);
+        var eventProfiles = await eventProfileService.FindAllByEventId(ev.Id);
+        var profileIds = eventProfiles.Select(ep => ep.ProfileId).ToList();
+
         if (profileIds.Count > 0)
         {
             var profileTask = profileEventService.PropagateEventUpdatesAsync(ev, profileIds);
-            var maskTask = maskService.PropagateEventUpdateAsync(ev, type, profileIds, actorId);
+            var maskTask = eventMaskService.PropagateEventUpdateAsync(ev, type, profileIds, actorId);
 
             await Task.WhenAll(profileTask, maskTask);
 

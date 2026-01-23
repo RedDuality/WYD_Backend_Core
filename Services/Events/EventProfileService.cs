@@ -4,10 +4,11 @@ using Core.Components.Database;
 using Core.Model.Profiles;
 using Core.Model.Events;
 using Core.Services.Notifications;
+using Core.Model.Notifications;
 
 namespace Core.Services.Events;
 
-public class EventProfileService(MongoDbService dbService) : IProfileFinder
+public class EventProfileService(MongoDbService dbService) : INotificationProfileFinder
 {
     private readonly CollectionName eventProfileCollection = CollectionName.EventProfiles;
 
@@ -58,9 +59,9 @@ public class EventProfileService(MongoDbService dbService) : IProfileFinder
         return eventProfiles;
     }
 
-    public async Task<List<ObjectId>> GetProfileIdsAsync(ObjectId eventId)
+    public async Task<HashSet<ObjectId>> GetNotificationProfileIdsAsync(Notification notification)
     {
-        var eps = await FindAllByEventId(eventId);
+        var eps = await FindAllByEventId(notification.ObjectId);
         return [.. eps.Select(ep => ep.ProfileId)];
     }
 

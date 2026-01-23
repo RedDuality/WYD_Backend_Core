@@ -1,52 +1,42 @@
 using Core.Model.Notifications;
 using Core.Services.Communities;
 using Core.Services.Events;
+using Core.Services.Masks;
 using Core.Services.Profiles;
 using MongoDB.Bson;
 
 namespace Core.Services.Notifications;
 
-public interface IProfileFinder
+public interface INotificationProfileFinder
 {
-    Task<List<ObjectId>> GetProfileIdsAsync(ObjectId objectId);
+    Task<HashSet<ObjectId>> GetNotificationProfileIdsAsync(Notification notification);
 }
 
-public class ProfileIdResolverFactory
+public class ProfileIdResolverFactory(
+    EventProfileService eventProfileService,
+    CommunityProfileService communityProfileService,
+    ProfileProfileService profileService,
+    MaskProfileService maskProfileService)
 {
-    private readonly Dictionary<NotificationType, IProfileFinder> _resolvers;
 
-    public ProfileIdResolverFactory(
-        EventProfileService eventProfileService,
-        CommunityProfileService communityProfileService,
-        ProfileProfileService profileService)
-    {
-        _resolvers = new()
+#pragma warning disable CS8524
+    public INotificationProfileFinder Resolve(NotificationType type) =>
+        type switch
         {
-            //{ NotificationType.CreateEvent, eventProfileService },
-            //{ NotificationType.ShareEvent, eventProfileService },
-            { NotificationType.UpdateEssentialsEvent, eventProfileService },
-            { NotificationType.ConfirmEvent, eventProfileService },
-            { NotificationType.DeclineEvent, eventProfileService },
-            //{ NotificationType.UpdateDetailsEvent, eventProfileService },
-            { NotificationType.UpdatePhotos, eventProfileService },
+            NotificationType.UpdateEssentialsEvent => eventProfileService,
+            NotificationType.UpdatePhotos => eventProfileService,
+            NotificationType.ConfirmEvent => eventProfileService,
+            NotificationType.DeclineEvent => eventProfileService,
+            NotificationType.DeleteEvent => eventProfileService,
+            NotificationType.DeleteEventForAll => eventProfileService,
 
-            { NotificationType.DeleteEvent, eventProfileService },
-            { NotificationType.DeleteEventForAll, eventProfileService },
+            NotificationType.UpdateProfile => profileService,
 
+            NotificationType.CreateCommunity => communityProfileService,
 
-            { NotificationType.UpdateProfile, profileService },
-
-            //{ NotificationType.GroupUpdate, new GroupProfileFinder() }
-            { NotificationType.CreateCommunity, communityProfileService }
-
+            NotificationType.UpdateMask => maskProfileService,
+            NotificationType.DeleteMask => maskProfileService,
         };
-    }
+#pragma warning restore CS8524
 
-    public IProfileFinder Resolve(NotificationType type)
-    {
-        if (!_resolvers.TryGetValue(type, out var resolver))
-            throw new NotSupportedException($"No profile resolver for type {type}");
-
-        return resolver;
-    }
 }

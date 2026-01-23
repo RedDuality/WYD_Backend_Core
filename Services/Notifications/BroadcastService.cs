@@ -16,10 +16,10 @@ public class BroadcastService(
             await notificationService.SendNotification(profileIds, notification.ToDictionary());
     }
 
-    public async Task<List<ObjectId>> GetProfileIds(Notification notification)
+    private async Task<HashSet<ObjectId>> GetProfileIds(Notification notification)
     {
         var profileFinder = resolverFactory.Resolve(notification.Type);
-        return await profileFinder.GetProfileIdsAsync(notification.ObjectId);
+        return await profileFinder.GetNotificationProfileIdsAsync(notification);
     }
 
 }

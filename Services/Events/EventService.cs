@@ -50,15 +50,15 @@ public class EventService(
         });
 
         /*
-                var notification = new Notification(
-                    ev.Id,
-                    NotificationType.UpdateEssentialsEvent,
-                    ev.UpdatedAt
-                )
-                {
-                    //ActorId = profileId,
-                };
-                await messageService.SendNotificationAsync(notification);
+        var notification = new Notification(
+            ev.Id,
+            NotificationType.UpdateEssentialsEvent,
+            ev.UpdatedAt
+        )
+        {
+            //ActorId = profileId,
+        };
+        await messageService.SendNotificationAsync(notification);
         */
         return EventDto;
     }

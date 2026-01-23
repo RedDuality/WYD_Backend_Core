@@ -28,7 +28,7 @@ public class ProfileDetailsService(MongoDbService dbService)
         return await dbService.FindOneAndUpdateAsync(profileDetailsCollection, detailsFilter, updateDefinition, session);
     }
 
-    public async Task<List<User>> RetrieveByProfileIds(List<ObjectId> profileIds)
+    public async Task<List<User>> RetrieveByProfileIds(HashSet<ObjectId> profileIds)
     {
         var profileDetails = await dbService.RetrieveMultipleAsync(
                     profileDetailsCollection,

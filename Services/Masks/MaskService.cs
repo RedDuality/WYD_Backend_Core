@@ -1,14 +1,16 @@
 using Core.Components.Database;
+using Core.Components.MessageQueue;
 using Core.DTO.MaskAPI;
-using Core.Model.Events;
 using Core.Model.Masks;
-using Core.Model.QueueMessages;
+using Core.Model.Notifications;
 using MongoDB.Bson;
 using MongoDB.Driver;
 
 namespace Core.Services.Masks;
 
-public class MaskService(MongoDbService dbService
+public class MaskService(
+    MongoDbService dbService,
+    MessageQueueService messageService
 )
 {
     private readonly CollectionName maskCollection = CollectionName.Masks;
@@ -17,38 +19,42 @@ public class MaskService(MongoDbService dbService
     {
         Mask mask = new(new ObjectId(profileId), createDto.StartTime, createDto.EndTime, createDto.Title);
         await dbService.CreateOneAsync(maskCollection, mask, null);
+
+        var notification = new Notification(mask.Id, NotificationType.UpdateMask, updatedAt: mask.UpdatedAt) { ActorId = profileId };
+        await messageService.SendNotificationAsync(notification);
+
         return new RetrieveMaskResponseDto(mask);
     }
 
-    public async Task CreateEventMaks(string profileId, Event ev, IClientSessionHandle session)
-    {
-        Mask mask = new(new ObjectId(profileId), ev);
-        await dbService.CreateOneAsync(maskCollection, mask, session);
-    }
-
-    public async Task<RetrieveMaskResponseDto> UpdateMaskAsync(UpdateMaskRequestDto updateDto)
+    public async Task<RetrieveMaskResponseDto> UpdateMaskAsync(string profileId, UpdateMaskRequestDto updateDto)
     {
         var updates = GetUpdates(updateDto);
 
         var filter = Builders<Mask>.Filter.And(
+            Builders<Mask>.Filter.Eq(m => m.ProfileId, new ObjectId(profileId)),
             Builders<Mask>.Filter.Eq(m => m.Id, new ObjectId(updateDto.MaskId)),
             Builders<Mask>.Filter.Eq(m => m.EventId, null) // Cannot update if EventId is set
         );
 
+        Mask updatedMask;
         try
         {
-            var updatedMask = await dbService.FindOneAndUpdateAsync(
+            updatedMask = await dbService.FindOneAndUpdateAsync(
                 maskCollection,
                 filter,
                 updates
             );
 
-            return new RetrieveMaskResponseDto(updatedMask);
         }
         catch (KeyNotFoundException)
         {
             throw new InvalidOperationException($"Update failed. Mask '{updateDto.MaskId}' either does not exist or is linked to an event and cannot be modified directly.");
         }
+
+        var notification = new Notification(updatedMask.Id, NotificationType.UpdateMask, updatedAt: updatedMask.UpdatedAt) { ActorId = profileId };
+        await messageService.SendNotificationAsync(notification);
+
+        return new RetrieveMaskResponseDto(updatedMask);
     }
 
     private static UpdateDefinition<Mask> GetUpdates(UpdateMaskRequestDto updateDto)
@@ -67,80 +73,29 @@ public class MaskService(MongoDbService dbService
         return Builders<Mask>.Update.Combine(updates); ;
     }
 
-
-    public async Task PropagateEventUpdateAsync(Event ev, EventUpdateType type, IEnumerable<ObjectId> profileIds, string? actorId = null)
-    {
-        switch (type)
-        {
-            case EventUpdateType.create:
-                { // creator is the only profileEvent at creation time 
-                    var creatorId = profileIds.FirstOrDefault();
-                    if (creatorId != default)
-                        await UpsertMaskAsync(creatorId, ev);
-                    break;
-                }
-            case EventUpdateType.confirm:
-                {
-                    if (actorId != null)
-                        await UpsertMaskAsync(new ObjectId(actorId), ev);
-                    break;
-                }
-            case EventUpdateType.update:
-                {
-                    foreach (var pid in profileIds)
-                        await UpsertMaskAsync(pid, ev);
-                    break;
-                }
-            case EventUpdateType.decline:
-                {
-                    if (actorId != null)
-                        await DeleteEventMaskAsync(new ObjectId(actorId), ev.Id);
-                    break;
-                }
-            case EventUpdateType.share: // no mask creation on share 
-                break;
-        }
-    }
-
-    private async Task UpsertMaskAsync(ObjectId profileId, Event ev)
+    public async Task DeleteMaskAsync(string profileId, string maskId)
     {
         var filter = Builders<Mask>.Filter.And(
-            Builders<Mask>.Filter.Eq(m => m.ProfileId, profileId),
-            Builders<Mask>.Filter.Eq(m => m.EventId, ev.Id)
-            );
-
-        var update = Builders<Mask>.Update
-            .SetOnInsert(m => m.ProfileId, profileId)
-            .SetOnInsert(m => m.EventId, ev.Id)
-            .Set(m => m.StartTime, ev.StartTime)
-            .Set(m => m.EndTime, ev.EndTime)
-            .Set(m => m.Title, ev.Title);
-
-        var options = new UpdateOptions<Mask> { IsUpsert = true };
-
-        await dbService.UpdateOneAsync(CollectionName.Masks, filter, update, session: null, options: options);
-    }
-
-    private async Task DeleteEventMaskAsync(ObjectId profileId, ObjectId eventId)
-    {
-        var filter = Builders<Mask>.Filter.And(
-            Builders<Mask>.Filter.Eq(m => m.ProfileId, profileId),
-            Builders<Mask>.Filter.Eq(m => m.EventId, eventId)
-            );
-
-        await dbService.GetCollection<Mask>(CollectionName.Masks).DeleteOneAsync(filter);
-    }
-
-
-    public async Task DeleteMaskAsync(ObjectId profileId, ObjectId maskId)
-    {
-        // no index as too storage expensive as it should not happen a lot
-        var filter = Builders<Mask>.Filter.And(
-            Builders<Mask>.Filter.Eq(m => m.ProfileId, profileId),
-            Builders<Mask>.Filter.Eq(m => m.Id, maskId)
+            Builders<Mask>.Filter.Eq(m => m.ProfileId, new ObjectId(profileId)),
+            Builders<Mask>.Filter.Eq(m => m.Id, new ObjectId(maskId))
         );
 
-        await dbService.GetCollection<Mask>(CollectionName.Masks).DeleteOneAsync(filter);
+        await dbService.DeleteOneAsync(maskCollection, filter);
+
+        var notification = new Notification(new ObjectId(maskId), NotificationType.DeleteMask) { ActorId = profileId };
+        await messageService.SendNotificationAsync(notification);
+    }
+
+    public async Task<RetrieveMaskResponseDto> RetrieveMaskAsync(string profileId, string maskId)
+    {
+        var filter = Builders<Mask>.Filter.And(
+            Builders<Mask>.Filter.Eq(m => m.ProfileId, new ObjectId(profileId)),
+            Builders<Mask>.Filter.Eq(m => m.Id, new ObjectId(maskId))
+        );
+
+        var mask = await dbService.RetrieveOrNullAsync(maskCollection, filter) ?? throw new InvalidOperationException("Mask not found");
+
+        return new RetrieveMaskResponseDto(mask);
     }
 
     public async Task<List<RetrieveMaskResponseDto>> RetrieveMasks(RetrieveMultipleMaskRequestDto retrieveDto)
@@ -159,19 +114,5 @@ public class MaskService(MongoDbService dbService
 
         return [.. masks.Select(m => new RetrieveMaskResponseDto(m))];
     }
-
-    public async Task<RetrieveMaskResponseDto> RetrieveEventMask(string eventId, string profileId)
-    {
-        var filter = Builders<Mask>.Filter.And(
-            Builders<Mask>.Filter.Eq(m => m.ProfileId, new ObjectId(profileId)),
-            Builders<Mask>.Filter.Eq(m => m.EventId, new ObjectId(eventId))
-        );
-
-        var mask = await dbService.RetrieveAsync(maskCollection, filter);
-
-        return new RetrieveMaskResponseDto(mask);
-    }
-
-
 
 }

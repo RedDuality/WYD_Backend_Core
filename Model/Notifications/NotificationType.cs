@@ -2,7 +2,7 @@ namespace Core.Model.Notifications;
 
 public enum NotificationType
 {
-    CreateEvent,
+    // CreateEvent,
     // ShareEvent,
     UpdateEssentialsEvent,
     // UpdateDetailsEvent,
@@ -11,7 +11,12 @@ public enum NotificationType
     DeclineEvent,
     DeleteEvent,
     DeleteEventForAll,
+
     UpdateProfile,
 
     CreateCommunity,
+
+    // Event-unrelated Masks
+    UpdateMask,
+    DeleteMask,
 }

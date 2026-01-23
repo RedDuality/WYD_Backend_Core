@@ -8,7 +8,7 @@ namespace Core.Services.Notifications;
 public class NotificationService(ISseService sseService, FCMService fcmService, ProfileDetailsService profileDetailsService)
 {
 
-    public async Task SendNotification(List<ObjectId> profileIds, Dictionary<string, string>? data = null)
+    public async Task SendNotification(HashSet<ObjectId> profileIds, Dictionary<string, string>? data = null)
     {
         var users = await profileDetailsService.RetrieveByProfileIds(profileIds);
         var userIds = users.Select((u) => u.Id.ToString()).ToHashSet();
