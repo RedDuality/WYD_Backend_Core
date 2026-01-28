@@ -27,6 +27,7 @@ public class UserService(
         var accountUid = contextManager.GetAccountId();
         var userId = contextManager.TryGetUserId();
 
+        // when the user tried to register, firebase was on but the server on down, need to create the new user
         if (userId == null)
         {
             return await Register(accountUid);
@@ -38,12 +39,14 @@ public class UserService(
     private async Task<RetrieveUserResponseDto> RetrieveUserWithProfiles(string userId, string accountUid)
     {
         var user = await RetrieveUser(userId, accountUid);
+        // somehow the db was destroyed, but firebase still had in memory the userId
+        if (user == null) return await Register(accountUid); 
         var tuple = await RetrieveDetailedProfilesAsync(user);
 
         return new RetrieveUserResponseDto(user, tuple);
     }
 
-    private async Task<User> RetrieveUser(string userId, string accountUid)
+    private async Task<User?> RetrieveUser(string userId, string accountUid)
     {
         var filter = Builders<User>.Filter.And(
             Builders<User>.Filter.Eq(u => u.Id, new ObjectId(userId)),
@@ -54,7 +57,7 @@ public class UserService(
 
         var users = await dbService.RetrieveMultipleAsync(userCollection, filter);
 
-        return users.FirstOrDefault() ?? throw new UnauthorizedAccessException("The account has no associated user");
+        return users.FirstOrDefault();
     }
 
     private async Task<List<Tuple<Profile, UserProfile, UserClaims>>> RetrieveDetailedProfilesAsync(User user)

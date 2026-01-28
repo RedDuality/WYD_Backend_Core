@@ -105,14 +105,19 @@ public class MongoDbContext
     }
 
     public async Task TestConnection()
-    { 
+    {
         await database.ListCollectionNames().ToListAsync();
     }
     public async Task Init()
     {
-        var initializer = new MongoDbInitializer(
+        var inizializerService = new MongoDbInitializerService(
             client,
             database,
+            Console.WriteLine
+        );
+
+        var initializer = new MongoDbInitializer(
+            inizializerService,
             Console.WriteLine
         );
 

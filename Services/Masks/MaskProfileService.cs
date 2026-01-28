@@ -12,7 +12,9 @@ public class MaskProfileService(
     public async Task<HashSet<ObjectId>> GetNotificationProfileIdsAsync(Notification notification)
     {
         var profileId = new ObjectId(notification.ActorId); // non-event masks are related to only one profile
-        return [profileId];
+        var result = new HashSet<ObjectId> { profileId };
+
+        return await Task.FromResult(result);
     }
 
 }

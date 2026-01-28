@@ -3,10 +3,9 @@ using MongoDB.Bson;
 
 namespace Core.DTO.MaskAPI;
 
-public class RetrieveMaskResponseDto(Mask mask, ObjectId? profileId = null)
+public class RetrieveViewMaskResponseDto(Mask mask)
 {
     public string Id { get; set; } = mask.Id.ToString();
-    public string ProfileId = profileId.ToString() ?? mask.ProfileId.ToString();
     public DateTimeOffset StartTime { get; set; } = mask.StartTime;
     public DateTimeOffset EndTime { get; set; } = mask.EndTime;
     public DateTimeOffset UpdatedAt { get; set; } = mask.UpdatedAt;

@@ -10,10 +10,13 @@ namespace Core.Services.Masks;
 
 public class MaskService(
     MongoDbService dbService,
-    MessageQueueService messageService
+    MessageQueueService messageService,
+    ImportedProfilesService importedProfilesService
 )
 {
     private readonly CollectionName maskCollection = CollectionName.Masks;
+
+    #region modify
 
     public async Task<RetrieveMaskResponseDto> CreateMaskAsync(string profileId, CreateMaskRequestDto createDto)
     {
@@ -86,7 +89,11 @@ public class MaskService(
         await messageService.SendNotificationAsync(notification);
     }
 
-    public async Task<RetrieveMaskResponseDto> RetrieveMaskAsync(string profileId, string maskId)
+    #endregion
+
+    #region retrieve
+
+    public async Task<RetrieveMaskResponseDto> RetrieveSingleMask(string profileId, string maskId)
     {
         var filter = Builders<Mask>.Filter.And(
             Builders<Mask>.Filter.Eq(m => m.ProfileId, new ObjectId(profileId)),
@@ -98,10 +105,14 @@ public class MaskService(
         return new RetrieveMaskResponseDto(mask);
     }
 
-    public async Task<List<RetrieveMaskResponseDto>> RetrieveMasks(RetrieveMultipleMaskRequestDto retrieveDto)
+
+    public async Task<List<RetrieveMaskResponseDto>> RetrieveUserMasks(RetrieveUserMaskRequestDto retrieveDto)
     {
+        var profileObjectIds = retrieveDto.ProfileIds
+            .Select(id => new ObjectId(id))
+            .ToList();
+
         var filterBuilder = Builders<Mask>.Filter;
-        var profileObjectIds = retrieveDto.ProfileIds.Select(id => ObjectId.Parse(id));
 
         var filter = filterBuilder.And(
             filterBuilder.In(m => m.ProfileId, profileObjectIds),
@@ -109,10 +120,62 @@ public class MaskService(
             filterBuilder.Lte(m => m.StartTime, retrieveDto.EndTime.ToUniversalTime())
         );
 
-
         var masks = await dbService.RetrieveMultipleAsync(maskCollection, filter);
 
         return [.. masks.Select(m => new RetrieveMaskResponseDto(m))];
     }
+
+    public async Task<List<RetrieveViewMaskResponseDto>> RetrieveProfileMasks(RetrieveProfileMaskRequestDto retrieveDto)
+    {
+
+        var profileId = new ObjectId(retrieveDto.ProfileId);
+        var relatedProfiles = await importedProfilesService.GetImportedProfiles(profileId);
+        relatedProfiles.Add(profileId);
+
+        var filterBuilder = Builders<Mask>.Filter;
+
+        var filter = filterBuilder.And(
+            filterBuilder.In(m => m.ProfileId, relatedProfiles),
+            filterBuilder.Gte(m => m.EndTime, retrieveDto.StartTime.ToUniversalTime()),
+            filterBuilder.Lte(m => m.StartTime, retrieveDto.EndTime.ToUniversalTime())
+        );
+
+        var sort = Builders<Mask>.Sort.Ascending(m => m.StartTime);
+        var masks = await dbService.FindForPaginationAsync(maskCollection, filter, sort, null, null);
+
+        var unifiedMasks = UnifyMasks(masks);
+        return [.. unifiedMasks.Select(m => new RetrieveViewMaskResponseDto(m))];
+    }
+
+    private static List<Mask> UnifyMasks(List<Mask> masks)
+    {
+
+        if (masks == null || masks.Count <= 1)
+            return masks ?? [];
+
+        return masks
+            .Aggregate(new List<Mask>(), (unified, next) =>
+            {
+                var last = unified.LastOrDefault();
+
+                // If list is empty or there is no overlap, add the next mask
+                if (last == null || next.StartTime > last.EndTime)
+                {
+                    unified.Add(next);
+                }
+                else
+                {
+                    // Partial or total overlap: update the EndTime of the existing mask
+                    if (next.EndTime > last.EndTime)
+                    {
+                        last.EndTime = next.EndTime;
+                    }
+                }
+
+                return unified;
+            });
+    }
+
+    #endregion
 
 }

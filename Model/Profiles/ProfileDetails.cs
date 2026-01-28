@@ -1,5 +1,4 @@
 using Core.Model.Base;
-using Core.Model.Communities;
 using Core.Model.Users;
 using MongoDB.Bson;
 using MongoDB.Bson.Serialization.Attributes;

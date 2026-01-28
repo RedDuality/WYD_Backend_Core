@@ -378,17 +378,19 @@ public class MongoDbService(MongoDbContext dbContext)
 
     public async Task<List<TDocument>> RetrieveMultipleByIdAsync<TDocument>(
         CollectionName collectionName,
-        HashSet<ObjectId> objectIds
+        HashSet<ObjectId> objectIds,
+        SortDefinition<TDocument>? sortDefinition = null
     )
     where TDocument : BaseEntity
     {
         var filter = Builders<TDocument>.Filter.In(doc => doc.Id, objectIds);
-        return await RetrieveMultipleAsync(collectionName, filter);
+        return await RetrieveMultipleAsync(collectionName, filter, sortDefinition: sortDefinition);
     }
 
     public async Task<List<TDocument>> RetrieveMultipleAsync<TDocument>(
         CollectionName cn,
         FilterDefinition<TDocument> filter,
+        SortDefinition<TDocument>? sortDefinition = null,
         int? limit = null
     )
     where TDocument : BaseEntity
@@ -397,8 +399,14 @@ public class MongoDbService(MongoDbContext dbContext)
         try
         {
             var collection = dbContext.GetCollection<TDocument>(collectionName);
-
-            return await collection.Find(filter).Limit(limit).ToListAsync();
+            if (sortDefinition != null)
+            {
+                return await collection.Find(filter).Sort(sortDefinition).Limit(limit).ToListAsync();
+            }
+            else
+            {
+                return await collection.Find(filter).Limit(limit).ToListAsync();
+            }
         }
         catch (MongoException ex)
         {

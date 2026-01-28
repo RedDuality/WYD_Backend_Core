@@ -9,6 +9,7 @@ using Core.Model.Notifications;
 using Core.DTO.UserAPI;
 using Core.Services.Util;
 using Core.Services.Users;
+using Core.Services.Masks;
 
 namespace Core.Services.Profiles;
 
@@ -19,6 +20,7 @@ public class ProfileService(
     MessageQueueService messageService,
     UserClaimService userClaimService,
     UserProfileService userProfileService,
+    ImportedProfilesService importedProfilesService,
     IContextManager contextManager)
 {
     private readonly CollectionName profileCollection = CollectionName.Profiles;
@@ -29,6 +31,8 @@ public class ProfileService(
         var profile = new Profile(tag, name);
         // this function populates the in-memory profile object
         await dbService.CreateOneAsync(profileCollection, profile, session);
+
+        await importedProfilesService.CreateAsync(profile, session);
 
         await profileDetailsService.CreateAsync(profile, session);
         await profileTagService.CreateAsync(profile, session);

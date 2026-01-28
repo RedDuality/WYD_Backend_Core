@@ -17,6 +17,8 @@ public sealed class CollectionName
 
     public static readonly CollectionName ProfileTags = new("ProfileTags");
 
+    public static readonly CollectionName MaskProfileImports = new("MaskProfileImports");
+
     public static readonly CollectionName Masks = new("Masks");
     
     public static readonly CollectionName Events = new("Events");
