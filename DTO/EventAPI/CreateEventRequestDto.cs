@@ -6,6 +6,7 @@ public class CreateEventRequestDto
     public string? Description { get; set; }
     public DateTimeOffset StartTime { get; set; }
     public DateTimeOffset EndTime { get; set; }
+    required public List<string> ProfileIds { get; set; } 
 
     // Parameterless constructor for deserialization
     public CreateEventRequestDto() { }
