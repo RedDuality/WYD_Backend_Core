@@ -13,7 +13,6 @@ public class EventUpdatePropagationService(
     EventProfileService eventProfileService,
     EventMaskService eventMaskService,
     BroadcastService broadcastService
-//MessageQueueService messageService
 )
 {
     public async Task PropagateUpdateEffects(Event ev, EventUpdateType type, string? actorId = null)
@@ -24,13 +23,12 @@ public class EventUpdatePropagationService(
         if (profileIds.Count > 0)
         {
             var profileTask = profileEventService.PropagateEventUpdatesAsync(ev, profileIds);
+            
             var maskTask = eventMaskService.PropagateEventUpdateAsync(ev, type, profileIds, actorId);
 
             await Task.WhenAll(profileTask, maskTask);
 
-
             var notification = GetUpdateNotification(type, ev, actorId);
-            //await messageService.SendNotificationAsync(notification);
             _ = broadcastService.BroadcastUpdate(notification);
 
         }
