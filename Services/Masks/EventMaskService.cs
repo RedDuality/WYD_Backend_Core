@@ -38,21 +38,21 @@ public class EventMaskService(
         {
             case EventUpdateType.create:
                 { // creator is the only profileEvent at creation time 
-                    var creatorId = profileIds.FirstOrDefault();
+                    var creatorId = new ObjectId(actorId);
                     if (creatorId != default)
-                        await UpsertMaskAsync(creatorId, ev);
+                        await CreateOrOverwriteMaskAsync(creatorId, ev);
                     break;
                 }
             case EventUpdateType.confirm:
                 {
                     if (actorId != null)
-                        await UpsertMaskAsync(new ObjectId(actorId), ev);
+                        await CreateOrOverwriteMaskAsync(new ObjectId(actorId), ev);
                     break;
                 }
             case EventUpdateType.update:
                 {
                     foreach (var pid in profileIds)
-                        await UpsertMaskAsync(pid, ev);
+                        await CreateOrOverwriteMaskAsync(pid, ev);
                     break;
                 }
             case EventUpdateType.decline:
@@ -66,8 +66,9 @@ public class EventMaskService(
         }
     }
 
-    private async Task UpsertMaskAsync(ObjectId profileId, Event ev)
+    private async Task CreateOrOverwriteMaskAsync(ObjectId profileId, Event ev)
     {
+        // only existing masks
         var filter = Builders<Mask>.Filter.And(
             Builders<Mask>.Filter.Eq(m => m.ProfileId, profileId),
             Builders<Mask>.Filter.Eq(m => m.EventId, ev.Id)

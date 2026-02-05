@@ -47,15 +47,66 @@ public class EventService(
 
             if (sharedProfileIds.Count > 0)
                 ev = await ShareEvent(ev, sharedProfileIds, false, session);
-            else
-            {
-                var propagationMessage = new QueueMessage<UpdateEventPayload>(MessageType.eventUpdate, new(ev, Model.QueueMessages.EventUpdateType.create));
-                await messageService.SendPropagationMessageAsync(propagationMessage);
-            }
+
+            var propagationMessage = new QueueMessage<UpdateEventPayload>(
+                MessageType.eventUpdate,
+                new(ev, EventUpdateType.create, actorId: profile.Id.ToString())
+            );
+            await messageService.SendPropagationMessageAsync(propagationMessage);
+
 
             return new RetrieveEventResponseDto(ev, eventDetails, [profileEvent]);
         });
         return EventDto;
+    }
+
+    public async Task<RetrieveEventResponseDto> ShareEventAsync(Profile profile, string eventId, List<ShareEventRequestDto> shareDto)
+    {
+
+        var ev = await dbService.RetrieveByIdAsync<Event>(eventCollection, eventId);
+        var profileIds = await groupService.GetProfilesByGroupIds(shareDto, profile);
+
+        profileIds = await FindAffectedByShare(profileIds, profile.Id, ev);
+
+        if (profileIds.Count > 0)
+            ev = await dbService.ExecuteInTransactionAsync(async (session) =>
+                {
+                    ev = await ShareEvent(ev, profileIds, true, session);
+                    var propagationMessage = new QueueMessage<UpdateEventPayload>(
+                        MessageType.eventUpdate,
+                        new(ev, EventUpdateType.share)
+                    );
+                    await messageService.SendPropagationMessageAsync(propagationMessage);
+
+                    return ev;
+                });
+
+        return new RetrieveEventResponseDto(ev);
+    }
+
+    private async Task<HashSet<ObjectId>> FindAffectedByShare(HashSet<ObjectId> profileIds, ObjectId currentProfileId, Event ev)
+    {
+        // remove profiles which event has already been shared
+        var alreadyExistingProfiles = await eventProfileService.FindAlreadyExisting(ev, profileIds);
+        //remove current profile
+        alreadyExistingProfiles.Add(currentProfileId);
+
+        profileIds.ExceptWith(alreadyExistingProfiles);
+
+        return profileIds;
+    }
+
+    private async Task<Event> ShareEvent(Event ev, HashSet<ObjectId> profileIds, bool increaseUpdate, IClientSessionHandle session)
+    {
+        await profileEventService.CreateMultipleProfileEventAsync(ev, profileIds, session);
+
+        if (increaseUpdate)
+        {
+            var updateDefinition = Builders<Event>.Update.Inc(e => e.TotalProfilesMinusOne, profileIds.Count);
+            ev = await dbService.FindOneByIdAndUpdateAsync(eventCollection, ev.Id, updateDefinition, session);
+        }
+
+        return ev;
     }
 
     // user open a link for an event it should not have, and, IF NOT ALREADY EXISTING, we create the related profileEvent 
@@ -72,59 +123,13 @@ public class EventService(
                 var updateDefinition = Builders<Event>.Update.Inc(e => e.TotalProfilesMinusOne, 1);
                 ev = await dbService.FindOneByIdAndUpdateAsync(eventCollection, ev.Id, updateDefinition, session);
 
-                var propagationMessage = new QueueMessage<UpdateEventPayload>(MessageType.eventUpdate, new(ev, Model.QueueMessages.EventUpdateType.update));
+                var propagationMessage = new QueueMessage<UpdateEventPayload>(MessageType.eventUpdate, new(ev, EventUpdateType.update));
                 await messageService.SendPropagationMessageAsync(propagationMessage);
 
                 return createdPe;
             });
 
         return new RetrieveEventResponseDto(ev, details: eventDetails, profileEvents: [pe]);
-    }
-
-    public async Task<RetrieveEventResponseDto> ShareEventAsync(Profile profile, string eventId, List<ShareEventRequestDto> shareDto)
-    {
-
-        var ev = await dbService.RetrieveByIdAsync<Event>(eventCollection, eventId);
-        var profileIds = await groupService.GetProfilesByGroupIds(shareDto, profile);
-
-        profileIds = await FindAffectedByShare(profileIds, profile.Id, ev);
-
-        if (profileIds.Count > 0)
-            ev = await dbService.ExecuteInTransactionAsync(async (session) =>
-                {
-                    return await ShareEvent(ev, profileIds, true, session);
-                });
-
-        return new RetrieveEventResponseDto(ev);
-    }
-
-
-    private async Task<Event> ShareEvent(Event ev, HashSet<ObjectId> profileIds, bool increaseUpdate, IClientSessionHandle session)
-    {
-        await profileEventService.CreateMultipleProfileEventAsync(ev, profileIds, session);
-
-        if (increaseUpdate)
-        {
-            var updateDefinition = Builders<Event>.Update.Inc(e => e.TotalProfilesMinusOne, profileIds.Count);
-            ev = await dbService.FindOneByIdAndUpdateAsync(eventCollection, ev.Id, updateDefinition, session);
-        }
-
-        var propagationMessage = new QueueMessage<UpdateEventPayload>(MessageType.eventUpdate, new(ev, Model.QueueMessages.EventUpdateType.share));
-        await messageService.SendPropagationMessageAsync(propagationMessage);
-
-        return ev;
-    }
-
-    private async Task<HashSet<ObjectId>> FindAffectedByShare(HashSet<ObjectId> profileIds, ObjectId currentProfileId, Event ev)
-    {
-        // remove profiles which event has already been shared
-        var alreadyExistingProfiles = await eventProfileService.FindAlreadyExisting(ev, profileIds);
-        //remove current profile
-        alreadyExistingProfiles.Add(currentProfileId);
-
-        profileIds.ExceptWith(alreadyExistingProfiles);
-
-        return profileIds;
     }
 
     #endregion
@@ -152,7 +157,7 @@ public class EventService(
 
                 ev = await dbService.FindOneByIdAndUpdateAsync(eventCollection, ev.Id, combinedUpdate, session);
 
-                var propagationMessage = new QueueMessage<UpdateEventPayload>(MessageType.eventUpdate, new(ev, Model.QueueMessages.EventUpdateType.update));
+                var propagationMessage = new QueueMessage<UpdateEventPayload>(MessageType.eventUpdate, new(ev, EventUpdateType.update));
                 await messageService.SendPropagationMessageAsync(propagationMessage);
             }
 
@@ -196,7 +201,7 @@ public class EventService(
                 var increaseUpdate = Builders<Event>.Update.Inc(ev => ev.TotalConfirmedMinusOne, 1);
                 var ev = await dbService.FindOneByIdAndUpdateAsync(eventCollection, new ObjectId(eventId), increaseUpdate, session);
 
-                var propagationMessage = new QueueMessage<UpdateEventPayload>(MessageType.eventUpdate, new(ev, Model.QueueMessages.EventUpdateType.confirm, profileId));
+                var propagationMessage = new QueueMessage<UpdateEventPayload>(MessageType.eventUpdate, new(ev, EventUpdateType.confirm, profileId));
                 await messageService.SendPropagationMessageAsync(propagationMessage);
             }
             return null;
@@ -213,7 +218,7 @@ public class EventService(
                 var decreaseUpdate = Builders<Event>.Update.Inc(ev => ev.TotalConfirmedMinusOne, -1);
                 var ev = await dbService.FindOneByIdAndUpdateAsync(eventCollection, new ObjectId(eventId), decreaseUpdate, session);
 
-                var propagationMessage = new QueueMessage<UpdateEventPayload>(MessageType.eventUpdate, new(ev, Model.QueueMessages.EventUpdateType.decline, profileId));
+                var propagationMessage = new QueueMessage<UpdateEventPayload>(MessageType.eventUpdate, new(ev, EventUpdateType.decline, profileId));
                 await messageService.SendPropagationMessageAsync(propagationMessage);
             }
 

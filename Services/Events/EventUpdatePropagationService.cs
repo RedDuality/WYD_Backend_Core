@@ -4,6 +4,7 @@ using Core.Model.QueueMessages;
 using Core.Services.Masks;
 using Core.Services.Notifications;
 using Core.Services.Profiles;
+using MongoDB.Bson;
 
 namespace Core.Services.Events;
 
@@ -15,21 +16,28 @@ public class EventUpdatePropagationService(
     BroadcastService broadcastService
 )
 {
-    public async Task PropagateUpdateEffects(Event ev, EventUpdateType type, string? actorId = null)
+    public async Task PropagateUpdateEffects(Event ev, EventUpdateType type, HashSet<ObjectId>? profileIds = null, string? actorId = null)
     {
-        var eventProfiles = await eventProfileService.FindAllByEventId(ev.Id);
-        var profileIds = eventProfiles.Select(ep => ep.ProfileId).ToList();
+        if (profileIds == null)
+        {
+            var eventProfiles = await eventProfileService.FindAllByEventId(ev.Id);
+            profileIds = [.. eventProfiles.Select(ep => ep.ProfileId)];
+        }
 
         if (profileIds.Count > 0)
         {
-            var profileTask = profileEventService.PropagateEventUpdatesAsync(ev, profileIds);
-            
-            var maskTask = eventMaskService.PropagateEventUpdateAsync(ev, type, profileIds, actorId);
+            var tasks = new List<Task>();
 
-            await Task.WhenAll(profileTask, maskTask);
+            if (type != EventUpdateType.create)
+                tasks.Add(profileEventService.PropagateEventUpdatesAsync(ev, profileIds));
+
+            if (type != EventUpdateType.share)
+                tasks.Add(eventMaskService.PropagateEventUpdateAsync(ev, type, profileIds, actorId));
+
+            await Task.WhenAll(tasks);
 
             var notification = GetUpdateNotification(type, ev, actorId);
-            _ = broadcastService.BroadcastUpdate(notification);
+            _ = broadcastService.BroadcastUpdate(notification, profileIds);
 
         }
     }
@@ -38,9 +46,9 @@ public class EventUpdatePropagationService(
     {
         return type switch
         {
-            EventUpdateType.create => new Notification(ev.Id, NotificationType.UpdateEssentialsEvent, ev.UpdatedAt),
+            EventUpdateType.create => new Notification(ev.Id, NotificationType.UpdateEssentialsEvent, ev.UpdatedAt) { ActorId = actorId },// To retrieve the mask
             EventUpdateType.share => new Notification(ev.Id, NotificationType.UpdateEssentialsEvent, ev.UpdatedAt),
-            EventUpdateType.update => new Notification(ev.Id, NotificationType.UpdateEssentialsEvent, ev.UpdatedAt),
+            EventUpdateType.update => new Notification(ev.Id, NotificationType.UpdateEssentialsEvent, ev.UpdatedAt) { ActorId = actorId },// To retrieve the mask
             EventUpdateType.confirm => new Notification(ev.Id, NotificationType.ConfirmEvent, ev.UpdatedAt) { ActorId = actorId },
             EventUpdateType.decline => new Notification(ev.Id, NotificationType.DeclineEvent, ev.UpdatedAt) { ActorId = actorId },
             _ => new Notification(ev.Id, NotificationType.UpdateEssentialsEvent, ev.UpdatedAt),

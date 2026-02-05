@@ -9,9 +9,10 @@ public class BroadcastService(
     ProfileIdResolverFactory resolverFactory)
 {
 
-    public async Task BroadcastUpdate(Notification notification)
+    public async Task BroadcastUpdate(Notification notification, HashSet<ObjectId>? profileIds = null)
     {
-        var profileIds = await GetProfileIds(notification);
+        profileIds ??= await GetProfileIds(notification);
+
         if (profileIds.Count > 0)
             await notificationService.SendNotification(profileIds, notification.ToDictionary());
     }
