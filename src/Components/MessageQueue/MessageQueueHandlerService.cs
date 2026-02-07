@@ -1,6 +1,7 @@
 using Core.Model.QueueMessages;
 using Core.Services.Events;
 using Core.Services.Profiles;
+using MongoDB.Bson;
 
 namespace Core.Components.MessageQueue;
 
@@ -24,7 +25,7 @@ public class MessageQueueHandlerService : IMessageQueueHandlerService
         {
             [MessageType.eventUpdate] = WrapHandler<UpdateEventPayload>(async p =>
             {
-                await _eventService.PropagateUpdateEffects(p.Event, p.Type, p.ActorId);
+                await _eventService.PropagateUpdateEffects(p.Event, p.Type, [new ObjectId(p.ActorId)]);
             }),
 /*
             [MessageType.profileUpdate] = WrapHandler<UpdateProfilePayload>(async p =>
