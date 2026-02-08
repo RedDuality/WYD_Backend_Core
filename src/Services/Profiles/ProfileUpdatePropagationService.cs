@@ -1,6 +1,5 @@
 using Core.Model.Notifications;
 using Core.Model.QueueMessages;
-using Core.Services.Notifications;
 using MongoDB.Bson;
 
 namespace Core.Services.Profiles;

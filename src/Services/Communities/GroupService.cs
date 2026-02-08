@@ -58,7 +58,7 @@ public class GroupService(MongoDbService dbService)
                 if (groupProfile.ProfileId == currentProfile.Id)
                 {
                     currentProfileFound = true;
-                    continue; // Skip adding currentProfile to the result
+                    continue; // Do not add currentProfile to the result
                 }
 
                 if (groupProfile.ProfileId.HasValue)

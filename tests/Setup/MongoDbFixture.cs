@@ -3,7 +3,7 @@ using Microsoft.Extensions.Configuration;
 using Core.Components.Database;
 using Xunit;
 
-namespace Core.Tests;
+namespace Core.Tests.Setup;
 
 public class MongoDbFixture : IAsyncLifetime
 {
@@ -12,7 +12,8 @@ public class MongoDbFixture : IAsyncLifetime
         .WithPassword("password")
         .Build();
 
-    public MongoDbContext DbContext { get; private set; } = null!;
+    public MongoDbService DbService { get; private set; }
+    public IServiceProvider ServiceProvider { get; private set; }
 
     // docker must be running and user must be in the docker group
     //
@@ -39,11 +40,15 @@ public class MongoDbFixture : IAsyncLifetime
             })
             .Build();
 
-        DbContext = new MongoDbContext(config);
-        await DbContext.Init();
+        var DbContext = new MongoDbContext(config);
 
+        await DbContext.Init();
         Console.WriteLine("Database Initialized");
 
+        DbService = new MongoDbService(DbContext);
+        ServiceProvider = TestServiceFactory.CreateServiceProvider(DbService);
+
+        Console.WriteLine("Services Initialized");
     }
 
     public async Task DisposeAsync() => await _mongoContainer.StopAsync();
