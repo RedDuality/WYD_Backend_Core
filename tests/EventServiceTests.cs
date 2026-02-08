@@ -3,13 +3,13 @@ using Core.Services.Profiles;
 using Core.DTO.EventAPI;
 using Core.Model.Profiles;
 using Core.Components.Database;
-using Moq;
-using FluentAssertions;
-using Xunit;
 using Core.Services.Communities;
 using Core.Components.MessageQueue;
+using Xunit;
+using Moq;
+using FluentAssertions;
 
-namespace Core.test;
+namespace Core.Tests;
 
 public class EventServiceTests : IClassFixture<MongoDbFixture>
 {
