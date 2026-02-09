@@ -16,37 +16,38 @@ public static class TestServiceFactory
     {
         var services = new ServiceCollection();
 
-        // 1. Database & Infrastructure
         services.AddSingleton(dbService);
 
-        // 2. Mock External Dependencies
-        var mockMedia = new Mock<MediaService>(dbService, null!);
-        var mockGroup = new Mock<GroupService>(dbService);
-        var mockBroadcast = new Mock<BroadcastService>(null!, null!);
 
-        services.AddSingleton(mockMedia); // Register the Mock object itself for access in tests
-        services.AddSingleton(mockMedia.Object);
-        services.AddSingleton(mockGroup.Object);
-        services.AddSingleton(mockBroadcast.Object);
+        services.AddScoped<MessageQueueService>();
 
-        // 3. Domain Services (Directly from Program.cs logic)
-        services.AddScoped<EventService>();
-        services.AddScoped<EventDetailsService>();
-        services.AddScoped<EventProfileService>();
-        services.AddScoped<ProfileEventService>();
-        services.AddScoped<EventMaskService>();
-        services.AddScoped<CommunityProfileService>();
+        services.AddScoped<ProfileService>();
         services.AddScoped<ProfileDetailsService>();
         services.AddScoped<ProfileProfileService>();
-        services.AddScoped<MaskProfileService>();
-        services.AddScoped<ProfileIdResolverFactory>();
-        services.AddScoped<EventUpdatePropagationService>();
         services.AddScoped<ProfileUpdatePropagationService>();
+
+        services.AddScoped<MaskProfileService>();
+        services.AddScoped<EventMaskService>();
+
+        services.AddScoped<EventService>();
+        services.AddScoped<EventUpdatePropagationService>();
+
+        services.AddScoped<EventDetailsService>();
+        services.AddScoped<ProfileEventService>();
+        services.AddScoped<EventProfileService>();
+
+        services.AddSingleton(_ => new Mock<MediaService>(dbService, null!).Object);
+
+        services.AddScoped<CommunityProfileService>();
+
+        services.AddSingleton(_ => new Mock<GroupService>(dbService).Object);
+
+
+        services.AddSingleton(_ => new Mock<BroadcastService>(null!, null!).Object);
+
+        services.AddScoped<ProfileIdResolverFactory>();
+
         services.AddScoped<IMessageQueueHandlerService, MessageQueueHandlerService>();
-        services.AddScoped<MessageQueueService>();
-        services.AddScoped<ProfileService>();
-        // Mock Notification components to avoid complex sub-dependency chains
-        services.AddScoped(_ => new Mock<BroadcastService>(null!, null!).Object);
 
         return services.BuildServiceProvider();
     }

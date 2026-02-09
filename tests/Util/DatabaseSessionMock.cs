@@ -1,7 +1,7 @@
 using MongoDB.Driver;
 using Moq;
 
-namespace Core.Tests.Setup;
+namespace Core.Tests.Util;
 
 public static class DatabaseSessionMock
 {

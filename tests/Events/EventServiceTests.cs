@@ -12,6 +12,7 @@ using Core.DTO.CommunityAPI;
 using Core.Model.Masks;
 using Core.Services.Profiles;
 using MongoDB.Bson;
+using Core.Tests.Util;
 
 namespace Core.Tests.Events;
 
