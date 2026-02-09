@@ -11,33 +11,37 @@ using Core.Model.Communities;
 using Core.DTO.CommunityAPI;
 using Core.Model.Masks;
 using Core.Services.Profiles;
+using MongoDB.Bson;
 
 namespace Core.Tests.Events;
 
-public class EventServiceTests : IClassFixture<MongoDbFixture>
+[Collection("DatabaseTests")]
+public class EventServiceTests
 {
     private readonly ProfileService _profileService;
     private readonly EventService _eventService;
     private readonly MongoDbService _dbService;
+    private readonly Profile _creator;
+
 
     public EventServiceTests(MongoDbFixture fixture)
     {
-        _dbService = fixture.DbService;
+        Skip.If(fixture.InitializationFailed, fixture.InitializationError);
 
-        // Resolve the service under test (SUT) and any mocks needed for verification
-        var scope = fixture.ServiceProvider.CreateScope();
-        
+        _dbService = fixture.DbService!;
+
+        var scope = fixture.ServiceProvider!.CreateScope();
+
         _profileService = scope.ServiceProvider.GetRequiredService<ProfileService>();
-
         _eventService = scope.ServiceProvider.GetRequiredService<EventService>();
+
+        _creator = _profileService.CreateAsync("jdoe", "John Doe", DatabaseSessionMock.Dummy()).GetAwaiter().GetResult();
     }
 
-    [Fact]
+
+    [SkippableFact]
     public async Task CreateEventAsync_ShouldPersistEventAndDetailsInDatabase()
     {
-        // ARRANGE
-        var creator = await _profileService.CreateAsync("jdoe", "John Doe", null);
-
         var request = new CreateEventRequestDto
         {
             Title = "Release Party",
@@ -48,10 +52,10 @@ public class EventServiceTests : IClassFixture<MongoDbFixture>
         };
 
         // ACT
-        var response = await _eventService.CreateEventAsync(request, creator);
+        var response = await _eventService.CreateEventAsync(request, _creator);
 
         // ASSERT
-        await CheckDirectEventCreation(response, request, creator);
+        await CheckDirectEventCreation(response, request, _creator);
     }
 
     // create and share
@@ -61,7 +65,10 @@ public class EventServiceTests : IClassFixture<MongoDbFixture>
 
     private async Task CheckDirectEventCreation(RetrieveEventResponseDto response, CreateEventRequestDto request, Profile creator)
     {
+
+
         // create Event
+        ObjectId.TryParse(response.Hash, out _).Should().BeTrue("the returned Hash should be a valid 24-character hex ObjectId");
         response.Title.Should().Be("Release Party");
 
         var filter = MongoDB.Driver.Builders<Event>.Filter.Eq(e => e.Title, "Release Party");
@@ -106,21 +113,20 @@ public class EventServiceTests : IClassFixture<MongoDbFixture>
     // todo
     // check groupService.GetProfilesByGroupIds
 
-    [Fact]
+    [SkippableFact]
     public async Task ShareEventAsync_ShouldCreateProfileEventsAndNotCreateMasks()
     {
         // 1. ARRANGE
-        var creator = await _profileService.CreateAsync("jdoe", "John Doe", null);
-        var sharedProfile = await _profileService.CreateAsync("asmith", "Alice Smith", null);
+        var sharedProfile = await _profileService.CreateAsync("asmith", "Alice Smith", DatabaseSessionMock.Dummy());
 
 
         // Seed Community and Group so GroupService can resolve the shared profiles
-        var community = new Community("Test Community", creator, CommunityType.Personal);
+        var community = new Community("Test Community", _creator, CommunityType.Personal);
         await _dbService.CreateOneAsync(CollectionName.Communities, community, null);
 
         var groupProfiles = new HashSet<GroupProfile>
         {
-            new(creator, GroupRole.Owner),
+            new(_creator, GroupRole.Owner),
             new(sharedProfile, GroupRole.Viewer)
         };
 
@@ -140,7 +146,7 @@ public class EventServiceTests : IClassFixture<MongoDbFixture>
         };
 
         // 2. ACT
-        var response = await _eventService.ShareEventAsync(creator, ev.Id.ToString(), shareRequest);
+        var response = await _eventService.ShareEventAsync(_creator, ev.Id.ToString(), shareRequest);
 
         // 3. ASSERT
         var peFilter = MongoDB.Driver.Builders<ProfileEvent>.Filter.And(
@@ -151,7 +157,7 @@ public class EventServiceTests : IClassFixture<MongoDbFixture>
         var profileEvent = await _dbService.RetrieveAsync(CollectionName.ProfileEvents, peFilter);
 
         profileEvent.Should().NotBeNull();
-        profileEvent.Confirmed.Should().BeFalse(); // Shared users must confirm themselves
+        profileEvent.Confirmed.Should().BeFalse(); // Shared users must not be confirmed
 
         // Verify EventUpdatedAt (eventUpdateDate)
         // It should match the UpdatedAt timestamp of the event at the time of sharing
