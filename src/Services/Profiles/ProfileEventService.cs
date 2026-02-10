@@ -69,7 +69,6 @@ public class ProfileEventService(MongoDbService dbService, EventProfileService e
             .Set(pe => pe.EventStartTime, ev.StartTime)
             .Set(pe => pe.EventEndTime, ev.EndTime);
 
-
         var result = await dbService.UpdateManyAsync(profileEventCollection, filter, update, session: session);
 
         //Console.WriteLine($"Matched {result.MatchedCount}, Modified {result.ModifiedCount}");

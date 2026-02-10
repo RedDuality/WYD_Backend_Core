@@ -22,7 +22,7 @@ public class EventService(
     EventProfileService eventProfileService,
     GroupService groupService,
     MediaService mediaService,
-    MessageQueueService messageService
+    IMessageQueueService messageService
 )
 {
     private readonly CollectionName eventCollection = CollectionName.Events;
@@ -37,7 +37,7 @@ public class EventService(
     {
         var sharedProfileIds = newEventDto.ProfileIds.Select(id => new ObjectId(id)).Where(id => id != profile.Id).ToHashSet();
 
-        var ev = new Event(newEventDto.Title!, newEventDto.StartTime, newEventDto.EndTime) { TotalProfilesMinusOne = sharedProfileIds.Count };
+        var ev = new Event(newEventDto.Title, newEventDto.StartTime, newEventDto.EndTime) { TotalProfilesMinusOne = sharedProfileIds.Count };
 
         RetrieveEventResponseDto EventDto = await dbService.ExecuteInTransactionAsync(async (session) =>
         {
@@ -96,11 +96,11 @@ public class EventService(
         return profileIds;
     }
 
-    private async Task<Event> ShareEvent(Event ev, HashSet<ObjectId> profileIds, bool increaseUpdate, IClientSessionHandle session)
+    private async Task<Event> ShareEvent(Event ev, HashSet<ObjectId> profileIds, bool alreadyExisted, IClientSessionHandle session)
     {
         await profileEventService.CreateMultipleProfileEventAsync(ev, profileIds, session);
 
-        if (increaseUpdate)
+        if (alreadyExisted)
         {
             var updateDefinition = Builders<Event>.Update.Inc(e => e.TotalProfilesMinusOne, profileIds.Count);
             ev = await dbService.FindOneByIdAndUpdateAsync(eventCollection, ev.Id, updateDefinition, session);

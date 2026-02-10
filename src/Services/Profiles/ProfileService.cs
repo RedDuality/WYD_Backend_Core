@@ -17,7 +17,7 @@ public class ProfileService(
     MongoDbService dbService,
     ProfileDetailsService profileDetailsService,
     ProfileTagService profileTagService,
-    MessageQueueService messageService,
+    IMessageQueueService messageService,
     UserClaimService userClaimService,
     UserProfileService userProfileService,
     ImportedProfilesService importedProfilesService,

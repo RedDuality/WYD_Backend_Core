@@ -4,7 +4,7 @@ using Core.Services.Notifications;
 
 namespace Core.Components.MessageQueue;
 
-public class MessageQueueService(IMessageQueueHandlerService handlerService, BroadcastService broadcastService)
+public class MessageQueueService(MessageQueueHandlerService handlerService, BroadcastService broadcastService) : IMessageQueueService
 {
 
     public async Task SendPropagationMessageAsync<T>(QueueMessage<T> message)

@@ -5,12 +5,7 @@ using MongoDB.Bson;
 
 namespace Core.Components.MessageQueue;
 
-public interface IMessageQueueHandlerService
-{
-    Task HandleMessageAsync<T>(QueueMessage<T> message);
-}
-
-public class MessageQueueHandlerService : IMessageQueueHandlerService
+public class MessageQueueHandlerService
 {
     private readonly Dictionary<MessageType, Func<object?, Task>> _handlers;
     private readonly EventUpdatePropagationService _eventService;
@@ -25,7 +20,7 @@ public class MessageQueueHandlerService : IMessageQueueHandlerService
         {
             [MessageType.eventUpdate] = WrapHandler<UpdateEventPayload>(async p =>
             {
-                await _eventService.PropagateUpdateEffects(p.Event, p.Type, [new ObjectId(p.ActorId)]);
+                await _eventService.PropagateUpdateEffects(p.Event, p.Type, actorId: p.ActorId);
             }),
 /*
             [MessageType.profileUpdate] = WrapHandler<UpdateProfilePayload>(async p =>

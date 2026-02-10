@@ -7,7 +7,7 @@ namespace Core.Services.Profiles;
 // move this to Profileservice after having created the actual message service
 public class ProfileUpdatePropagationService(
     //BroadcastService broadcastService
-//MessageQueueService messageService
+//IMessageQueueService messageService
 )
 {
 

@@ -3,13 +3,14 @@ using Microsoft.Extensions.Configuration;
 using Core.Components.Database;
 using Xunit;
 using System.Runtime.InteropServices;
+using MongoDB.Driver;
 
 namespace Core.Tests.Setup;
 
 public class MongoDbFixture : IAsyncLifetime
 {
     private MongoDbContainer? _mongoContainer;
-
+    public MongoDbContext? DbContext { get; private set; }
     public MongoDbService? DbService { get; private set; }
     public IServiceProvider? ServiceProvider { get; private set; }
 
@@ -43,10 +44,10 @@ public class MongoDbFixture : IAsyncLifetime
                 })
                 .Build();
 
-            var dbContext = new MongoDbContext(config);
-            await dbContext.Init();
+            DbContext = new MongoDbContext(config);
+            await DbContext.Init();
 
-            DbService = new MongoDbService(dbContext);
+            DbService = new MongoDbService(DbContext);
             ServiceProvider = TestServiceFactory.CreateServiceProvider(DbService);
         }
         catch (Exception ex)
@@ -54,6 +55,17 @@ public class MongoDbFixture : IAsyncLifetime
             InitializationFailed = true;
             InitializationError = ex.Message;
         }
+    }
+
+    public Task<IClientSessionHandle> StartSessionAsync()
+    => DbContext!.GetNewSession();
+
+    public static bool IsDockerProviderAvailable()
+    {
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            return File.Exists(@"\\.\pipe\docker_engine");
+
+        return File.Exists("/var/run/docker.sock");
     }
 
     public async Task DisposeAsync()
@@ -65,11 +77,5 @@ public class MongoDbFixture : IAsyncLifetime
         }
     }
 
-    public static bool IsDockerProviderAvailable()
-    {
-        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-            return File.Exists(@"\\.\pipe\docker_engine");
 
-        return File.Exists("/var/run/docker.sock");
-    }
 }

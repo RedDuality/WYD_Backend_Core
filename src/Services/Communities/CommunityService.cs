@@ -14,7 +14,7 @@ public class CommunityService(
     ProfileService profileService,
     GroupService groupService,
     ProfileCommunityService profileCommunityService,
-    MessageQueueService messageService)
+    IMessageQueueService messageService)
 {
     private readonly CollectionName communityCollection = CollectionName.Communities;
 

@@ -10,7 +10,7 @@ namespace Core.Services.Masks;
 
 public class MaskService(
     MongoDbService dbService,
-    MessageQueueService messageService,
+    IMessageQueueService messageService,
     ImportedProfilesService importedProfilesService
 )
 {

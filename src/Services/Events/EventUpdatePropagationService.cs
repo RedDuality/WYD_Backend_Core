@@ -16,13 +16,10 @@ public class EventUpdatePropagationService(
     BroadcastService broadcastService
 )
 {
-    public async Task PropagateUpdateEffects(Event ev, EventUpdateType type, HashSet<ObjectId>? profileIds = null, string? actorId = null)
+    public async Task PropagateUpdateEffects(Event ev, EventUpdateType type, string? actorId = null)
     {
-        if (profileIds == null)
-        {
-            var eventProfiles = await eventProfileService.FindAllByEventId(ev.Id);
-            profileIds = [.. eventProfiles.Select(ep => ep.ProfileId)];
-        }
+        var eventProfiles = await eventProfileService.FindAllByEventId(ev.Id);
+        var profileIds = eventProfiles.Select(ep => ep.ProfileId).ToHashSet();
 
         if (profileIds.Count > 0)
         {

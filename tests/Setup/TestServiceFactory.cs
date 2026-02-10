@@ -7,6 +7,8 @@ using Core.Services.Notifications;
 using Core.Services.Masks;
 using Core.Components.Database;
 using Core.Components.MessageQueue;
+using Core.Services.Users;
+using Core.Services.Util;
 
 namespace Core.Tests.Setup;
 
@@ -19,11 +21,19 @@ public static class TestServiceFactory
         services.AddSingleton(dbService);
 
 
-        services.AddScoped<MessageQueueService>();
+        services.AddScoped<IMessageQueueService, MessageQueueService>();
+        services.AddScoped<MessageQueueHandlerService>();
+
+        services.AddScoped<UserService>();
+        services.AddScoped<UserProfileService>();
+        services.AddScoped<UserClaimService>();
 
         services.AddScoped<ProfileService>();
         services.AddScoped<ProfileDetailsService>();
+        services.AddScoped<ProfileTagService>();
         services.AddScoped<ProfileProfileService>();
+
+        services.AddScoped<ImportedProfilesService>();
         services.AddScoped<ProfileUpdatePropagationService>();
 
         services.AddScoped<MaskProfileService>();
@@ -40,6 +50,8 @@ public static class TestServiceFactory
 
         services.AddScoped<CommunityProfileService>();
 
+        services.AddSingleton(new Mock<IContextManager>().Object);
+
         services.AddSingleton(_ => new Mock<GroupService>(dbService).Object);
 
 
@@ -47,7 +59,6 @@ public static class TestServiceFactory
 
         services.AddScoped<ProfileIdResolverFactory>();
 
-        services.AddScoped<IMessageQueueHandlerService, MessageQueueHandlerService>();
 
         return services.BuildServiceProvider();
     }
