@@ -20,19 +20,16 @@ public class CommunityService(
 
     public async Task<RetrieveCommunityResponseDto> Create(CreateCommunityRequestDto dto, Profile ownerProfile)
     {
-        HashSet<Profile> profiles = [];
-        if (dto.ProfileIds.Count > 0)
-            profiles = await profileService.RetrieveMultiple([.. dto.ProfileIds]);
-            
-        profiles.Add(ownerProfile);
+        var profiles = await RetrieveProfiles(dto.ProfileIds, ownerProfile);
 
         // check community does not already exists
         if (dto.Type == CommunityType.Personal)
         {
-            var oldCommunity = await profileCommunityService.FindPersonalCommunity(ownerProfile, profiles.Where(p => p.Id != ownerProfile.Id).First());
+            var oldCommunity = await profileCommunityService.FindPersonalCommunity(ownerProfile, profiles.First(p => p.Id != ownerProfile.Id));
             if (oldCommunity != null)
                 return new RetrieveCommunityResponseDto(oldCommunity);
         }
+
         var community = new Community(dto.Name, ownerProfile, dto.Type);
 
         List<ProfileCommunity> profileCommunities = await dbService.ExecuteInTransactionAsync(async (session) =>
@@ -43,36 +40,51 @@ public class CommunityService(
                     community,
                     profiles,
                     ownerProfile,
-                    mainGroup: community.Type != CommunityType.Personal,
-                    session: session);
+                    community.Type != CommunityType.Personal ? "Personal" : "General",
+                    session,
+                    mainGroup: community.Type != CommunityType.Personal
+                    );
 
                 var profileCommunities = await profileCommunityService.CreateAsync(community, group, ownerProfile, profiles, session);
 
                 return profileCommunities;
             });
-        var currentProfileCommunity = profileCommunities.Where(pc => pc.ProfileId == ownerProfile.Id).First();
 
+        await SendCreateCommunityNotification(community);
 
-        var notification = new Notification(
-            community.Id,
-            NotificationType.CreateCommunity,
-            community.UpdatedAt
-        );
-        await messageService.SendNotificationAsync(notification);
-
+        var currentProfileCommunity = profileCommunities.First(pc => pc.ProfileId == ownerProfile.Id);
         return new RetrieveCommunityResponseDto(currentProfileCommunity);
+    }
+
+    private async Task<HashSet<Profile>> RetrieveProfiles(List<string> profileIds, Profile ownerProfile)
+    {
+        HashSet<Profile> profiles = [];
+        if (profileIds.Count > 0)
+            profiles = await profileService.RetrieveMultiple([.. profileIds]);
+
+        profiles.Add(ownerProfile);
+
+        return profiles;
     }
 
     public async Task<Group> CreateAndAddGroup(
         Community community,
         HashSet<Profile> profiles,
         Profile ownerProfile,
-        bool mainGroup = false,
-        string name = "General",
-        IClientSessionHandle? session = null)
+        string name,
+        IClientSessionHandle session,
+        bool mainGroup = false)
     {
         var group = await groupService.CreateAsync(profiles, ownerProfile, community, mainGroup, name, session);
 
+        var updates = GetCommunityUpdates(mainGroup, group);
+
+        await dbService.UpdateOneByIdAsync(communityCollection, community.Id, Builders<Community>.Update.Combine(updates), session);
+        return group;
+    }
+
+    private static List<UpdateDefinition<Community>> GetCommunityUpdates(bool mainGroup, Group group)
+    {
         var updates = new List<UpdateDefinition<Community>>();
 
         if (mainGroup == true)
@@ -80,17 +92,19 @@ public class CommunityService(
 
         updates.Add(Builders<Community>.Update.AddToSet(c => c.Groups, group.Id));
 
-        await dbService.UpdateOneByIdAsync(communityCollection, community.Id, Builders<Community>.Update.Combine(updates), session);
-        return group;
+        return updates;
     }
 
-
-    public async Task<HashSet<RetrieveCommunityResponseDto>> RetrieveCommunities(Profile profile)
+    private async Task SendCreateCommunityNotification(Community community)
     {
-        var profileCommunities = await profileCommunityService.RetrieveProfileCommunitiesByProfile(profile);
-        var responseDtos = profileCommunities.Select((pc) => new RetrieveCommunityResponseDto(pc)).ToHashSet();
-        return responseDtos;
+        var notification = new Notification(
+            community.Id,
+            NotificationType.CreateCommunity,
+            community.UpdatedAt
+        );
+        await messageService.SendNotificationAsync(notification);
     }
+
 
     public async Task<Community> MakeMultiGroupAsync(Community community)
     {
@@ -101,6 +115,13 @@ public class CommunityService(
         await dbService.UpdateOneByIdAsync(communityCollection, community.Id, update);
 
         return community;
+    }
+
+    public async Task<HashSet<RetrieveCommunityResponseDto>> RetrieveCommunities(Profile profile)
+    {
+        var profileCommunities = await profileCommunityService.RetrieveProfileCommunitiesByProfile(profile);
+        var responseDtos = profileCommunities.Select((pc) => new RetrieveCommunityResponseDto(pc)).ToHashSet();
+        return responseDtos;
     }
 
 }

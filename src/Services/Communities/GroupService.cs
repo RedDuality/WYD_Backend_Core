@@ -19,7 +19,7 @@ public class GroupService(MongoDbService dbService)
         Community community,
         bool mainGroup,
         string name,
-        IClientSessionHandle? session = null)
+        IClientSessionHandle session)
     {
         var groupProfiles = profiles.Select((p) =>
             {
@@ -34,11 +34,17 @@ public class GroupService(MongoDbService dbService)
 
 
 
-
-    public async Task<HashSet<ObjectId>> GetProfilesByGroupIds(List<ShareEventRequestDto> dtos, Profile currentProfile)
+    /// <summary>
+    /// 
+    /// </summary>
+    /// <param name="groupIdentification"></param>
+    /// <param name="currentProfile">current Profile is removed from the result</param>
+    /// <returns> A set of ids of the join of the profiles in the grouds inside the identification, withoud including currentProfile</returns>
+    /// <exception cref="UnauthorizedAccessException"></exception>
+    public async Task<HashSet<ObjectId>> GetProfilesByGroupIds(List<ShareGroupIdentifierDto> groupIdentification, Profile currentProfile)
     {
-        var groupIds = dtos.Select(dto => new ObjectId(dto.GroupId)).ToList();
-        var communityIds = dtos.Select(dto => new ObjectId(dto.CommunityId)).Distinct().ToList();
+        var groupIds = groupIdentification.Select(dto => new ObjectId(dto.GroupId)).ToList();
+        var communityIds = groupIdentification.Select(dto => new ObjectId(dto.CommunityId)).Distinct().ToList();
 
         var filter = Builders<Group>.Filter.And(
             Builders<Group>.Filter.In("_id", groupIds),
