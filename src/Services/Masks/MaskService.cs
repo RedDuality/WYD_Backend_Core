@@ -108,7 +108,7 @@ public class MaskService(
     }
 
 
-    public async Task<List<RetrieveMaskResponseDto>> RetrieveUserMasks(String userId, RetrieveUserMaskRequestDto retrieveDto)
+    public async Task<List<RetrieveMaskResponseDto>> RetrieveUserMasks(string userId, RetrieveUserMaskRequestDto retrieveDto)
     {
         var profileObjectIds = await userService.GetProfileIds(userId);
 
@@ -124,6 +124,23 @@ public class MaskService(
 
         return [.. masks.Select(m => new RetrieveMaskResponseDto(m))];
     }
+
+    public async Task<List<RetrieveMaskResponseDto>> RetrieveUpdated(string userId, RetrieveUserMaskRequestDto retrieveDto)
+    {
+        var profileObjectIds = await userService.GetProfileIds(userId);
+
+        var filterBuilder = Builders<Mask>.Filter;
+
+        var filter = filterBuilder.And(
+            filterBuilder.In(m => m.ProfileId, profileObjectIds),
+            filterBuilder.Gte(m => m.UpdatedAt, retrieveDto.StartTime.ToUniversalTime())
+        );
+
+        var masks = await dbService.RetrieveMultipleAsync(maskCollection, filter);
+
+        return [.. masks.Select(m => new RetrieveMaskResponseDto(m))];
+    }
+
 
     public async Task<List<RetrieveViewMaskResponseDto>> RetrieveProfileMasks(RetrieveProfileMaskRequestDto retrieveDto)
     {
