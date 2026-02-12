@@ -114,11 +114,21 @@ public class MaskService(
 
         var filterBuilder = Builders<Mask>.Filter;
 
-        var filter = filterBuilder.And(
+        var filters = new List<FilterDefinition<Mask>>
+        {
+            // Add the mandatory filters
             filterBuilder.In(m => m.ProfileId, profileObjectIds),
             filterBuilder.Gte(m => m.EndTime, retrieveDto.StartTime.ToUniversalTime()),
-            filterBuilder.Lte(m => m.StartTime, retrieveDto.EndTime.ToUniversalTime())
-        );
+        };
+
+        if (retrieveDto.EndTime.HasValue)
+        {
+            // Only apply the Less-than-or-equal filter if endTime has a value
+            filters.Add(filterBuilder.Lte(pe => pe.StartTime, retrieveDto.EndTime.Value.ToUniversalTime()));
+        }
+
+        var filter = filterBuilder.And(filters);
+
 
         var masks = await dbService.RetrieveMultipleAsync(maskCollection, filter);
 
