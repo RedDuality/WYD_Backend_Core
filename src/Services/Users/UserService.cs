@@ -40,7 +40,7 @@ public class UserService(
     {
         var user = await RetrieveUser(userId, accountUid);
         // somehow the db was destroyed, but firebase still had in memory the userId
-        if (user == null) return await Register(accountUid); 
+        if (user == null) return await Register(accountUid);
         var tuple = await RetrieveDetailedProfilesAsync(user);
 
         return new RetrieveUserResponseDto(user, tuple);
@@ -159,6 +159,13 @@ public class UserService(
         }
         var update = Builders<User>.Update.Combine(updates);
         return await dbService.FindOneByIdAndUpdateAsync(userCollection, user.Id, update, session);
+    }
+
+    public async Task<HashSet<ObjectId>> GetProfileIds(string userId)
+    {
+        var user = await dbService.RetrieveByIdAsync<User>(userCollection, userId);
+
+        return user.ProfileIds;
     }
 }
 

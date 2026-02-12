@@ -3,6 +3,7 @@ using Core.Components.MessageQueue;
 using Core.DTO.MaskAPI;
 using Core.Model.Masks;
 using Core.Model.Notifications;
+using Core.Services.Users;
 using MongoDB.Bson;
 using MongoDB.Driver;
 
@@ -10,6 +11,7 @@ namespace Core.Services.Masks;
 
 public class MaskService(
     MongoDbService dbService,
+    UserService userService,
     IMessageQueueService messageService,
     ImportedProfilesService importedProfilesService
 )
@@ -106,11 +108,9 @@ public class MaskService(
     }
 
 
-    public async Task<List<RetrieveMaskResponseDto>> RetrieveUserMasks(RetrieveUserMaskRequestDto retrieveDto)
+    public async Task<List<RetrieveMaskResponseDto>> RetrieveUserMasks(String userId, RetrieveUserMaskRequestDto retrieveDto)
     {
-        var profileObjectIds = retrieveDto.ProfileIds
-            .Select(id => new ObjectId(id))
-            .ToList();
+        var profileObjectIds = await userService.GetProfileIds(userId);
 
         var filterBuilder = Builders<Mask>.Filter;
 

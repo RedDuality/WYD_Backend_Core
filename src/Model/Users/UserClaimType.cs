@@ -6,16 +6,20 @@ public enum UserClaimType
     CanViewProfileDetails,
     CanImpersonateProfile,
     CanEditProfile,
+    
     // Community
     CanViewCommunity,
     CanCreateCommunity,
     CanEditCommunity,
+    
     // Events
     CanReadEvents,
     CanCreateEvents,
     CanEditEvents,
     CanShareEvents,
+    
     // Masks
     CanCreateMasks,
-
+    CanEditMasks,
+    CanDeleteMasks,
 }

@@ -52,15 +52,25 @@ public class FCMService
             Tokens = tokens,
             Data = data,
         };
-        
 
-        BatchResponse response = await Messagging.SendEachForMulticastAsync(message);
+        Console.WriteLine("ADSFASDFasdfa ");
+        try
+        {
+            BatchResponse response = await Messagging.SendEachForMulticastAsync(message);
+            await HandleFailedNotifications(response, tokensWithUserIds);
+        }
+        catch
+        {
+            Console.WriteLine("ADSFASDFasdfa 1");
+        }
 
-        await HandleFailedNotifications(response, tokensWithUserIds);
+
+
     }
 
     private async Task HandleFailedNotifications(BatchResponse response, Dictionary<string, ObjectId> tokensWithUserIds)
     {
+        Console.WriteLine("ADSFASDFasdfa 2");
         for (int i = 0; i < response.Responses.Count; i++)
         {
             var fcmResponse = response.Responses[i];

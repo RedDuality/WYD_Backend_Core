@@ -68,7 +68,7 @@ public class EventMaskService(
 
     private async Task CreateOrOverwriteMaskAsync(ObjectId profileId, Event ev)
     {
-        // only existing masks
+
         var filter = Builders<Mask>.Filter.And(
             Builders<Mask>.Filter.Eq(m => m.ProfileId, profileId),
             Builders<Mask>.Filter.Eq(m => m.EventId, ev.Id)

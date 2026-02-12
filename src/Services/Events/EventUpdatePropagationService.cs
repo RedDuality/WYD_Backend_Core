@@ -4,7 +4,6 @@ using Core.Model.QueueMessages;
 using Core.Services.Masks;
 using Core.Services.Notifications;
 using Core.Services.Profiles;
-using MongoDB.Bson;
 
 namespace Core.Services.Events;
 
@@ -25,9 +24,11 @@ public class EventUpdatePropagationService(
         {
             var tasks = new List<Task>();
 
+            // profileEvents
             if (type != EventUpdateType.create)
                 tasks.Add(profileEventService.PropagateEventUpdatesAsync(ev, profileIds));
 
+            // masks
             if (type != EventUpdateType.share)
                 tasks.Add(eventMaskService.PropagateEventUpdateAsync(ev, type, profileIds, actorId));
 
