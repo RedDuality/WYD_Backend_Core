@@ -22,33 +22,44 @@ public class SseService : ISseService
         {
             await foreach (var message in channel.Reader.ReadAllAsync(ct))
             {
-                Console.WriteLine($"sending message to web application:{message}");
-                var payload = $"data: {message}\n\n";
-                await writer.WriteAsync(payload, ct);
-                await writer.FlushAsync(ct);
+                try
+                {
+                    Console.WriteLine($"sending message to web application:{message}");
+                    var payload = $"data: {message}\n\n";
+                    await writer.WriteAsync(payload, ct);
+                    await writer.FlushAsync(ct);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"SSe exception inside the loop: {ex.Message}");
+                }
             }
         }
-        catch (OperationCanceledException)
+        catch (Exception ex)
         {
+            Console.WriteLine($"SSe exception: {ex.Message}");
         }
         finally
         {
             _channels.TryRemove(userId, out _);
         }
     }
-
-    public void SendToUser(string userId, string message)
-    {
-        Console.WriteLine($"send to user{message}");
-        if (_channels.TryGetValue(userId, out var channel))
-            channel.Writer.TryWrite(message);
-    }
-
     public void SendToUsers(HashSet<string> userIds, string message)
     {
         foreach (var id in userIds)
             SendToUser(id, message);
     }
+
+    public void SendToUser(string userId, string message)
+    {
+        Console.WriteLine($"send to user{message}");
+        if (_channels.TryGetValue(userId, out var channel))
+        {
+            channel.Writer.TryWrite(message);
+        }
+    }
+
+
 }
 
 
