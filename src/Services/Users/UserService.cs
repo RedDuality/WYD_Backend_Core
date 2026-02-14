@@ -111,6 +111,7 @@ public class UserService(
                 ["userId"] = user.Id.ToString()
             };
             await authService.AddOrUpdateClaimsAsync(accountUid, claims);
+            await authService.RevokeTokens(accountUid);
 
             return new RetrieveUserResponseDto(result.UpdatedUser, [Tuple.Create(result.Profile, result.UserProfile, result.UserClaims)]);
         });

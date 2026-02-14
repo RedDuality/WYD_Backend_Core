@@ -31,7 +31,7 @@ public class FirebaseAuthService : IAuthService
         });
     }
 
-    public FirebaseAuth GetInstance() => _authInstance.Value;
+    private FirebaseAuth GetInstance() => _authInstance.Value;
 
     /// <summary>
     /// Safely adds or updates multiple custom claims for a Firebase user.
@@ -57,7 +57,7 @@ public class FirebaseAuthService : IAuthService
 
             await auth.SetCustomUserClaimsAsync(firebaseUid, updatedClaims);
         }
-        catch (FirebaseAdmin.Auth.FirebaseAuthException ex)
+        catch (FirebaseAuthException ex)
         {
             Console.WriteLine($"Error updating claims for UID {firebaseUid}: {ex.Message}");
             throw;
@@ -67,5 +67,10 @@ public class FirebaseAuthService : IAuthService
             Console.WriteLine($"An unexpected error occurred: {ex.Message}");
             throw;
         }
+    }
+
+    public async Task RevokeTokens(string accountUid)
+    {
+        await GetInstance().RevokeRefreshTokensAsync(accountUid);
     }
 }
