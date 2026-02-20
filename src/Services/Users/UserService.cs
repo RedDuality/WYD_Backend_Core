@@ -101,10 +101,11 @@ public class UserService(
     private async Task<RetrieveUserResponseDto> Register(string accountUid)
     {
         string email = contextManager.GetEmail();
+        SignInType signInType = contextManager.GetSignInType();
 
         return await dbService.ExecuteInTransactionAsync(async (session) =>
         {
-            var user = new User(new Account(accountUid, email));
+            var user = new User(new Account(accountUid, email, signInType));
             await dbService.CreateOneAsync(userCollection, user, session);
 
             var profile = await profileService.CreateAsync(accountUid, email, session);

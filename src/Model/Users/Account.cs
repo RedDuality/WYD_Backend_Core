@@ -3,7 +3,7 @@ using MongoDB.Bson.Serialization.Attributes;
 
 namespace Core.Model.Users;
 
-public class Account(string uid, string email)
+public class Account(string uid, string email, SignInType type)
 {
     [BsonElement("uid")]
     public string Uid { get; set; } = uid;
@@ -11,5 +11,8 @@ public class Account(string uid, string email)
     [BsonElement("mail")]
     public string Email { get; set; } = email;
 
+    [BsonElement("SignInType")]
+    [BsonRepresentation(BsonType.String)]
+    public SignInType SignInType { get; set; } = type;
 }
 

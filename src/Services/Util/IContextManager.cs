@@ -1,3 +1,5 @@
+using Core.Model.Users;
+
 namespace Core.Services.Util;
 
 public interface IContextManager
@@ -11,5 +13,7 @@ public interface IContextManager
     string GetUserId();
 
     string GetCurrentProfileId();
+
+    SignInType GetSignInType();
 }
 
