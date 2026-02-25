@@ -5,7 +5,7 @@ using MongoDB.Bson.Serialization.Attributes;
 
 namespace Core.Model.Users;
 
-public class UserProfile( User user, Profile profile) : BaseDateEntity
+public class UserProfile(User user, Profile profile) : BaseDateEntity
 {
     [BsonElement("userId")]
     public ObjectId UserId { get; set; } = user.Id;
@@ -33,3 +33,4 @@ public class ViewSettings(ObjectId profileId, bool viewConfirmed = false, bool v
     [BsonIgnoreIfDefault]
     public bool ViewShared { get; set; } = viewShared;
 }
+

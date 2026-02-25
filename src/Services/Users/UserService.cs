@@ -46,7 +46,7 @@ public class UserService(
             await authService.RevokeTokens(accountUid);
             return returnDto;
         }
-        var tuple = await RetrieveDetailedProfilesAsync(user);
+        var tuple = await profileService.RetrieveDetailedProfilesAsync(user.Id, user.ProfileIds);
 
         return new RetrieveUserResponseDto(user, tuple);
     }
@@ -65,32 +65,7 @@ public class UserService(
         return users.FirstOrDefault();
     }
 
-    private async Task<List<Tuple<Profile, UserProfile, UserClaims>>> RetrieveDetailedProfilesAsync(User user)
-    {
-        var profileIds = user.ProfileIds;
 
-        var profiles = await dbService.RetrieveMultipleByIdAsync<Profile>(CollectionName.Profiles, profileIds);
-        var userProfiles = await userProfileService.RetrieveFromUser(user.Id);
-        var userClaims = await userClaimService.RetrieveFromUser(user);
-
-        var userProfileMap = userProfiles.ToDictionary(up => up.ProfileId);
-        var userClaimMap = userClaims.ToDictionary(uc => uc.ProfileId);
-
-        var resultList = profiles
-            .Select(profile =>
-            {
-                userProfileMap.TryGetValue(profile.Id, out var userProfile);
-                userClaimMap.TryGetValue(profile.Id, out var userClaims);
-                return Tuple.Create(
-                    profile,
-                    userProfile!,
-                    userClaims!
-                );
-            })
-            .ToList();
-
-        return resultList;
-    }
 
     public async Task<RetrieveUserResponseDto> Register()
     {
@@ -118,11 +93,11 @@ public class UserService(
             };
             await authService.AddOrUpdateClaimsAsync(accountUid, claims);
 
-            return new RetrieveUserResponseDto(result.UpdatedUser, [Tuple.Create(result.Profile, result.UserProfile, result.UserClaims)]);
+            return new RetrieveUserResponseDto(result.UpdatedUser, [Tuple.Create(result.Profile, result.UserProfile, result.UserClaims, result.profileDetails)]);
         });
     }
 
-    public async Task<(User UpdatedUser, Profile Profile, UserProfile UserProfile, UserClaims UserClaims)> AddProfileAsync(
+    public async Task<(User UpdatedUser, Profile Profile, UserProfile UserProfile, UserClaims UserClaims, ProfileDetails profileDetails)> AddProfileAsync(
         Profile profile,
         User user,
         bool mainProfile = false,
@@ -134,7 +109,7 @@ public class UserService(
         });
     }
 
-    public async Task<(User UpdatedUser, Profile Profile, UserProfile UserProfile, UserClaims UserClaims)> AddProfileAsync(
+    public async Task<(User UpdatedUser, Profile Profile, UserProfile UserProfile, UserClaims UserClaims, ProfileDetails profileDetails)> AddProfileAsync(
         Profile profile,
         User user,
         IClientSessionHandle session,
@@ -146,11 +121,11 @@ public class UserService(
         var userProfile = await userProfileService.Create(user, profile, session);
 
 
-        await profileService.AddUserAsync(profile, user, session);
+        var profileDetails = await profileService.AddUserAsync(profile, user, session);
 
         var userClaims = await userClaimService.SetRole(user, profile, role, session);
 
-        return (user, profile, userProfile, userClaims);
+        return (user, profile, userProfile, userClaims, profileDetails);
     }
 
     private async Task<User> AddProfileToUserDoc(User user, Profile profile, bool mainProfile, IClientSessionHandle session)

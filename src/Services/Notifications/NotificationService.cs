@@ -10,7 +10,7 @@ public class NotificationService(ISseService sseService, FCMService fcmService, 
 
     public async Task SendNotification(HashSet<ObjectId> profileIds, Dictionary<string, string>? data = null)
     {
-        var users = await profileDetailsService.RetrieveByProfileIds(profileIds);
+        var users = await profileDetailsService.RetrieveUsersByProfileIds(profileIds);
         var userIds = users.Select((u) => u.Id.ToString()).ToHashSet();
 
         string message = data != null

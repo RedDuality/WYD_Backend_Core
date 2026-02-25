@@ -28,19 +28,34 @@ public class ProfileDetailsService(MongoDbService dbService)
         return await dbService.FindOneAndUpdateAsync(profileDetailsCollection, detailsFilter, updateDefinition, session);
     }
 
-    public async Task<List<User>> RetrieveByProfileIds(HashSet<ObjectId> profileIds)
+    public async Task<ProfileDetails> RetrieveByProfileId(ObjectId profileId)
     {
-        var profileDetails = await dbService.RetrieveMultipleAsync(
+        return await dbService.RetrieveAsync(
                     profileDetailsCollection,
-                    Builders<ProfileDetails>.Filter.In(p => p.ProfileId, profileIds)
+                    Builders<ProfileDetails>.Filter.Where(p => p.ProfileId == profileId)
                 );
+    }
+    public async Task<List<ProfileDetails>> RetrieveByProfileIds(HashSet<ObjectId> profileIds)
+    {
+        return await dbService.RetrieveMultipleAsync(
+                     profileDetailsCollection,
+                     Builders<ProfileDetails>.Filter.In(p => p.ProfileId, profileIds)
+                 );
+
+    }
+
+
+    public async Task<List<User>> RetrieveUsersByProfileIds(HashSet<ObjectId> profileIds)
+    {
+        var profileDetails = await RetrieveByProfileIds(profileIds);
+
         var userIds = profileDetails.SelectMany(pd => pd.Users).Select(pu => pu.UserId).ToHashSet();
 
-        return  await dbService.RetrieveMultipleAsync(
+        return await dbService.RetrieveMultipleAsync(
             CollectionName.Users,
             Builders<User>.Filter.In(u => u.Id, userIds)
         );
     }
-    
+
 
 }

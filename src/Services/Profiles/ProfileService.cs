@@ -40,9 +40,9 @@ public class ProfileService(
         return profile;
     }
 
-    public async Task AddUserAsync(Profile profile, User user, IClientSessionHandle session)
+    public async Task<ProfileDetails> AddUserAsync(Profile profile, User user, IClientSessionHandle session)
     {
-        await profileDetailsService.AddUser(profile.Id, user, session);
+        return await profileDetailsService.AddUser(profile.Id, user, session);
     }
 
     public async Task<RetrieveDetailedProfileResponseDto> Update(UpdateProfileRequestDto updateDto)
@@ -69,7 +69,7 @@ public class ProfileService(
             } // else throw nothingChangedException
 
             updatedProfile ??= await RetrieveProfileById(updateDto.ProfileId);
-            return new RetrieveDetailedProfileResponseDto(updatedProfile, userProfile, null);
+            return new RetrieveDetailedProfileResponseDto(updatedProfile, userProfile, null, null);
         });
 
         return updatedDto;
@@ -111,11 +111,43 @@ public class ProfileService(
         var userId = new ObjectId(contextManager.GetUserId());
 
         var profile = await dbService.RetrieveByIdAsync<Profile>(profileCollection, profileId);
+        var profileDetails = await profileDetailsService.RetrieveByProfileId(new ObjectId(profileId));
         var userProfile = await userProfileService.RetrieveFromUserAndProfile(userId, profile.Id);
         var userClaims = await userClaimService.RetrieveFromUserAndProfile(userId, profile.Id);
 
-        return new RetrieveDetailedProfileResponseDto(profile, userProfile, userClaims);
+        return new RetrieveDetailedProfileResponseDto(profile, userProfile, userClaims, profileDetails);
     }
+
+    public async Task<List<Tuple<Profile, UserProfile, UserClaims, ProfileDetails>>> RetrieveDetailedProfilesAsync(ObjectId userId, HashSet<ObjectId> profileIds)
+    {
+        var profiles = await dbService.RetrieveMultipleByIdAsync<Profile>(profileCollection, profileIds);
+        var profileDetails = await profileDetailsService.RetrieveByProfileIds(profileIds);
+        var userProfiles = await userProfileService.RetrieveFromUser(userId);
+        var userClaims = await userClaimService.RetrieveFromUser(userId);
+
+        var userProfileMap = userProfiles.ToDictionary(up => up.ProfileId);
+        var userClaimMap = userClaims.ToDictionary(uc => uc.ProfileId);
+        var profileDetailsMap = profileDetails.ToDictionary(pd => pd.ProfileId);
+
+        var resultList = profiles
+            .Select(profile =>
+            {
+                userProfileMap.TryGetValue(profile.Id, out var userProfile);
+                userClaimMap.TryGetValue(profile.Id, out var userClaims);
+                profileDetailsMap.TryGetValue(profile.Id, out var profileDetails);
+
+                return Tuple.Create(
+                    profile,
+                    userProfile!,
+                    userClaims!,
+                    profileDetails!
+                );
+            })
+            .ToList();
+
+        return resultList;
+    }
+
 
     public async Task<HashSet<RetrieveProfileResponseDto>> RetrieveMultipleProfileById(HashSet<string> profileIds)
     {

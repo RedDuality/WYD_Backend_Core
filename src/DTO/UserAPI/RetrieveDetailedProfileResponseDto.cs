@@ -5,19 +5,23 @@ namespace Core.DTO.UserAPI;
 
 // TODO use only RetrieveUserProfileResponseDto
 
-public class RetrieveDetailedProfileResponseDto(Profile profile, UserProfile? up, UserClaims? uc)
+public class RetrieveDetailedProfileResponseDto(Profile profile, UserProfile? up, UserClaims? uc, ProfileDetails? pd)
 {
-    public string Id { get; set; } = profile.Id.ToString();
-    public string Tag { get; set; } = profile.Tag;
-    public string Name { get; set; } = profile.Name;
-    public DateTimeOffset UpdatedAt { get; set; } = profile.UpdatedAt;
-    public long? Color { get; set; } = up?.Color;
+        public string Id { get; set; } = profile.Id.ToString();
+        public string Tag { get; set; } = profile.Tag;
+        public string Name { get; set; } = profile.Name;
+        public DateTimeOffset UpdatedAt { get; set; } = profile.UpdatedAt;
+        public long? Color { get; set; } = up?.Color;
 
-    public List<ViewSettingsDto>? ViewSettings { get; set; } = up?.ViewSettings?
-            .Select(vs => new ViewSettingsDto(vs))
-            .ToList();
+        public HashSet<ExternalImportDto>? Imports { get; set; } = pd?.Imports?
+                .Select(im => new ExternalImportDto(im))
+                .ToHashSet();
 
-    public HashSet<string>? UserClaims { get; set; } = uc?.Claims?
-            .Select(c => c.Claim.ToString())
-            .ToHashSet();
+        public List<ViewSettingsDto>? ViewSettings { get; set; } = up?.ViewSettings?
+                .Select(vs => new ViewSettingsDto(vs))
+                .ToList();
+
+        public HashSet<string>? UserClaims { get; set; } = uc?.Claims?
+                .Select(c => c.Claim.ToString())
+                .ToHashSet();
 }

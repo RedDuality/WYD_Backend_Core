@@ -11,8 +11,12 @@ public class Account(string uid, string email, SignInType type)
     [BsonElement("mail")]
     public string Email { get; set; } = email;
 
-    [BsonElement("SignInType")]
+    [BsonElement("signInType")]
     [BsonRepresentation(BsonType.String)]
     public SignInType SignInType { get; set; } = type;
+
+    [BsonElement("importedByProfile")]
+    [BsonIgnoreIfNull]
+    public ObjectId? ImportedByProfile { get; set; }
 }
 

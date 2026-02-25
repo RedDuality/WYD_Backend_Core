@@ -1,5 +1,4 @@
 using Core.Model.Profiles;
-using MongoDB.Bson;
 
 namespace Core.DTO.ProfileAPI;
 

@@ -32,9 +32,9 @@ public class UserClaimService(MongoDbService dbService)
     }
 
 
-    public async Task<List<UserClaims>> RetrieveFromUser(User user)
+    public async Task<List<UserClaims>> RetrieveFromUser(ObjectId userId)
     {
-        var filter = Builders<UserClaims>.Filter.Eq(uc => uc.UserId, user.Id);
+        var filter = Builders<UserClaims>.Filter.Eq(uc => uc.UserId, userId);
 
         return await dbService.RetrieveMultipleAsync(userClaimCollection, filter);
     }

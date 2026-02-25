@@ -4,7 +4,9 @@ namespace Core.DTO.UserAPI;
 
 public class AccountDto(Account account)
 {
-    public string Mail { get; set; } = account.Email;
+    public string Email { get; set; } = account.Email;
 
     public string SignInType { get; set; } = account.SignInType.ToString();
+
+    public string? ImportedBy { get; set; } = account.ImportedByProfile.ToString();
 }

@@ -12,6 +12,10 @@ public class ProfileDetails(Profile profile) : BaseEntity
 
     [BsonElement("users")]
     public List<ProfileUser> Users { get; set; } = [];
+
+    [BsonElement("imports")]
+    [BsonIgnoreIfDefault]
+    public HashSet<ExternalImport> Imports { get; set; } = [];
 }
 
 public class ProfileUser(User user)
@@ -23,5 +27,14 @@ public class ProfileUser(User user)
     [BsonElement("receivesNotifications")]
     [BsonIgnoreIfDefault]
     public bool ReceivesNotifications { get; set; } = true;
+}
 
+public class ExternalImport(string email, SignInType type)
+{
+    [BsonElement("importedAccount")]
+    public string ImportedAccountEmail { get; set; } = email;
+
+    [BsonElement("importType")]
+    [BsonRepresentation(BsonType.String)]
+    public SignInType ImportType { get; set; } = type;
 }
