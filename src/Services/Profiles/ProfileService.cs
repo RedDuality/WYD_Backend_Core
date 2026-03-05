@@ -162,4 +162,18 @@ public class ProfileService(
     }
 
     #endregion
+
+    #region import
+
+    public async Task Import(string accessToken, string userId, string profileId)
+    {
+        // 1. import events
+        // 2. retrieve sync token
+        // 3. encrypt token
+        // 4. save token 
+        // 5. update account
+        // 6. update profileDetails
+    }
+
+    #endregion
 }

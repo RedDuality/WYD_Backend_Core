@@ -13,13 +13,16 @@ public class RetrieveEventResponseDto(Event ev)
     public int? TotalProfiles { get; set; } = ev.TotalProfilesMinusOne != 0 ? ev.TotalProfilesMinusOne + 1 : null;
     public int? TotalConfirmed { get; set; } = ev.TotalConfirmedMinusOne != 0 ? ev.TotalConfirmedMinusOne + 1 : null;
 
+    public string? RecurrencyInstanceId { get; set; } = ev.RecurrencyInstanceId;
+    public string? ImportedAccountUid { get; set; } = ev.ImportedAccountUid;
+
 
     public List<ProfileEventDto>? ProfileEvents { get; set; }
 
     public EventDetailsDto? EventDetails { get; set; }
 
 
-
+    // details might be null for update response
     public RetrieveEventResponseDto(Event ev, EventDetails? details = null)
         : this(ev, details, profileEventDtos: null)
     { }
@@ -34,6 +37,7 @@ public class RetrieveEventResponseDto(Event ev)
             EventDetails = new EventDetailsDto(details);
         if (profileEventDtos != null)
             ProfileEvents = profileEventDtos;
+        
     }
 
 }

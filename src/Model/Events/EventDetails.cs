@@ -4,7 +4,7 @@ using MongoDB.Bson.Serialization.Attributes;
 
 namespace Core.Model.Events;
 
-public class EventDetails(Event ev) : BaseDateEntity
+public class EventDetails(BaseEvent ev) : BaseDateEntity
 {
     [BsonElement("eventId")]
     public ObjectId EventId { get; set; } = ev.Id;

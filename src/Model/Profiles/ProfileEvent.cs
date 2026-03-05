@@ -5,7 +5,7 @@ using MongoDB.Bson.Serialization.Attributes;
 
 namespace Core.Model.Profiles;
 
-public class ProfileEvent(Event ev, ObjectId profileId) : BaseDateEntity
+public class ProfileEvent(BaseEvent ev, ObjectId profileId) : BaseDateEntity
 {
     [BsonElement("eventId")]
     public ObjectId EventId { get; set; } = ev.Id;

@@ -12,21 +12,24 @@ public sealed class CollectionName
 
     public static readonly CollectionName Profiles = new("Profiles");
     public static readonly CollectionName ProfileDetails = new("ProfileDetails");
-    public static readonly CollectionName ProfileEvents = new("ProfileEvents");
     public static readonly CollectionName ProfileCommunities = new("ProfileCommunities");
+    public static readonly CollectionName ProfileEvents = new("ProfileEvents");
+    public static readonly CollectionName ProfileRecurrentEvents = new("ProfileRecurrentEvents");
 
     public static readonly CollectionName ProfileTags = new("ProfileTags");
 
     public static readonly CollectionName MaskProfileImports = new("MaskProfileImports");
 
     public static readonly CollectionName Masks = new("Masks");
-    
+    public static readonly CollectionName RecurrentMasks = new("RecurrentMasks");
+
     public static readonly CollectionName Events = new("Events");
     public static readonly CollectionName EventDetails = new("EventDetails");
     public static readonly CollectionName EventMedia = new("EventMedia");
     public static readonly CollectionName EventProfiles = new("EventProfiles");
 
-
+    public static readonly CollectionName RecurrentEvents = new("RecurrentEvents");
+    public static readonly CollectionName RecurrentEventProfiles = new("RecurrentEventProfiles");
 
     public static readonly CollectionName Communities = new("Communities");
     public static readonly CollectionName Groups = new("Groups");

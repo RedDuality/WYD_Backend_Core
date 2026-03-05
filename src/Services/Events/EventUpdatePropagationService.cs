@@ -7,7 +7,6 @@ using Core.Services.Profiles;
 
 namespace Core.Services.Events;
 
-// move this to Eventservice after having created the actual message service
 public class EventUpdatePropagationService(
     ProfileEventService profileEventService,
     EventProfileService eventProfileService,
@@ -24,11 +23,11 @@ public class EventUpdatePropagationService(
         {
             var tasks = new List<Task>();
 
-            // profileEvents
+            // update profileEvents
             if (type != EventUpdateType.create)
                 tasks.Add(profileEventService.PropagateEventUpdatesAsync(ev, profileIds));
 
-            // masks
+            // update/create masks
             if (type != EventUpdateType.share)
                 tasks.Add(eventMaskService.PropagateEventUpdateAsync(ev, type, profileIds, actorId));
 

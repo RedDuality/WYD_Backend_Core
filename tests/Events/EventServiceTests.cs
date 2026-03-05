@@ -20,7 +20,7 @@ namespace Core.Tests.Events;
 public class EventServiceTests
 {
     private readonly ProfileService _profileService;
-    private readonly EventService _eventService;
+    private readonly EventRetrieveService _eventService;
     private readonly MongoDbService _dbService;
     private readonly Profile _creator;
 
@@ -36,7 +36,7 @@ public class EventServiceTests
         var scope = fixture.ServiceProvider!.CreateScope();
 
         _profileService = scope.ServiceProvider.GetRequiredService<ProfileService>();
-        _eventService = scope.ServiceProvider.GetRequiredService<EventService>();
+        _eventService = scope.ServiceProvider.GetRequiredService<EventRetrieveService>();
 
         _session = fixture.StartSessionAsync().GetAwaiter().GetResult();
 

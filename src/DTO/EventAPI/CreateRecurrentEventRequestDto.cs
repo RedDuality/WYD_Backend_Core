@@ -1,8 +1,6 @@
-using Core.DTO.CommunityAPI;
-
 namespace Core.DTO.EventAPI;
 
-public class CreateEventRequestDto
+public class CreateRecurrentEventRequestDto
 {
     required public string Title { get; set; }
     public string? Description { get; set; }
@@ -11,9 +9,13 @@ public class CreateEventRequestDto
 
     public bool IsAllDay { get; set; } = false;
 
-    public ShareEventRequestDto? ShareDto { get; set; }
+    public required string RecurrenceRule { get; set; }
+    public required TimeZoneInfo TimeZone { get; set; }
+
+    public required DateTimeOffset CacheIntervalStart { get; set; }
+    public required DateTimeOffset CacheIntervalEnd { get; set; }
 
     // Parameterless constructor for deserialization
-    public CreateEventRequestDto() { }
+    public CreateRecurrentEventRequestDto() { }
 
 }

@@ -9,7 +9,7 @@ public class EventDetailsService(MongoDbService dbService)
 {
     private readonly CollectionName eventDetailsCollection = CollectionName.EventDetails;
 
-    public async Task<EventDetails> CreateAsync(Event ev, string? description, IClientSessionHandle session)
+    public async Task<EventDetails> CreateAsync(BaseEvent ev, string? description, IClientSessionHandle session)
     {
         var eventDetails = new EventDetails(ev)
         {

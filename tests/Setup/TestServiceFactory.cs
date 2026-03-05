@@ -39,7 +39,7 @@ public static class TestServiceFactory
         services.AddScoped<MaskProfileService>();
         services.AddScoped<EventMaskService>();
 
-        services.AddScoped<EventService>();
+        services.AddScoped<EventRetrieveService>();
         services.AddScoped<EventUpdatePropagationService>();
 
         services.AddScoped<EventDetailsService>();

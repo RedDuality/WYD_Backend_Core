@@ -148,6 +148,17 @@ public class UserService(
 
         return user.ProfileIds;
     }
+
+    public async Task<User> CheckUserHaveAccount(string userId, string accountEmail)
+    {
+        var user = await dbService.RetrieveByIdAsync<User>(userCollection, userId);
+
+        if (user.Accounts.Where((a) => a.Email == accountEmail).ToList().Count > 0)
+        {
+            return user;
+        }
+        throw new UnauthorizedAccessException("User does not have permission over the account");
+    }
 }
 
 /*

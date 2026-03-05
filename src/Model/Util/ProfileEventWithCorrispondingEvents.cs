@@ -8,6 +8,7 @@ namespace Core.Model.Util;
 
 public class ProfileEventWithCorrespondingEvents : BaseDateEntity
 {
+    // bsonElements are used for the join
     [BsonElement("eventId")]
     public ObjectId EventId { get; set; }
 
@@ -19,5 +20,7 @@ public class ProfileEventWithCorrespondingEvents : BaseDateEntity
 
     [BsonElement("role")]
     public EventRole Role { get; set; }
+
+    // list because mongodb does not know it can only be one event
     public List<Event> Events { get; set; } = [];
 }

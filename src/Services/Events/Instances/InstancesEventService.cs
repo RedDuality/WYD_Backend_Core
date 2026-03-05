@@ -13,7 +13,7 @@ using Core.Components.MessageQueue;
 using Core.Model.QueueMessages;
 using Core.Services.Profiles;
 
-namespace Core.Services.Events;
+namespace Core.Services.Events.Instances;
 
 public class EventService(
     MongoDbService dbService,
@@ -267,66 +267,54 @@ public class EventService(
 
     public async Task<List<RetrieveEventResponseDto>> RetrieveEventsByProfileIds(RetrieveMultipleEventsRequestDto requestDto)
     {
+        // create pipeline, to have the db handle everything in one operation
         var aggregate = dbService.GetAggregate<ProfileEvent>(CollectionName.ProfileEvents);
 
-        var objectIds = requestDto.ProfileIds.Select(ph => new ObjectId(ph)).ToList();
+        var objectIds = requestDto.ProfileIds.Select(pId => new ObjectId(pId)).ToList();
 
-        // Step 1: Define the filter using Builders
-        var filterBuilder = Builders<ProfileEvent>.Filter;
-
-        // Build the filter with logical AND conditions
-        var filters = new List<FilterDefinition<ProfileEvent>>
-        {
-            // Add the mandatory filters
-            filterBuilder.In(pe => pe.ProfileId, objectIds),
-            filterBuilder.Gte(pe => pe.EventEndTime, requestDto.StartTime.ToUniversalTime())
-        };
-
-        // Step 2: Conditionally add the end time filter
-        if (requestDto.EndTime.HasValue)
-        {
-            // Only apply the Less-than-or-equal filter if endTime has a value
-            filters.Add(filterBuilder.Lte(pe => pe.EventStartTime, requestDto.EndTime.Value.ToUniversalTime()));
-        }
-
-        // Combine all filters with a logical AND
-        var filter = filterBuilder.And(filters);
+        var filter = Builders<ProfileEvent>.Filter.And(
+            Builders<ProfileEvent>.Filter.In(pe => pe.ProfileId, objectIds),
+            Builders<ProfileEvent>.Filter.Gte(pe => pe.EventEndTime, requestDto.StartTime.ToUniversalTime()),
+            Builders<ProfileEvent>.Filter.Lte(pe => pe.EventStartTime, requestDto.EndTime.ToUniversalTime())
+        );
 
         // Apply the filter to the aggregate pipeline
-        var matchStage = aggregate.Match(filter)
-                                  .Limit(40);
+        var profileEvents = aggregate.Match(filter)
+                                  .Limit(100);
 
-        // Step 3: Lookup the corresponding Event for each ProfileEvent
-        // Join the two collecions in a ProfileEventWithCEvents object
-        var lookupStage = matchStage.Lookup<ProfileEvent, Event, ProfileEventWithCorrespondingEvents>(
+        // Step 2: Lookup the Event collection, and
+        // join the two collections in a ProfileEventWithCorrEvents(pewce) object
+        var lookupStage = profileEvents.Lookup<ProfileEvent, Event, ProfileEventWithCorrespondingEvents>(
             dbService.GetCollection<Event>(eventCollection),
             pe => pe.EventId,
             e => e.Id,
             pewce => pewce.Events);
 
-        //flat out the results on a new projected object
-        var projected = lookupStage
-            .Project(pe => new
+        // flat out the results on a new projected object
+        var projections = lookupStage
+            .Project(pewce => new
             {
-                Event = pe.Events[0],
-                pe.ProfileId,
-                pe.Role,
-                pe.Confirmed
+                Event = pewce.Events[0],
+                pewce.ProfileId,
+                pewce.Role,
+                pewce.Confirmed
             });
 
 
         //var intermediateResults = await projected.ToListAsync();
 
-        var grouped = projected.Group(
-            pe => pe.Event.Id,
-            group => new
+        // now that we have all the events (one for each profile), 
+        // we group them by eventId, listing the profiles into ProfileEventDto
+        var grouped = projections.Group(
+            projected => projected.Event.Id,
+            groupedEvents => new
             {
-                ev = group.First().Event,
-                ProfileEvents = group.Select(pe => new ProfileEventDto
+                ev = groupedEvents.First().Event,
+                ProfileEvents = groupedEvents.Select(projection => new ProfileEventDto
                 {
-                    ProfileId = pe.ProfileId.ToString(),
-                    Role = pe.Role,
-                    Confirmed = pe.Confirmed,
+                    ProfileId = projection.ProfileId.ToString(),
+                    Role = projection.Role,
+                    Confirmed = projection.Confirmed,
                     Trusted = false
                 }).ToList()
             }
@@ -341,7 +329,7 @@ public class EventService(
 
     }
 
-    public async Task<List<RetrieveEventResponseDto>> RetrieveUpdatesByProfileIds(RetrieveMultipleEventsRequestDto requestDto)
+    public async Task<List<RetrieveEventResponseDto>> RetrieveUpdatesByProfileIds(RetrieveUpdatedEventsRequestDto requestDto)
     {
         var aggregate = dbService.GetAggregate<ProfileEvent>(CollectionName.ProfileEvents);
 
@@ -350,7 +338,7 @@ public class EventService(
         var filterBuilder = Builders<ProfileEvent>.Filter;
         var filter = filterBuilder.And(
             filterBuilder.In(pe => pe.ProfileId, objectIds),
-            filterBuilder.Gte(pe => pe.UpdatedAt, requestDto.StartTime.ToUniversalTime())
+            filterBuilder.Gte(pe => pe.UpdatedAt, requestDto.UpdatedAfterTime.ToUniversalTime())
          );
 
         // Apply the filter to the aggregate pipeline
