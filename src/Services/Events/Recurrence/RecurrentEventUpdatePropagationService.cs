@@ -1,20 +1,22 @@
 using Core.Model.Events;
+using Core.Model.Events.Recurrence;
 using Core.Model.Notifications;
 using Core.Model.QueueMessages;
+using Core.Services.Events.Instances;
 using Core.Services.Masks;
 using Core.Services.Notifications;
 using Core.Services.Profiles;
 
-namespace Core.Services.Events;
+namespace Core.Services.Events.Recurrence;
 
-public class EventUpdatePropagationService(
-    ProfileEventService profileEventService,
+public class RecurrentEventUpdatePropagationService(
+    ProfileRecurrentEventService profileEventService,
     EventProfileService eventProfileService,
     EventMaskService eventMaskService,
     BroadcastService broadcastService
 )
 {
-    public async Task PropagateUpdateEffects(Event ev, EventUpdateType type, string? actorId = null)
+    public async Task PropagateUpdateEffects(RecurrentEvent ev, EventUpdateType type, string? actorId = null)
     {
         var eventProfiles = await eventProfileService.FindAllByEventId(ev.Id);
         var profileIds = eventProfiles.Select(ep => ep.ProfileId).ToHashSet();
@@ -23,13 +25,13 @@ public class EventUpdatePropagationService(
         {
             var tasks = new List<Task>();
 
-            // update profileEvents
+            // update profileRecurrentEvents
             if (type != EventUpdateType.create)
                 tasks.Add(profileEventService.PropagateEventUpdatesAsync(ev, profileIds));
 
             // update/create masks
             if (type != EventUpdateType.share)
-                tasks.Add(eventMaskService.PropagateEventUpdateAsync(ev, type, profileIds, actorId));
+                tasks.Add(eventMaskService.PropagateRecurrentEventUpdateAsync(ev, type, profileIds, actorId));
 
             await Task.WhenAll(tasks);
 
@@ -39,7 +41,7 @@ public class EventUpdatePropagationService(
         }
     }
 
-    private static Notification GetUpdateNotification(EventUpdateType type, Event ev, string? actorId = null)
+    private static Notification GetUpdateNotification(EventUpdateType type, RecurrentEvent ev, string? actorId = null)
     {
         return type switch
         {

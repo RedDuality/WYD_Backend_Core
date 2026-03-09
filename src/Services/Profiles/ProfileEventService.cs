@@ -1,10 +1,10 @@
 using Core.Components.Database;
 using MongoDB.Bson;
 using MongoDB.Driver;
-using Core.Services.Events;
 using Core.Model.Profiles;
 using Core.Model.Events;
 using Core.DTO.EventAPI;
+using Core.Services.Events.Instances;
 
 
 namespace Core.Services.Profiles;

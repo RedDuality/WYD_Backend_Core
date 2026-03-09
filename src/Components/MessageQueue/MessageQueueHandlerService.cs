@@ -1,5 +1,6 @@
 using Core.Model.QueueMessages;
-using Core.Services.Events;
+using Core.Services.Events.Instances;
+using Core.Services.Events.Recurrence;
 using Core.Services.Profiles;
 using MongoDB.Bson;
 
@@ -9,25 +10,35 @@ public class MessageQueueHandlerService
 {
     private readonly Dictionary<MessageType, Func<object?, Task>> _handlers;
     private readonly EventUpdatePropagationService _eventService;
+    private readonly RecurrentEventUpdatePropagationService _recurrentEventService;
     private readonly ProfileUpdatePropagationService _profileService;
 
-    public MessageQueueHandlerService(EventUpdatePropagationService eventService, ProfileUpdatePropagationService profileService)
+    public MessageQueueHandlerService(
+        EventUpdatePropagationService eventService,
+        RecurrentEventUpdatePropagationService recurrentEventService,
+        ProfileUpdatePropagationService profileService)
     {
         _eventService = eventService;
+        _recurrentEventService = recurrentEventService;
         _profileService = profileService;
 
         _handlers = new Dictionary<MessageType, Func<object?, Task>>
         {
-            [MessageType.eventUpdate] = WrapHandler<UpdateEventPayload>(async p =>
+            [MessageType.eventUpdate] = WrapHandler<EventPayload>(async p =>
             {
                 await _eventService.PropagateUpdateEffects(p.Event, p.Type, actorId: p.ActorId);
             }),
-/*
+            [MessageType.recurrentEventUpdate] = WrapHandler<RecurrentEventPayload>(async p =>
+            {
+                await _recurrentEventService.PropagateUpdateEffects(p.Event, p.Type, actorId: p.ActorId);
+            }),
+            /*
             [MessageType.profileUpdate] = WrapHandler<UpdateProfilePayload>(async p =>
             {
                 _profileService.PropagateUpdateEffects(p.ProfileId, p.Type, p.ActorId);
             }),
-*/        };
+            */
+        };
     }
 
     private static Func<object?, Task> WrapHandler<T>(Func<T, Task> handlerLogic) where T : class

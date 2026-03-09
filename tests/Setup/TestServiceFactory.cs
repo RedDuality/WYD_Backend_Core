@@ -9,6 +9,8 @@ using Core.Components.Database;
 using Core.Components.MessageQueue;
 using Core.Services.Users;
 using Core.Services.Util;
+using Core.Services.Events.Instances;
+using Core.Services.Events.Recurrence;
 
 namespace Core.Tests.Setup;
 

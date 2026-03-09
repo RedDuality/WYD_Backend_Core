@@ -2,7 +2,7 @@ using Core.Model.Notifications;
 using Core.Model.QueueMessages;
 using Core.Services.Notifications;
 
-namespace Core.Components.MessageQueue;
+namespace Core.Components.MessageQueue.ImplementationSpecific;
 
 public class MessageQueueService(MessageQueueHandlerService handlerService, BroadcastService broadcastService) : IMessageQueueService
 {

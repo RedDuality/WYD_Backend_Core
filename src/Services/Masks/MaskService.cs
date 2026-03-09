@@ -3,7 +3,6 @@ using Core.Components.MessageQueue;
 using Core.DTO.MaskAPI;
 using Core.Model.Masks;
 using Core.Model.Notifications;
-using Core.Services.Users;
 using MongoDB.Bson;
 using MongoDB.Driver;
 
@@ -11,9 +10,7 @@ namespace Core.Services.Masks;
 
 public class MaskService(
     MongoDbService dbService,
-    UserService userService,
-    IMessageQueueService messageService,
-    ImportedProfilesService importedProfilesService
+    IMessageQueueService messageService
 )
 {
     private readonly CollectionName maskCollection = CollectionName.Masks;
@@ -92,117 +89,4 @@ public class MaskService(
     }
 
     #endregion
-
-    #region retrieve
-
-    public async Task<RetrieveMaskResponseDto> RetrieveSingleMask(string profileId, string maskId)
-    {
-        var filter = Builders<Mask>.Filter.And(
-            Builders<Mask>.Filter.Eq(m => m.ProfileId, new ObjectId(profileId)),
-            Builders<Mask>.Filter.Eq(m => m.Id, new ObjectId(maskId))
-        );
-
-        var mask = await dbService.RetrieveOrNullAsync(maskCollection, filter) ?? throw new InvalidOperationException("Mask not found");
-
-        return new RetrieveMaskResponseDto(mask);
-    }
-
-
-    public async Task<List<RetrieveMaskResponseDto>> RetrieveUserMasks(string userId, RetrieveUserMaskRequestDto retrieveDto)
-    {
-        var profileObjectIds = await userService.GetProfileIds(userId);
-
-        var filterBuilder = Builders<Mask>.Filter;
-
-        var filters = new List<FilterDefinition<Mask>>
-        {
-            // Add the mandatory filters
-            filterBuilder.In(m => m.ProfileId, profileObjectIds),
-            filterBuilder.Gte(m => m.EndTime, retrieveDto.StartTime.ToUniversalTime()),
-        };
-
-        if (retrieveDto.EndTime.HasValue)
-        {
-            // Only apply the Less-than-or-equal filter if endTime has a value
-            filters.Add(filterBuilder.Lte(pe => pe.StartTime, retrieveDto.EndTime.Value.ToUniversalTime()));
-        }
-
-        var filter = filterBuilder.And(filters);
-
-
-        var masks = await dbService.RetrieveMultipleAsync(maskCollection, filter);
-
-        return [.. masks.Select(m => new RetrieveMaskResponseDto(m))];
-    }
-
-    public async Task<List<RetrieveMaskResponseDto>> RetrieveUpdated(string userId, RetrieveUserMaskRequestDto retrieveDto)
-    {
-        var profileObjectIds = await userService.GetProfileIds(userId);
-
-        var filterBuilder = Builders<Mask>.Filter;
-
-        var filter = filterBuilder.And(
-            filterBuilder.In(m => m.ProfileId, profileObjectIds),
-            filterBuilder.Gte(m => m.UpdatedAt, retrieveDto.StartTime.ToUniversalTime())
-        );
-
-        var masks = await dbService.RetrieveMultipleAsync(maskCollection, filter);
-
-        return [.. masks.Select(m => new RetrieveMaskResponseDto(m))];
-    }
-
-
-    public async Task<List<RetrieveViewMaskResponseDto>> RetrieveProfileMasks(RetrieveProfileMaskRequestDto retrieveDto)
-    {
-
-        var profileId = new ObjectId(retrieveDto.ProfileId);
-        var relatedProfiles = await importedProfilesService.GetImportedProfiles(profileId);
-        relatedProfiles.Add(profileId);
-
-        var filterBuilder = Builders<Mask>.Filter;
-
-        var filter = filterBuilder.And(
-            filterBuilder.In(m => m.ProfileId, relatedProfiles),
-            filterBuilder.Gte(m => m.EndTime, retrieveDto.StartTime.ToUniversalTime()),
-            filterBuilder.Lte(m => m.StartTime, retrieveDto.EndTime.ToUniversalTime())
-        );
-
-        var sort = Builders<Mask>.Sort.Ascending(m => m.StartTime);
-        var masks = await dbService.FindForPaginationAsync(maskCollection, filter, sort, null, null);
-
-        var unifiedMasks = UnifyMasks(masks);
-        return [.. unifiedMasks.Select(m => new RetrieveViewMaskResponseDto(m))];
-    }
-
-    private static List<Mask> UnifyMasks(List<Mask> masks)
-    {
-
-        if (masks == null || masks.Count <= 1)
-            return masks ?? [];
-
-        return masks
-            .Aggregate(new List<Mask>(), (unified, next) =>
-            {
-                var last = unified.LastOrDefault();
-
-                // If list is empty or there is no overlap, add the next mask
-                if (last == null || next.StartTime > last.EndTime)
-                {
-                    unified.Add(next);
-                }
-                else
-                {
-                    // Partial or total overlap: update the EndTime of the existing mask
-                    if (next.EndTime > last.EndTime)
-                    {
-                        last.EndTime = next.EndTime;
-                    }
-                }
-
-                return unified;
-            });
-    }
-
-    #endregion
-
 }

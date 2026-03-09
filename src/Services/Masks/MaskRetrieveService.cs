@@ -2,8 +2,7 @@ using Core.Components.Database;
 using Core.DTO.MaskAPI;
 using Core.Model.Masks;
 using Core.Services.Users;
-using Ical.Net;
-using Ical.Net.CalendarComponents;
+using Core.Services.Util;
 using Ical.Net.DataTypes;
 using MongoDB.Bson;
 using MongoDB.Driver;
@@ -82,7 +81,7 @@ public class MaskRetrieveService(
         var relatedProfiles = await importedProfilesService.GetImportedProfiles(profileId);
         relatedProfiles.Add(profileId);
 
-        var masksTask = RetrieveSimpleMasks(retrieveDto, relatedProfiles);
+        var masksTask = RetrieveInstanceMasks(retrieveDto, relatedProfiles);
         var recurrentMasksTask = RetrieveRecurrentMasks(retrieveDto, relatedProfiles);
 
         var results = await Task.WhenAll(masksTask, recurrentMasksTask);
@@ -93,7 +92,7 @@ public class MaskRetrieveService(
         return [.. unifiedMasks.Select(m => new RetrieveViewMaskResponseDto(m))];
     }
 
-    private async Task<List<Mask>> RetrieveSimpleMasks(RetrieveProfileMaskRequestDto retrieveDto, HashSet<ObjectId> profiles)
+    private async Task<List<Mask>> RetrieveInstanceMasks(RetrieveProfileMaskRequestDto retrieveDto, HashSet<ObjectId> profiles)
     {
         var filterBuilder = Builders<Mask>.Filter;
 
@@ -126,25 +125,8 @@ public class MaskRetrieveService(
                 retrieveDto.StartTime,
                 retrieveDto.EndTime)
             ).ToList();
-        
+
         return masks;
-    }
-
-
-    private static List<Mask> SubstituteWithInstances(List<Mask> masks, List<Mask> recurrenceMasks)
-    {
-        if (recurrenceMasks.Count > 0)
-        {
-            var overriddenInstanceIds = masks
-                .Where(m => m.RecurrencyInstanceId != null)
-                .Select(m => m.RecurrencyInstanceId)
-                .ToHashSet();
-
-            recurrenceMasks = recurrenceMasks
-                .Where(m => m.RecurrencyInstanceId == null || !overriddenInstanceIds.Contains(m.RecurrencyInstanceId))
-                .ToList();
-        }
-        return masks.Concat(recurrenceMasks).ToList();
     }
 
     private static List<Mask> UnifyMasks(List<Mask> masks)
@@ -179,71 +161,30 @@ public class MaskRetrieveService(
 
 
     #region expand
-
-    /// Expands a RecurrentEvent into individual Event instances for all occurrences
-    /// that overlap with the given [startTime, endTime] window, then maps each to a DTO.
     private static List<Mask> ExpandRecurrentMask(
         RecurrentMask mask,
         ObjectId profileId,
         DateTimeOffset startTime,
         DateTimeOffset endTime)
     {
-        var eventDuration = mask.EndTime - mask.StartTime;
+        TimeSpan maskDuration = mask.EndTime - mask.StartTime;
 
-        var dtos = GetOccurrences(mask, startTime, endTime)
+        var dtos = RecurrenceExpansionService.GetOccurrences(
+            mask.RecurrenceRule,
+            mask.StartTime,
+            mask.RecurrenceEnd,
+            mask.TimeZone,
+            Duration.FromTimeSpanExact(maskDuration),
+            startTime,
+            endTime)
             .Select(occurrenceStart => BuildMaskInstance(
                 profileId,
                 mask,
                 occurrenceStart,
-                occurrenceStart + eventDuration)
+                occurrenceStart + maskDuration)
             ).ToList();
 
         return dtos;
-    }
-
-    private static IEnumerable<DateTimeOffset> GetOccurrences(
-        RecurrentMask ev,
-        DateTimeOffset windowStart,
-        DateTimeOffset windowEnd)
-    {
-        var tz = ev.TimeZone;
-
-        // Cap the upper bound at the series' own recurrence end, if defined.
-        var effectiveEnd = ev.RecurrenceEnd.HasValue && ev.RecurrenceEnd.Value < windowEnd
-            ? ev.RecurrenceEnd.Value
-            : windowEnd;
-
-        // Ical.Net works in local DateTime; convert from UTC using the event time zone.
-        var dtStartLocal = TimeZoneInfo.ConvertTime(ev.StartTime, tz).DateTime;
-        var searchStartLocal = TimeZoneInfo.ConvertTime(windowStart, tz).DateTime;
-        var searchEndLocal = TimeZoneInfo.ConvertTime(effectiveEnd, tz).DateTime;
-
-        var calEvent = new CalendarEvent
-        {
-            DtStart = new CalDateTime(dtStartLocal, tz.Id),
-            Duration = Duration.FromTimeSpanExact(ev.EndTime - ev.StartTime),
-            RecurrenceRules =
-            [
-                new(ev.RecurrenceRule)
-            ]
-        };
-
-
-        var calendar = new Calendar();
-        calendar.Events.Add(calEvent);
-
-
-        return calendar
-            .GetOccurrences(new CalDateTime(searchStartLocal, tz.Id))
-            .Where(o => o.Period.StartTime.Value <= searchEndLocal)
-            .Select(o =>
-            {
-                var localDt = o.Period.StartTime.Value;
-                var offset = tz.GetUtcOffset(localDt);
-                return new DateTimeOffset(
-                    DateTime.SpecifyKind(localDt, DateTimeKind.Unspecified), offset)
-                    .ToUniversalTime();
-            });
     }
 
     /// Builds a transient (non-persisted) Event for one recurrence occurrence,
@@ -266,7 +207,24 @@ public class MaskRetrieveService(
             instanceId
         );
     }
-    
+
+    private static List<Mask> SubstituteWithInstances(List<Mask> masks, List<Mask> recurrenceMasks)
+    {
+        if (recurrenceMasks.Count > 0)
+        {
+            var overriddenInstanceIds = masks
+                .Where(m => m.RecurrencyInstanceId != null)
+                .Select(m => m.RecurrencyInstanceId)
+                .ToHashSet();
+
+            recurrenceMasks = recurrenceMasks
+                .Where(m => m.RecurrencyInstanceId == null || !overriddenInstanceIds.Contains(m.RecurrencyInstanceId))
+                .ToList();
+        }
+        return masks.Concat(recurrenceMasks).ToList();
+    }
+
+
     #endregion
 
 

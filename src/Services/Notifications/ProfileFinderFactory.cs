@@ -1,6 +1,6 @@
 using Core.Model.Notifications;
 using Core.Services.Communities;
-using Core.Services.Events;
+using Core.Services.Events.Instances;
 using Core.Services.Masks;
 using Core.Services.Profiles;
 using MongoDB.Bson;

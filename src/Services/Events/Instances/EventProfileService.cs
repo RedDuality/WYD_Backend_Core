@@ -6,7 +6,7 @@ using Core.Model.Events;
 using Core.Services.Notifications;
 using Core.Model.Notifications;
 
-namespace Core.Services.Events;
+namespace Core.Services.Events.Instances;
 
 public class EventProfileService(MongoDbService dbService) : INotificationProfileFinder
 {

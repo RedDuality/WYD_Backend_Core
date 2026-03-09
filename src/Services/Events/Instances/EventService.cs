@@ -66,7 +66,7 @@ public class EventService(
 
     private async Task SendCreatePropagationMessage(Event ev, Profile creatorProfile)
     {
-        var propagationMessage = new QueueMessage<UpdateEventPayload>(
+        var propagationMessage = new QueueMessage<EventPayload>(
                 MessageType.eventUpdate,
                 new(ev, EventUpdateType.create, actorId: creatorProfile.Id.ToString())
             );
@@ -105,7 +105,7 @@ public class EventService(
 
     private async Task SendSharePropagationMessage(Event ev)
     {
-        var propagationMessage = new QueueMessage<UpdateEventPayload>(
+        var propagationMessage = new QueueMessage<EventPayload>(
                         MessageType.eventUpdate,
                         new(ev, EventUpdateType.share)
                     );
@@ -172,7 +172,7 @@ public class EventService(
 
                 ev = await dbService.FindOneByIdAndUpdateAsync(eventCollection, ev.Id, combinedUpdate, session);
 
-                var propagationMessage = new QueueMessage<UpdateEventPayload>(MessageType.eventUpdate, new(ev, EventUpdateType.update));
+                var propagationMessage = new QueueMessage<EventPayload>(MessageType.eventUpdate, new(ev, EventUpdateType.update));
                 await messageService.SendPropagationMessageAsync(propagationMessage);
             }
 
@@ -216,7 +216,7 @@ public class EventService(
                 var increaseUpdate = Builders<Event>.Update.Inc(ev => ev.TotalConfirmedMinusOne, 1);
                 var ev = await dbService.FindOneByIdAndUpdateAsync(eventCollection, new ObjectId(eventId), increaseUpdate, session);
 
-                var propagationMessage = new QueueMessage<UpdateEventPayload>(MessageType.eventUpdate, new(ev, EventUpdateType.confirm, profileId));
+                var propagationMessage = new QueueMessage<EventPayload>(MessageType.eventUpdate, new(ev, EventUpdateType.confirm, profileId));
                 await messageService.SendPropagationMessageAsync(propagationMessage);
             }
             return null;
@@ -233,7 +233,7 @@ public class EventService(
                 var decreaseUpdate = Builders<Event>.Update.Inc(ev => ev.TotalConfirmedMinusOne, -1);
                 var ev = await dbService.FindOneByIdAndUpdateAsync(eventCollection, new ObjectId(eventId), decreaseUpdate, session);
 
-                var propagationMessage = new QueueMessage<UpdateEventPayload>(MessageType.eventUpdate, new(ev, EventUpdateType.decline, profileId));
+                var propagationMessage = new QueueMessage<EventPayload>(MessageType.eventUpdate, new(ev, EventUpdateType.decline, profileId));
                 await messageService.SendPropagationMessageAsync(propagationMessage);
             }
 

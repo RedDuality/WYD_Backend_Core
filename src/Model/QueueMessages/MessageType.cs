@@ -4,5 +4,6 @@ public enum MessageType
 {
     profileUpdate,
     eventUpdate,
+    recurrentEventUpdate,
     groupUpdate,
 }

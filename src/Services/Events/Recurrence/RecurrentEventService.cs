@@ -11,13 +11,17 @@ using Core.Model.Profiles;
 using Core.Model.Events;
 using Core.Model.Events.Recurrence;
 using Core.Services.Profiles;
+using Core.Components.MessageQueue;
+using Core.Model.QueueMessages;
+using Core.Services.Util;
 
 namespace Core.Services.Events.Recurrence;
 
 public class RecurrentEventService(
     MongoDbService dbService,
     EventDetailsService eventDetailsService,
-    ProfileEventService profileEventService
+    ProfileRecurrentEventService profileEventService,
+    IMessageQueueService messageService
 )
 {
     private readonly CollectionName recurrentEventCollection = CollectionName.RecurrentEvents;
@@ -32,10 +36,17 @@ public class RecurrentEventService(
         DateTimeOffset startTime,
         DateTimeOffset endTime)
     {
-        var eventDuration = ev.EndTime - ev.StartTime;
+        TimeSpan eventDuration = ev.EndTime - ev.StartTime;
 
-        var dtos = GetOccurrences(ev, startTime, endTime)
-            .Select(occurrenceStart => BuildEventInstance(ev, occurrenceStart, occurrenceStart + eventDuration))
+        var dtos = RecurrenceExpansionService.GetOccurrences(
+            ev.RecurrenceRule,
+            ev.StartTime,
+            ev.RecurrenceEnd,
+            ev.TimeZone,
+            Duration.FromTimeSpanExact(eventDuration),
+            startTime,
+            endTime)
+            .Select(occurrenceStart => BuildEventInstance(ev, occurrenceStart, occurrenceStart.Add(eventDuration)))
             .Select(instanceEvent => new RetrieveEventResponseDto(
                 instanceEvent,
                 profileEventDtos: [
@@ -50,51 +61,6 @@ public class RecurrentEventService(
             .ToList();
 
         return dtos;
-    }
-
-    private static IEnumerable<DateTimeOffset> GetOccurrences(
-        RecurrentEvent ev,
-        DateTimeOffset windowStart,
-        DateTimeOffset windowEnd)
-    {
-        var tz = ev.TimeZone;
-
-        // Cap the upper bound at the series' own recurrence end, if defined.
-        var effectiveEnd = ev.RecurrenceEnd.HasValue && ev.RecurrenceEnd.Value < windowEnd
-            ? ev.RecurrenceEnd.Value
-            : windowEnd;
-
-        // Ical.Net works in local DateTime; convert from UTC using the event time zone.
-        var dtStartLocal = TimeZoneInfo.ConvertTime(ev.StartTime, tz).DateTime;
-        var searchStartLocal = TimeZoneInfo.ConvertTime(windowStart, tz).DateTime;
-        var searchEndLocal = TimeZoneInfo.ConvertTime(effectiveEnd, tz).DateTime;
-
-        var calEvent = new CalendarEvent
-        {
-            DtStart = new CalDateTime(dtStartLocal, tz.Id),
-            Duration = Duration.FromTimeSpanExact(ev.EndTime - ev.StartTime),
-            RecurrenceRules =
-            [
-                new(ev.RecurrenceRule)
-            ]
-        };
-
-
-        var calendar = new Calendar();
-        calendar.Events.Add(calEvent);
-
-
-        return calendar
-            .GetOccurrences(new CalDateTime(searchStartLocal, tz.Id))
-            .Where(o => o.Period.StartTime.Value <= searchEndLocal)
-            .Select(o =>
-            {
-                var localDt = o.Period.StartTime.Value;
-                var offset = tz.GetUtcOffset(localDt);
-                return new DateTimeOffset(
-                    DateTime.SpecifyKind(localDt, DateTimeKind.Unspecified), offset)
-                    .ToUniversalTime();
-            });
     }
 
     /// Builds a transient (non-persisted) Event for one recurrence occurrence,
@@ -134,15 +100,23 @@ public class RecurrentEventService(
         {
             await dbService.CreateOneAsync(recurrentEventCollection, ev, session);
             EventDetails eventDetails = await eventDetailsService.CreateAsync(ev, newEventDto.Description, session);
-            ProfileEvent profileEvent = await profileEventService.CreateProfileEventAsync(ev, creatorProfile.Id, session);
+            ProfileRecurrentEvent profileRecurrentEvent = await profileEventService.CreateProfileEventAsync(ev, creatorProfile.Id, session);
 
-            // await SendCreatePropagationMessage(ev, creatorProfile);
+            await SendCreatePropagationMessage(ev, creatorProfile);
 
             return ExpandRecurrentEvent(ev, creatorProfile.Id, newEventDto.CacheIntervalEnd, newEventDto.CacheIntervalEnd);
         });
         return EventDto;
     }
 
+    private async Task SendCreatePropagationMessage(RecurrentEvent ev, Profile creatorProfile)
+    {
+        var propagationMessage = new QueueMessage<RecurrentEventPayload>(
+                MessageType.recurrentEventUpdate,
+                new(ev, EventUpdateType.create, actorId: creatorProfile.Id.ToString())
+            );
+        await messageService.SendPropagationMessageAsync(propagationMessage);
+    }
     #endregion
 
     #region retrieve
