@@ -22,7 +22,6 @@ public class RecurrentEvent(
     public TimeZoneInfo TimeZone { get; set; } = timeZone;
 
     [BsonElement("recurrenceRule")]
-    [BsonIgnoreIfNull]
     public string RecurrenceRule { get; set; } = recurrenceRule;
 
     // --- imported values ---

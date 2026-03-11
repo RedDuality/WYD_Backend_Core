@@ -1,8 +1,6 @@
 using MongoDB.Bson;
 using MongoDB.Driver;
-using Ical.Net.CalendarComponents;
 using Ical.Net.DataTypes;
-using Ical.Net;
 
 using Core.Components.Database;
 using Core.Model.Util;
@@ -93,7 +91,7 @@ public class RecurrentEventService(
             newEventDto.Title,
             newEventDto.StartTime,
             newEventDto.EndTime,
-            newEventDto.TimeZone,
+            newEventDto.GetTimeZoneInfo(),
             newEventDto.RecurrenceRule);
 
         List<RetrieveEventResponseDto> EventDto = await dbService.ExecuteInTransactionAsync(async (session) =>

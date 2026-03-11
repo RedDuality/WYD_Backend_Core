@@ -13,7 +13,10 @@ public class RetrieveEventResponseDto(Event ev)
     public int? TotalProfiles { get; set; } = ev.TotalProfilesMinusOne != 0 ? ev.TotalProfilesMinusOne + 1 : null;
     public int? TotalConfirmed { get; set; } = ev.TotalConfirmedMinusOne != 0 ? ev.TotalConfirmedMinusOne + 1 : null;
 
+    // --- recurrency
     public string? RecurrencyInstanceId { get; set; } = ev.RecurrencyInstanceId;
+
+    // --- import
     public string? ImportedAccountUid { get; set; } = ev.ImportedAccountUid;
 
 

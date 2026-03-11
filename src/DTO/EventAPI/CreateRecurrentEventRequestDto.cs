@@ -10,12 +10,21 @@ public class CreateRecurrentEventRequestDto
     public bool IsAllDay { get; set; } = false;
 
     public required string RecurrenceRule { get; set; }
-    public required TimeZoneInfo TimeZone { get; set; }
+    public required string TimeZone { get; set; }
 
     public required DateTimeOffset CacheIntervalStart { get; set; }
     public required DateTimeOffset CacheIntervalEnd { get; set; }
 
     // Parameterless constructor for deserialization
     public CreateRecurrentEventRequestDto() { }
+
+    public TimeZoneInfo GetTimeZoneInfo() 
+    {
+        try {
+            return TimeZoneInfo.FindSystemTimeZoneById(TimeZone);
+        } catch {
+            throw new ArgumentException("Selected timezone is not valid"); 
+        }
+    }
 
 }

@@ -2,8 +2,6 @@ using MongoDB.Bson;
 using Core.Components.Database;
 using MongoDB.Driver;
 using Core.Model.Util;
-using Core.Components.ObjectStorage;
-using Core.DTO.MediaAPI;
 using Core.DTO.EventAPI;
 using Core.Model.Profiles;
 using Core.Model.Events;
@@ -57,7 +55,7 @@ public class EventRetrieveService(
     }
 
     // filter out edited recurrence Instances
-    private List<RetrieveEventResponseDto> SubstituteWithInstances(
+    private static List<RetrieveEventResponseDto> SubstituteWithInstances(
         List<RetrieveEventResponseDto> instanceEvents,
         List<RetrieveEventResponseDto> recurrenceEvents)
     {

@@ -16,4 +16,8 @@ public class EventDetails(BaseEvent ev) : BaseDateEntity
     [BsonElement("totalImages")]
     [BsonIgnoreIfDefault]
     public long TotalImages { get; set; } = 0;
+
+    [BsonElement("recurrenceRule")]
+    [BsonIgnoreIfNull]
+    public string? RecurrenceRule { get; set; }
 }
