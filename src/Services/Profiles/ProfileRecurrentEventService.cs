@@ -9,17 +9,20 @@ using Core.Services.Events.Recurrence;
 namespace Core.Services.Profiles;
 
 public class ProfileRecurrentEventService(
-    MongoDbService dbService, 
+    MongoDbService dbService,
     RecurrentEventProfileService eventProfileService)
 {
     private readonly CollectionName profileRecurrentEventCollection = CollectionName.ProfileRecurrentEvents;
 
-    public async Task<ProfileRecurrentEvent> CreateProfileEventAsync(RecurrentEvent ev, ObjectId profileId, IClientSessionHandle session)
+    public async Task<ProfileRecurrentEvent> CreateProfileEventAsync(RecurrentEvent ev, ObjectId profileId, IClientSessionHandle session, bool confirmed = true)
     {
         ProfileRecurrentEvent profileEvent = new(
                 ev,
                 profileId
-            );
+            )
+        {
+            Confirmed = confirmed,
+        };
 
         await dbService.CreateOneAsync(profileRecurrentEventCollection, profileEvent, session);
 
@@ -27,7 +30,7 @@ public class ProfileRecurrentEventService(
         return profileEvent;
     }
 
-    
+
 
     public async Task PropagateEventUpdatesAsync(
         RecurrentEvent ev,

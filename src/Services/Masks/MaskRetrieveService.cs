@@ -169,7 +169,7 @@ public class MaskRetrieveService(
     {
         TimeSpan maskDuration = mask.EndTime - mask.StartTime;
 
-        var dtos = RecurrenceExpansionService.GetOccurrences(
+        var dtos = RecurrenceService.GetOccurrences(
             mask.RecurrenceRule,
             mask.StartTime,
             mask.RecurrenceEnd,

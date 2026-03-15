@@ -1,6 +1,6 @@
 namespace Core.DTO.EventAPI;
 
-public class RetrieveMultipleEventsRequestDto
+public record RetrieveMultipleEventsRequestDto
 {
     public List<string> ProfileIds { get; set; } = [];
     public DateTimeOffset StartTime { get; set; }

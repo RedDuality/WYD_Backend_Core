@@ -13,6 +13,10 @@ public class ProfileRecurrentEvent(RecurrentEvent ev, ObjectId profileId) : Base
     [BsonElement("profileId")]
     public ObjectId ProfileId { get; set; } = profileId;
 
+    [BsonElement("confirmed")]
+    [BsonIgnoreIfDefault]
+    public bool Confirmed { get; set; }
+
     [BsonElement("eventUpdatedAt")]
     public DateTimeOffset EventUpdatedAt { get; set; } = ev.UpdatedAt;
 

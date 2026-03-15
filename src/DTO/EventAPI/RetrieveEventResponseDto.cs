@@ -3,27 +3,35 @@ using Core.Model.Profiles;
 
 namespace Core.DTO.EventAPI;
 
-public class RetrieveEventResponseDto(Event ev)
+public record RetrieveEventResponseDto(Event Ev)
 {
-    public string Hash { get; set; } = ev.Id.ToString();
-    public string Title { get; set; } = ev.Title;
-    public DateTimeOffset StartTime { get; set; } = ev.StartTime;
-    public DateTimeOffset EndTime { get; set; } = ev.EndTime;
-    public DateTimeOffset UpdatedAt { get; set; } = ev.UpdatedAt;
-    public int? TotalProfiles { get; set; } = ev.TotalProfilesMinusOne != 0 ? ev.TotalProfilesMinusOne + 1 : null;
-    public int? TotalConfirmed { get; set; } = ev.TotalConfirmedMinusOne != 0 ? ev.TotalConfirmedMinusOne + 1 : null;
+    public string Id { get; set; } = GetId(Ev);
+    public string Title { get; set; } = Ev.Title;
+    public DateTimeOffset StartTime { get; set; } = Ev.StartTime;
+    public DateTimeOffset EndTime { get; set; } = Ev.EndTime;
+    public DateTimeOffset UpdatedAt { get; set; } = Ev.UpdatedAt;
+    public int? TotalProfiles { get; set; } = Ev.TotalProfilesMinusOne != 0 ? Ev.TotalProfilesMinusOne + 1 : null;
+    public int? TotalConfirmed { get; set; } = Ev.TotalConfirmedMinusOne != 0 ? Ev.TotalConfirmedMinusOne + 1 : null;
 
     // --- recurrency
-    public string? RecurrencyInstanceId { get; set; } = ev.RecurrencyInstanceId;
+    public string? MasterEventId { get; set; } = Ev.MasterEventId.ToString();
+    public string? RecurrencyInstanceId { get; set; } = Ev.RecurrencyInstanceId;
+    public bool DetachedInstance {get; set; } = Ev.DetachedInstance;
 
     // --- import
-    public string? ImportedAccountUid { get; set; } = ev.ImportedAccountUid;
+    public string? ImportedAccountUid { get; set; } = Ev.ImportedAccountUid;
 
 
     public List<ProfileEventDto>? ProfileEvents { get; set; }
 
     public EventDetailsDto? EventDetails { get; set; }
 
+
+    private static string GetId(Event ev)
+    {
+        // for generatedRecurrencyInstance have the sameId
+        return (ev.MasterEventId == null && ev.DetachedInstance == false) ? ev.Id.ToString() : ev.MasterEventId.ToString() + '_' + ev.RecurrencyInstanceId;  
+    }
 
     // details might be null for update response
     public RetrieveEventResponseDto(Event ev, EventDetails? details = null)
@@ -40,7 +48,7 @@ public class RetrieveEventResponseDto(Event ev)
             EventDetails = new EventDetailsDto(details);
         if (profileEventDtos != null)
             ProfileEvents = profileEventDtos;
-        
+
     }
 
 }

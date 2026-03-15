@@ -4,8 +4,8 @@ using MongoDB.Bson.Serialization.Attributes;
 namespace Core.Model.Events;
 
 public class Event(
-    string title, 
-    DateTimeOffset startTime, 
+    string title,
+    DateTimeOffset startTime,
     DateTimeOffset endTime) : BaseEvent(title, startTime, endTime)
 {
     [BsonElement("TotalProfiles")]
@@ -22,9 +22,13 @@ public class Event(
     [BsonIgnoreIfNull]
     public ObjectId? MasterEventId { get; set; }
 
-    [BsonElement("recurrencyInstanceId")]
+    [BsonElement("recurrencyId")]
     [BsonIgnoreIfNull]
     public string? RecurrencyInstanceId { get; set; }
+
+    [BsonElement("detached")]
+    [BsonIgnoreIfDefault]
+    public bool DetachedInstance { get; set; } = false;
 
     // --- Imported values ---
 

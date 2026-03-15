@@ -12,6 +12,7 @@ using Core.Services.Profiles;
 using Core.Components.MessageQueue;
 using Core.Model.QueueMessages;
 using Core.Services.Util;
+using Core.Model.Util.Exceptions;
 
 namespace Core.Services.Events.Recurrence;
 
@@ -36,7 +37,7 @@ public class RecurrentEventService(
     {
         TimeSpan eventDuration = ev.EndTime - ev.StartTime;
 
-        var dtos = RecurrenceExpansionService.GetOccurrences(
+        var dtos = RecurrenceService.GetOccurrences(
             ev.RecurrenceRule,
             ev.StartTime,
             ev.RecurrenceEnd,
@@ -70,13 +71,17 @@ public class RecurrentEventService(
     {
         // Use compact ISO-8601 UTC instant as the instance identifier —
         // uniquely identifies this slot within the recurrence series.
-        var instanceId = occurrenceStart.UtcDateTime.ToString("yyyyMMddTHHmmssZ");
+        var instanceId = master.IsAllDay
+            ? occurrenceStart.UtcDateTime.ToString("yyyyMMdd")       // DATE
+            : occurrenceStart.UtcDateTime.ToString("yyyyMMddTHHmmssZ"); // DATE-TIME
 
         return new Event(master.Title, occurrenceStart, occurrenceEnd)
         {
+            UpdatedAt = master.UpdatedAt,
             IsAllDay = master.IsAllDay,
             MasterEventId = master.Id,     // links back to the RecurrentEvent
             RecurrencyInstanceId = instanceId,
+            DetachedInstance = false,
             ImportedAccountUid = master.ImportedAccountUid,
             ExternalEventId = null,
             ExternalMasterEventId = master.ExternalEventId,
@@ -94,7 +99,7 @@ public class RecurrentEventService(
             newEventDto.GetTimeZoneInfo(),
             newEventDto.RecurrenceRule);
 
-        List<RetrieveEventResponseDto> EventDto = await dbService.ExecuteInTransactionAsync(async (session) =>
+        List<RetrieveEventResponseDto> InstanceDtos = await dbService.ExecuteInTransactionAsync(async (session) =>
         {
             await dbService.CreateOneAsync(recurrentEventCollection, ev, session);
             EventDetails eventDetails = await eventDetailsService.CreateAsync(ev, newEventDto.Description, session);
@@ -102,9 +107,9 @@ public class RecurrentEventService(
 
             await SendCreatePropagationMessage(ev, creatorProfile);
 
-            return ExpandRecurrentEvent(ev, creatorProfile.Id, newEventDto.CacheIntervalEnd, newEventDto.CacheIntervalEnd);
+            return ExpandRecurrentEvent(ev, creatorProfile.Id, newEventDto.CacheIntervalStart, newEventDto.CacheIntervalEnd);
         });
-        return EventDto;
+        return InstanceDtos;
     }
 
     private async Task SendCreatePropagationMessage(RecurrentEvent ev, Profile creatorProfile)
@@ -118,10 +123,99 @@ public class RecurrentEventService(
     #endregion
 
     #region retrieve
+    public async Task<RetrieveEventResponseDto> RetrieveDetailsById(RetrieveRecurrenceInstanceDetailsRequestDto requestDto)
+    {
+        // check if an instance was created over the generated one.
+        var possibleInstance = await CheckPossibleInstanceId(requestDto);
+        if (possibleInstance != null)
+            return possibleInstance;
+
+        // if not, check if master still covers that.
+        // if it covers, return the generated instance + event details
+        return await GetGeneratedInstance(requestDto);
+
+    }
+
+    private async Task<RetrieveEventResponseDto?> CheckPossibleInstanceId(RetrieveRecurrenceInstanceDetailsRequestDto retrieveDto)
+    {
+        var filter = Builders<Event>.Filter.And(
+            Builders<Event>.Filter.Eq(e => e.MasterEventId, new ObjectId(retrieveDto.MasterEventId)),
+            Builders<Event>.Filter.Eq(e => e.RecurrencyInstanceId, retrieveDto.RecurrencyInstanceId)
+        );
+
+        var ev = await dbService.RetrieveOrNullAsync(CollectionName.Events, filter);
+        if (ev != null)
+        {
+            var eventDetails = await eventDetailsService.RetrieveByEventId(ev.Id.ToString());
+            return new RetrieveEventResponseDto(ev, details: eventDetails);
+        }
+        return null;
+    }
+
+    private async Task<RetrieveEventResponseDto> GetGeneratedInstance(RetrieveRecurrenceInstanceDetailsRequestDto requestDto)
+    {
+        var master = await dbService.RetrieveByIdAsync<RecurrentEvent>(recurrentEventCollection, requestDto.MasterEventId);
+
+        DateTimeOffset occurrenceStart = ParseInstanceId(requestDto.RecurrencyInstanceId, master.TimeZone);
+        TimeSpan eventDuration = master.EndTime - master.StartTime;
+
+        // Verify the master's recurrence rule still generates this occurrence.
+        // We query a window of [occurrenceStart, occurrenceStart + duration] so only
+        // the exact slot can match — if the rule was shortened or the instance was
+        // deleted, GetOccurrences returns empty and we surface ObjectDeletedException.
+        bool occurrenceExists = RecurrenceService
+            .GetOccurrences(
+                master.RecurrenceRule,
+                master.StartTime,
+                master.RecurrenceEnd,
+                master.TimeZone,
+                Duration.FromTimeSpanExact(eventDuration),
+                occurrenceStart,
+                occurrenceStart + eventDuration)
+            .Any();
+
+        if (!occurrenceExists)
+            throw new ObjectDeletedException();
+
+        Event eventInstance = BuildEventInstance(master, occurrenceStart, occurrenceStart.Add(eventDuration));
+
+        // EventDetails are stored against the master event, not individual instances.
+        var eventDetails = await eventDetailsService.RetrieveByEventId(requestDto.MasterEventId);
+        return new RetrieveEventResponseDto(eventInstance, details: eventDetails);
+    }
+
+    /// Reverses the compact ISO-8601 instance ID produced in <see cref="BuildEventInstance"/>
+    /// back into a <see cref="DateTimeOffset"/>.
+    /// DATE format:      yyyyMMdd         → interpreted in the event's local time zone
+    /// DATE-TIME format: yyyyMMddTHHmmssZ → UTC instant
+    private static DateTimeOffset ParseInstanceId(string instanceId, TimeZoneInfo timeZone)
+    {
+        if (instanceId.Length == 8) // DATE: yyyyMMdd
+        {
+            var date = DateTime.ParseExact(
+                instanceId,
+                "yyyyMMdd",
+                System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.None);
+
+            return new DateTimeOffset(date, timeZone.GetUtcOffset(date));
+        }
+        else // DATE-TIME: yyyyMMddTHHmmssZ
+        {
+            var utcDt = DateTime.ParseExact(
+                instanceId,
+                "yyyyMMddTHHmmssZ",
+                System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.AssumeUniversal | System.Globalization.DateTimeStyles.AdjustToUniversal);
+
+            return new DateTimeOffset(utcDt, TimeSpan.Zero);
+        }
+    }
+
     public async Task<List<RetrieveEventResponseDto>> RetrieveEventsByProfileIds(RetrieveMultipleEventsRequestDto requestDto)
     {
         // create pipeline, to have the db handle everything in one operation
-        var aggregate = dbService.GetAggregate<ProfileRecurrentEvent>(CollectionName.ProfileEvents);
+        var aggregate = dbService.GetAggregate<ProfileRecurrentEvent>(CollectionName.ProfileRecurrentEvents);
 
         var objectIds = requestDto.ProfileIds.Select(ph => new ObjectId(ph)).ToList();
 

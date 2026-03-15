@@ -1,8 +1,6 @@
-using Core.Model.Events;
 using Core.Model.Events.Recurrence;
 using Core.Model.Notifications;
 using Core.Model.QueueMessages;
-using Core.Services.Events.Instances;
 using Core.Services.Masks;
 using Core.Services.Notifications;
 using Core.Services.Profiles;
@@ -10,15 +8,15 @@ using Core.Services.Profiles;
 namespace Core.Services.Events.Recurrence;
 
 public class RecurrentEventUpdatePropagationService(
-    ProfileRecurrentEventService profileEventService,
-    EventProfileService eventProfileService,
+    ProfileRecurrentEventService profileREventService,
+    RecurrentEventProfileService rEventProfileService,
     EventMaskService eventMaskService,
     BroadcastService broadcastService
 )
 {
-    public async Task PropagateUpdateEffects(RecurrentEvent ev, EventUpdateType type, string? actorId = null)
+    public async Task PropagateUpdateEffects(RecurrentEvent rev, EventUpdateType type, string? actorId = null)
     {
-        var eventProfiles = await eventProfileService.FindAllByEventId(ev.Id);
+        var eventProfiles = await rEventProfileService.FindAllByEventId(rev.Id);
         var profileIds = eventProfiles.Select(ep => ep.ProfileId).ToHashSet();
 
         if (profileIds.Count > 0)
@@ -27,15 +25,15 @@ public class RecurrentEventUpdatePropagationService(
 
             // update profileRecurrentEvents
             if (type != EventUpdateType.create)
-                tasks.Add(profileEventService.PropagateEventUpdatesAsync(ev, profileIds));
+                tasks.Add(profileREventService.PropagateEventUpdatesAsync(rev, profileIds));
 
             // update/create masks
             if (type != EventUpdateType.share)
-                tasks.Add(eventMaskService.PropagateRecurrentEventUpdateAsync(ev, type, profileIds, actorId));
+                tasks.Add(eventMaskService.PropagateRecurrentEventUpdateAsync(rev, type, profileIds, actorId));
 
             await Task.WhenAll(tasks);
 
-            var notification = GetUpdateNotification(type, ev, actorId);
+            var notification = GetUpdateNotification(type, rev, actorId);
             _ = broadcastService.BroadcastUpdate(notification, profileIds);
 
         }

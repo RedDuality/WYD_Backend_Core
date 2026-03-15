@@ -1,3 +1,4 @@
+using Core.Services.Util;
 using MongoDB.Bson;
 using MongoDB.Bson.Serialization.Attributes;
 
@@ -15,7 +16,7 @@ public class RecurrentEvent(
 
     [BsonElement("recurrenceEnd")]
     [BsonIgnoreIfNull]
-    public DateTimeOffset? RecurrenceEnd { get; set; }
+    public DateTimeOffset? RecurrenceEnd { get; set; } = RecurrenceService.ExtractRecurrenceEnd(recurrenceRule, timeZone);
 
     [BsonElement("timeZone")]
     [BsonIgnoreIfNull]

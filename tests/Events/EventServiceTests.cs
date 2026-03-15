@@ -1,4 +1,3 @@
-using Core.Services.Events;
 using Core.DTO.EventAPI;
 using Core.Model.Profiles;
 using Core.Components.Database;
@@ -13,6 +12,7 @@ using Core.Model.Masks;
 using Core.Services.Profiles;
 using MongoDB.Bson;
 using MongoDB.Driver;
+using Core.Services.Events.Instances;
 
 namespace Core.Tests.Events;
 
@@ -20,7 +20,7 @@ namespace Core.Tests.Events;
 public class EventServiceTests
 {
     private readonly ProfileService _profileService;
-    private readonly EventRetrieveService _eventService;
+    private readonly EventService _eventService;
     private readonly MongoDbService _dbService;
     private readonly Profile _creator;
 
@@ -36,7 +36,7 @@ public class EventServiceTests
         var scope = fixture.ServiceProvider!.CreateScope();
 
         _profileService = scope.ServiceProvider.GetRequiredService<ProfileService>();
-        _eventService = scope.ServiceProvider.GetRequiredService<EventRetrieveService>();
+        _eventService = scope.ServiceProvider.GetRequiredService<EventService>();
 
         _session = fixture.StartSessionAsync().GetAwaiter().GetResult();
 
@@ -53,8 +53,7 @@ public class EventServiceTests
             Title = "Release Party",
             StartTime = DateTimeOffset.UtcNow.AddDays(1),
             EndTime = DateTimeOffset.UtcNow.AddDays(1).AddHours(2),
-            Description = "Celebrating the new test suite!",
-            ProfileIds = []
+            Description = "Celebrating the new test suite!"
         };
 
         // ACT
@@ -149,21 +148,24 @@ public class EventServiceTests
             Title = "Shared Celebration",
             StartTime = DateTimeOffset.UtcNow.AddDays(1),
             EndTime = DateTimeOffset.UtcNow.AddDays(1).AddHours(2),
-            Description = "Celebrating the new test suite!",
-            ProfileIds = []
+            Description = "Celebrating the new test suite!"
         };
         var createdEventDto = await _eventService.CreateEventAsync(request, _creator);
 
         // 2. ACT
-        var shareRequest = new List<ShareEventRequestDto>
+        var shareRequest = new ShareEventRequestDto
         {
-            new() {
-                CommunityId = community.Id.ToString(),
-                GroupId = group.Id.ToString()
-            }
+            SharedGroups = [
+                new ShareGroupIdentifierDto
+                {
+                    CommunityId = community.Id.ToString(),
+                    GroupId = group.Id.ToString()
+                }
+            ]
         };
+
         var response = await _eventService.ShareEventAsync(_creator, createdEventDto.Hash.ToString(), shareRequest);
-        
+
         // wait for propagation
         await Task.Delay(200);
 
@@ -219,13 +221,37 @@ public class EventServiceTests
         // 1. ARRANGE
         var invitedProfile = await _profileService.CreateAsync("jsmith", "Jane Smith", _session);
 
+        var community = new Community("Test Community Two", _creator, CommunityType.Personal);
+        await _dbService.CreateOneAsync(CollectionName.Communities, community, null);
+
+        var groupProfiles = new HashSet<GroupProfile>
+        {
+            new(_creator, GroupRole.Owner),
+            new(invitedProfile, GroupRole.Viewer)
+        };
+
+        var group = new Group(community, "Test Group Two", groupProfiles);
+        await _dbService.CreateOneAsync(CollectionName.Groups, group, null);
+
+
+        var shareRequest = new ShareEventRequestDto
+        {
+            SharedGroups = [
+                new ShareGroupIdentifierDto
+                {
+                    CommunityId = community.Id.ToString(),
+                    GroupId = group.Id.ToString()
+                }
+            ]
+        };
+
         var request = new CreateEventRequestDto
         {
             Title = "Collaborative Workshop",
             StartTime = DateTimeOffset.UtcNow.AddDays(2),
             EndTime = DateTimeOffset.UtcNow.AddDays(2).AddHours(3),
             Description = "A shared event creation test",
-            ProfileIds = [invitedProfile.Id.ToString()]
+            ShareDto = shareRequest
         };
 
         // 2. ACT

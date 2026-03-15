@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Core.Model.Util.Exceptions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 
@@ -14,15 +15,15 @@ public static class ExceptionService
                 unauthorizedEx.Message
             ),
 
-
             InvalidOperationException invalidOperationException => new BadRequestObjectResult(
                 invalidOperationException.Message
             ),
 
+            ObjectDeletedException => new NoContentResult(),
+            
             KeyNotFoundException keyNotFoundEx => new NotFoundObjectResult(
                 keyNotFoundEx.Message
             ),
-
             ArgumentException argumentException => new BadRequestObjectResult(
                 "Input error: " + argumentException.Message
             ),

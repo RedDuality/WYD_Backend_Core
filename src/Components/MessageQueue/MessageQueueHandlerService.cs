@@ -2,7 +2,6 @@ using Core.Model.QueueMessages;
 using Core.Services.Events.Instances;
 using Core.Services.Events.Recurrence;
 using Core.Services.Profiles;
-using MongoDB.Bson;
 
 namespace Core.Components.MessageQueue;
 

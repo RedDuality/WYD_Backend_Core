@@ -77,7 +77,7 @@ public class ImportService(MongoDbService dbService)
             .ToList();
 
         var profileEvents = events
-            .Select(ev => new ProfileRecurrentEvent(ev, creatorProfile.Id) { Confirmed = true, Role = EventRole.Owner })
+            .Select(ev => new ProfileRecurrentEvent(ev, creatorProfile.Id))
             .ToList();
 
         var eventProfiles = profileEvents

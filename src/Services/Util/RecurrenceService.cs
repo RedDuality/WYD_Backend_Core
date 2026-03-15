@@ -1,11 +1,9 @@
-
-using Ical.Net;
 using Ical.Net.CalendarComponents;
 using Ical.Net.DataTypes;
 
 namespace Core.Services.Util;
 
-public class RecurrenceExpansionService()
+public class RecurrenceService()
 {
     public static IEnumerable<DateTimeOffset> GetOccurrences(
         string recurrenceRule,
@@ -39,7 +37,7 @@ public class RecurrenceExpansionService()
         };
 
 
-        var calendar = new Calendar();
+        var calendar = new Ical.Net.Calendar();
         calendar.Events.Add(calEvent);
 
 
@@ -54,5 +52,20 @@ public class RecurrenceExpansionService()
                     DateTime.SpecifyKind(localDt, DateTimeKind.Unspecified), offset)
                     .ToUniversalTime();
             });
+    }
+
+    public static DateTimeOffset? ExtractRecurrenceEnd(string recurrenceRule, TimeZoneInfo tz)
+    {
+        var pattern = new RecurrencePattern(recurrenceRule);
+
+        if (pattern.Until == null)
+            return null;
+
+        var dt = pattern.Until.Value;
+
+        var offset = tz.GetUtcOffset(dt);
+        var dto = new DateTimeOffset(DateTime.SpecifyKind(dt, DateTimeKind.Unspecified), offset);
+
+        return dto.ToUniversalTime();
     }
 }

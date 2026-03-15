@@ -11,6 +11,7 @@ using Core.Services.Users;
 using Core.Services.Util;
 using Core.Services.Events.Instances;
 using Core.Services.Events.Recurrence;
+using Core.Components.MessageQueue.ImplementationSpecific;
 
 namespace Core.Tests.Setup;
 

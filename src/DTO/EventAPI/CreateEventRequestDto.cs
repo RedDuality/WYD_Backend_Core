@@ -2,7 +2,7 @@ using Core.DTO.CommunityAPI;
 
 namespace Core.DTO.EventAPI;
 
-public class CreateEventRequestDto
+public record CreateEventRequestDto
 {
     required public string Title { get; set; }
     public string? Description { get; set; }
