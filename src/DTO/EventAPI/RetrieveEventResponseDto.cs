@@ -5,7 +5,7 @@ namespace Core.DTO.EventAPI;
 
 public record RetrieveEventResponseDto(Event Ev)
 {
-    public string Id { get; set; } = GetId(Ev);
+    public string Id { get; set; } = Ev.Id.ToString();
     public string Title { get; set; } = Ev.Title;
     public DateTimeOffset StartTime { get; set; } = Ev.StartTime;
     public DateTimeOffset EndTime { get; set; } = Ev.EndTime;
@@ -25,13 +25,6 @@ public record RetrieveEventResponseDto(Event Ev)
     public List<ProfileEventDto>? ProfileEvents { get; set; }
 
     public EventDetailsDto? EventDetails { get; set; }
-
-
-    private static string GetId(Event ev)
-    {
-        // for generatedRecurrencyInstance have the sameId
-        return (ev.MasterEventId == null && ev.DetachedInstance == false) ? ev.Id.ToString() : ev.MasterEventId.ToString() + '_' + ev.RecurrencyInstanceId;  
-    }
 
     // details might be null for update response
     public RetrieveEventResponseDto(Event ev, EventDetails? details = null)

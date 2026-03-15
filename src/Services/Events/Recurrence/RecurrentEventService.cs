@@ -46,8 +46,17 @@ public class RecurrentEventService(
             startTime,
             endTime)
             .Select(occurrenceStart => BuildEventInstance(ev, occurrenceStart, occurrenceStart.Add(eventDuration)))
-            .Select(instanceEvent => new RetrieveEventResponseDto(
-                instanceEvent,
+            .Select(instanceEvent => GetGeneratedEventDto(instanceEvent,profileId))
+            .ToList();
+
+        return dtos;
+    }
+
+    private static RetrieveEventResponseDto GetGeneratedEventDto(Event ev, ObjectId profileId, EventDetails? details = null)
+    {
+        return new RetrieveEventResponseDto(
+                ev,
+                details: details,
                 profileEventDtos: [
                     new ProfileEventDto {
                         ProfileId = profileId.ToString(),
@@ -56,10 +65,8 @@ public class RecurrentEventService(
                         Trusted = true
                     }
                 ]
-            ))
-            .ToList();
-
-        return dtos;
+            )
+        { Id = ev.MasterEventId.ToString() + '_' + ev.RecurrencyInstanceId };
     }
 
     /// Builds a transient (non-persisted) Event for one recurrence occurrence,
@@ -123,7 +130,7 @@ public class RecurrentEventService(
     #endregion
 
     #region retrieve
-    public async Task<RetrieveEventResponseDto> RetrieveDetailsById(RetrieveRecurrenceInstanceDetailsRequestDto requestDto)
+    public async Task<RetrieveEventResponseDto> RetrieveDetailsById(Profile profile, RetrieveRecurrenceInstanceDetailsRequestDto requestDto)
     {
         // check if an instance was created over the generated one.
         var possibleInstance = await CheckPossibleInstanceId(requestDto);
@@ -132,7 +139,7 @@ public class RecurrentEventService(
 
         // if not, check if master still covers that.
         // if it covers, return the generated instance + event details
-        return await GetGeneratedInstance(requestDto);
+        return await GetGeneratedInstance(profile, requestDto);
 
     }
 
@@ -152,7 +159,7 @@ public class RecurrentEventService(
         return null;
     }
 
-    private async Task<RetrieveEventResponseDto> GetGeneratedInstance(RetrieveRecurrenceInstanceDetailsRequestDto requestDto)
+    private async Task<RetrieveEventResponseDto> GetGeneratedInstance(Profile profile, RetrieveRecurrenceInstanceDetailsRequestDto requestDto)
     {
         var master = await dbService.RetrieveByIdAsync<RecurrentEvent>(recurrentEventCollection, requestDto.MasterEventId);
 
@@ -181,7 +188,8 @@ public class RecurrentEventService(
 
         // EventDetails are stored against the master event, not individual instances.
         var eventDetails = await eventDetailsService.RetrieveByEventId(requestDto.MasterEventId);
-        return new RetrieveEventResponseDto(eventInstance, details: eventDetails);
+
+        return GetGeneratedEventDto(eventInstance, profile.Id, eventDetails);
     }
 
     /// Reverses the compact ISO-8601 instance ID produced in <see cref="BuildEventInstance"/>
