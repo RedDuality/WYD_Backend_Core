@@ -24,7 +24,10 @@ public class ProfileRecurrentEvent(RecurrentEvent ev, ObjectId profileId) : Base
     public DateTimeOffset RecurrenceStart { get; set; } = ev.StartTime.ToUniversalTime();
 
     [BsonElement("recurrenceEnd")]
-    public DateTimeOffset? RecurrenceEnd { get; set; } = ev.RecurrenceEnd?.ToUniversalTime();
+    public DateTimeOffset RecurrenceEnd { get; set; } = ev.RecurrenceEnd.ToUniversalTime();
+
+    [BsonElement("role")]
+    public EventRole Role { get; set; } = EventRole.Partecipant;
 
 }
 

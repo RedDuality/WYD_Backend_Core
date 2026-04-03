@@ -6,7 +6,6 @@ using MongoDB.Bson;
 
 namespace Core.Services.Users;
 
-
 public class UserProfileService(MongoDbService dbService)
 {
 

@@ -3,7 +3,6 @@ using MongoDB.Driver;
 using Ical.Net.DataTypes;
 
 using Core.Components.Database;
-using Core.Model.Util;
 using Core.DTO.EventAPI;
 using Core.Model.Profiles;
 using Core.Model.Events;
@@ -13,6 +12,7 @@ using Core.Components.MessageQueue;
 using Core.Model.QueueMessages;
 using Core.Services.Util;
 using Core.Model.Util.Exceptions;
+using Core.Model.Util.EventsQuery;
 
 namespace Core.Services.Events.Recurrence;
 
@@ -46,7 +46,7 @@ public class RecurrentEventService(
             startTime,
             endTime)
             .Select(occurrenceStart => BuildEventInstance(ev, occurrenceStart, occurrenceStart.Add(eventDuration)))
-            .Select(instanceEvent => GetGeneratedEventDto(instanceEvent,profileId))
+            .Select(instanceEvent => GetGeneratedEventDto(instanceEvent, profileId))
             .ToList();
 
         return dtos;
@@ -97,7 +97,7 @@ public class RecurrentEventService(
     #endregion
 
     #region create
-    public async Task<List<RetrieveEventResponseDto>> CreateRecurrentEventAsync(CreateRecurrentEventRequestDto newEventDto, Profile creatorProfile)
+    public async Task<RetrieveRecurrentEventResponseDto> CreateRecurrentEventAsync(CreateRecurrentEventRequestDto newEventDto, Profile creatorProfile)
     {
         var ev = new RecurrentEvent(
             newEventDto.Title,
@@ -106,17 +106,23 @@ public class RecurrentEventService(
             newEventDto.GetTimeZoneInfo(),
             newEventDto.RecurrenceRule);
 
-        List<RetrieveEventResponseDto> InstanceDtos = await dbService.ExecuteInTransactionAsync(async (session) =>
+        RetrieveRecurrentEventResponseDto InstanceDto = await dbService.ExecuteInTransactionAsync(async (session) =>
         {
             await dbService.CreateOneAsync(recurrentEventCollection, ev, session);
             EventDetails eventDetails = await eventDetailsService.CreateAsync(ev, newEventDto.Description, session);
-            ProfileRecurrentEvent profileRecurrentEvent = await profileEventService.CreateProfileEventAsync(ev, creatorProfile.Id, session);
+            ProfileRecurrentEvent profileRecurrentEvent = await profileEventService.CreateProfileEventAsync(ev, creatorProfile.Id, session, role: EventRole.Owner);
 
             await SendCreatePropagationMessage(ev, creatorProfile);
 
-            return ExpandRecurrentEvent(ev, creatorProfile.Id, newEventDto.CacheIntervalStart, newEventDto.CacheIntervalEnd);
+            return new RetrieveRecurrentEventResponseDto(ev, eventDetails, profileEventDtos: [new ProfileEventDto
+                {
+                    ProfileId = profileRecurrentEvent.ProfileId.ToString(),
+                    Role = profileRecurrentEvent.Role,
+                    Confirmed = profileRecurrentEvent.Confirmed,
+                    Trusted = false
+                }]);
         });
-        return InstanceDtos;
+        return InstanceDto;
     }
 
     private async Task SendCreatePropagationMessage(RecurrentEvent ev, Profile creatorProfile)
@@ -140,7 +146,6 @@ public class RecurrentEventService(
         // if not, check if master still covers that.
         // if it covers, return the generated instance + event details
         return await GetGeneratedInstance(profile, requestDto);
-
     }
 
     private async Task<RetrieveEventResponseDto?> CheckPossibleInstanceId(RetrieveRecurrenceInstanceDetailsRequestDto retrieveDto)
@@ -188,7 +193,6 @@ public class RecurrentEventService(
 
         // EventDetails are stored against the master event, not individual instances.
         var eventDetails = await eventDetailsService.RetrieveByEventId(requestDto.MasterEventId);
-
         return GetGeneratedEventDto(eventInstance, profile.Id, eventDetails);
     }
 
@@ -220,15 +224,13 @@ public class RecurrentEventService(
         }
     }
 
-    public async Task<List<RetrieveEventResponseDto>> RetrieveEventsByProfileIds(RetrieveMultipleEventsRequestDto requestDto)
+    public async Task<List<RetrieveRecurrentEventResponseDto>> RetrieveMastersByProfileIds(List<ObjectId> profileIds, RetrieveMultipleEventsRequestDto requestDto)
     {
         // create pipeline, to have the db handle everything in one operation
         var aggregate = dbService.GetAggregate<ProfileRecurrentEvent>(CollectionName.ProfileRecurrentEvents);
 
-        var objectIds = requestDto.ProfileIds.Select(ph => new ObjectId(ph)).ToList();
-
         var filter = Builders<ProfileRecurrentEvent>.Filter.And(
-            Builders<ProfileRecurrentEvent>.Filter.In(pe => pe.ProfileId, objectIds),
+            Builders<ProfileRecurrentEvent>.Filter.In(pe => pe.ProfileId, profileIds),
             Builders<ProfileRecurrentEvent>.Filter.Gte(pe => pe.RecurrenceEnd, requestDto.StartTime.ToUniversalTime()),
             Builders<ProfileRecurrentEvent>.Filter.Lte(pe => pe.RecurrenceStart, requestDto.EndTime.ToUniversalTime())
         );
@@ -246,19 +248,35 @@ public class RecurrentEventService(
 
         //flat out the results on a new projected object (profileEvent only have one event)
         var projected = lookupStage
-            .Project(prewce => new EventWithProfile(prewce.Events[0], prewce.ProfileId));
+            .Project(prewce => new
+            {
+                Event = prewce.Events[0],
+                prewce.ProfileId,
+                prewce.Role,
+                prewce.Confirmed
+            });
 
-        var result = await projected.ToListAsync();
 
+        var grouped = projected.Group(
+            pe => pe.Event.Id,
+            group => new
+            {
+                ev = group.First().Event,
+                ProfileEvents = group.Select(pe => new ProfileEventDto
+                {
+                    ProfileId = pe.ProfileId.ToString(),
+                    Role = pe.Role,
+                    Confirmed = pe.Confirmed,
+                    Trusted = false
+                }).ToList()
+            }
+        );
 
-        // return expanded events
-        return result.SelectMany(
-            ewp => ExpandRecurrentEvent(
-                ewp.Event,
-                ewp.ProfileId,
-                requestDto.StartTime,
-                requestDto.EndTime)
-            ).ToList();
+        var result = await grouped.ToListAsync();
+
+        var finalResult = result.Select(g => new RetrieveRecurrentEventResponseDto(g.ev, profileEventDtos: g.ProfileEvents)).ToList();
+
+        return finalResult;
     }
 
     #endregion

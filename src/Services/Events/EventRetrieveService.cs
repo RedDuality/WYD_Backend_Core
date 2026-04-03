@@ -1,13 +1,13 @@
 using MongoDB.Bson;
 using Core.Components.Database;
 using MongoDB.Driver;
-using Core.Model.Util;
 using Core.DTO.EventAPI;
 using Core.Model.Profiles;
 using Core.Model.Events;
 using Core.Services.Profiles;
 using Core.Services.Events.Recurrence;
 using Core.Services.Events.Instances;
+using Core.Model.Util.EventsQuery;
 
 namespace Core.Services.Events;
 
@@ -24,7 +24,7 @@ public class EventRetrieveService(
     private readonly CollectionName eventCollection = CollectionName.Events;
 
 
-    #region retrieve
+    #region single
     public async Task CheckEventExists(string id)
     {
         await dbService.ConfirmExists<Event>(eventCollection, id);
@@ -45,34 +45,42 @@ public class EventRetrieveService(
         return new RetrieveEventResponseDto(ev, details: eventDetails);
     }
 
-    public async Task<List<RetrieveEventResponseDto>> RetrieveEventsByProfileIds(RetrieveMultipleEventsRequestDto requestDto)
-    {
-        var instancesTask = instancesEventService.RetrieveEventsByProfileIds(requestDto);
-        var recurrenceTask = recurrentEventService.RetrieveEventsByProfileIds(requestDto);
+    #endregion
 
-        var results = await Task.WhenAll(instancesTask, recurrenceTask);
-        return SubstituteWithInstances(results[0], results[1]);
+    #region multiple
+    public async Task<RetrieveMultipleEventsResponseDto> RetrieveEventsByProfileIds(List<ObjectId> profileIds, RetrieveMultipleEventsRequestDto requestDto)
+    {
+        var instancesTask = instancesEventService.RetrieveEventsByProfileIds(profileIds, requestDto);
+        var recurrenceTask = recurrentEventService.RetrieveMastersByProfileIds(profileIds, requestDto);
+
+        await Task.WhenAll(instancesTask, recurrenceTask);
+
+        var instances = await instancesTask;
+        var masters = await recurrenceTask;
+
+        return new RetrieveMultipleEventsResponseDto(instances, masters);
     }
 
-    // filter out edited recurrence Instances
-    private static List<RetrieveEventResponseDto> SubstituteWithInstances(
-        List<RetrieveEventResponseDto> instanceEvents,
-        List<RetrieveEventResponseDto> recurrenceEvents)
-    {
-        if (recurrenceEvents.Count > 0)
+    /*
+        // filter out edited recurrence Instances
+        private static List<RetrieveEventResponseDto> SubstituteWithInstances(
+            List<RetrieveEventResponseDto> instanceEvents,
+            List<RetrieveEventResponseDto> recurrenceEvents)
         {
-            var overriddenInstanceIds = instanceEvents
-                .Where(e => e.RecurrencyInstanceId != null)
-                .Select(e => e.RecurrencyInstanceId)
-                .ToHashSet();
+            if (recurrenceEvents.Count > 0)
+            {
+                var overriddenInstanceIds = instanceEvents
+                    .Where(e => e.RecurrencyInstanceId != null)
+                    .Select(e => e.RecurrencyInstanceId)
+                    .ToHashSet();
 
-            recurrenceEvents = recurrenceEvents
-                .Where(e => e.RecurrencyInstanceId == null || !overriddenInstanceIds.Contains(e.RecurrencyInstanceId))
-                .ToList();
+                recurrenceEvents = recurrenceEvents
+                    .Where(e => e.RecurrencyInstanceId == null || !overriddenInstanceIds.Contains(e.RecurrencyInstanceId))
+                    .ToList();
+            }
+            return instanceEvents.Concat(recurrenceEvents).ToList();
         }
-        return instanceEvents.Concat(recurrenceEvents).ToList();
-    }
-
+    */
     public async Task<List<RetrieveEventResponseDto>> RetrieveUpdatesByProfileIds(RetrieveUpdatedEventsRequestDto requestDto)
     {
         var aggregate = dbService.GetAggregate<ProfileEvent>(CollectionName.ProfileEvents);

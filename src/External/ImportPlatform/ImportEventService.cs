@@ -68,7 +68,6 @@ public class ImportService(MongoDbService dbService)
                 dto.RecurrenceRule)
                 {
                     IsAllDay = dto.IsAllDay,
-                    RecurrenceEnd = dto.RecurrenceEnd,
                 })
             .ToList();
 

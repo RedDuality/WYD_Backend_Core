@@ -1,7 +1,6 @@
 using MongoDB.Bson;
 using Core.Components.Database;
 using MongoDB.Driver;
-using Core.Model.Util;
 using Core.Components.ObjectStorage;
 using Core.DTO.MediaAPI;
 using Core.DTO.EventAPI;
@@ -12,6 +11,7 @@ using Core.Services.Communities;
 using Core.Components.MessageQueue;
 using Core.Model.QueueMessages;
 using Core.Services.Profiles;
+using Core.Model.Util.EventsQuery;
 
 namespace Core.Services.Events.Instances;
 
@@ -42,7 +42,7 @@ public class EventService(
         {
             await dbService.CreateOneAsync(eventCollection, ev, session);
             EventDetails eventDetails = await eventDetailsService.CreateAsync(ev, newEventDto.Description, session);
-            ProfileEvent profileEvent = await profileEventService.CreateProfileEventAsync(ev, creatorProfile.Id, session);
+            ProfileEvent profileEvent = await profileEventService.CreateProfileEventAsync(ev, creatorProfile.Id, session, role: EventRole.Owner);
 
             if (sharedProfileIds.Count > 0)
                 ev = await ShareEvent(ev, sharedProfileIds, false, session);
@@ -265,15 +265,13 @@ public class EventService(
         return new RetrieveEventResponseDto(ev, details: eventDetails);
     }
 
-    public async Task<List<RetrieveEventResponseDto>> RetrieveEventsByProfileIds(RetrieveMultipleEventsRequestDto requestDto)
+    public async Task<List<RetrieveEventResponseDto>> RetrieveEventsByProfileIds(List<ObjectId> profileIds, RetrieveMultipleEventsRequestDto requestDto)
     {
         // create pipeline, to have the db handle everything in one operation
         var aggregate = dbService.GetAggregate<ProfileEvent>(CollectionName.ProfileEvents);
 
-        var objectIds = requestDto.ProfileIds.Select(pId => new ObjectId(pId)).ToList();
-
         var filter = Builders<ProfileEvent>.Filter.And(
-            Builders<ProfileEvent>.Filter.In(pe => pe.ProfileId, objectIds),
+            Builders<ProfileEvent>.Filter.In(pe => pe.ProfileId, profileIds),
             Builders<ProfileEvent>.Filter.Gte(pe => pe.EventEndTime, requestDto.StartTime.ToUniversalTime()),
             Builders<ProfileEvent>.Filter.Lte(pe => pe.EventStartTime, requestDto.EndTime.ToUniversalTime())
         );

@@ -13,7 +13,7 @@ public class ProfileEventService(MongoDbService dbService, EventProfileService e
 {
     private readonly CollectionName profileEventCollection = CollectionName.ProfileEvents;
 
-    public async Task<ProfileEvent> CreateProfileEventAsync(BaseEvent ev, ObjectId profileId, IClientSessionHandle session, bool confirmed = true)
+    public async Task<ProfileEvent> CreateProfileEventAsync(BaseEvent ev, ObjectId profileId, IClientSessionHandle session, bool confirmed = true, EventRole role = EventRole.Partecipant)
     {
         ProfileEvent profileEvent = new(
                 ev,
@@ -21,6 +21,7 @@ public class ProfileEventService(MongoDbService dbService, EventProfileService e
             )
         {
             Confirmed = confirmed,
+            Role = role,
         };
         await dbService.CreateOneAsync(profileEventCollection, profileEvent, session);
 

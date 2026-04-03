@@ -1,3 +1,5 @@
+using Core.Model.Events;
+using Core.Model.Events.Recurrence;
 using Core.Model.Masks;
 using Core.Model.MediaStorage;
 using Core.Model.Profiles;
@@ -55,6 +57,7 @@ public class MongoDbInitializer(
             isUnique: true
         );
     }
+
     private async Task InitialiseProfilesAsync()
     {
         await initService.InitializeCollectionAsync(CollectionName.Profiles, "_id");
@@ -89,6 +92,31 @@ public class MongoDbInitializer(
             [("profileId", 1), ("updatedAt", 1)]
         );
 
+        // RecurrentEvent Join
+        await initService.InitializeCollectionAsync(CollectionName.ProfileRecurrentEvents, "profileId");
+        // retrieveEvents
+        await initService.CreateCompoundIndexAsync<ProfileRecurrentEvent>(
+            CollectionName.ProfileRecurrentEvents,
+            [("profileId", 1), ("recurrenceStart", 1), ("recurrenceEnd", 1)]
+        );
+        // create profileRecurrentEvent, ensure uniqueness
+        await initService.CreateCompoundIndexAsync<ProfileRecurrentEvent>(
+            CollectionName.ProfileRecurrentEvents,
+            [("profileId", 1), ("eventId", 1)],
+            isUnique: true
+        );
+        // propagate updates
+        await initService.CreateCompoundIndexAsync<ProfileRecurrentEvent>(
+            CollectionName.ProfileRecurrentEvents,
+            [("profileId", 1), ("eventId", 1), ("eventUpdatedAt", -1)]
+        );
+        // retrieve updates
+        await initService.CreateCompoundIndexAsync<ProfileRecurrentEvent>(
+            CollectionName.ProfileRecurrentEvents,
+            [("profileId", 1), ("updatedAt", 1)]
+        );
+
+
         // collection join
         await initService.InitializeCollectionAsync(CollectionName.ProfileCommunities, "profileId");
         await initService.CreateIndexAsync<ProfileCommunity>(CollectionName.ProfileCommunities, "communityUpdatedAt");
@@ -98,6 +126,7 @@ public class MongoDbInitializer(
         // mask imports
         await initService.InitializeCollectionAsync(CollectionName.MaskProfileImports, "maskProfileImports");
     }
+
     private async Task InitialiseMasksAsync()
     {
         // Masks
@@ -125,23 +154,36 @@ public class MongoDbInitializer(
         );
 
     }
+    
     private async Task InitialiseEventsAsync()
     {
         // Events
         await initService.InitializeCollectionAsync(CollectionName.Events, "_id");
 
-        await initService.InitializeCollectionAsync(CollectionName.EventDetails, "eventId");
-
-        await initService.InitializeCollectionAsync(CollectionName.EventMedia, "parentId");
-        await initService.CreateIndexAsync<Media>(CollectionName.EventMedia, "creationDate");
-
         await initService.InitializeCollectionAsync(CollectionName.EventProfiles, "eventId");
-        await initService.CreateCompoundIndexAsync<ProfileEvent>(
+        await initService.CreateCompoundIndexAsync<EventProfile>(
             CollectionName.EventProfiles,
             [("eventId", 1), ("profileId", 1)],
             isUnique: true
         );
+
+        //Recurrent
+        await initService.InitializeCollectionAsync(CollectionName.RecurrentEvents, "_id");
+
+        await initService.InitializeCollectionAsync(CollectionName.RecurrentEventProfiles, "eventId");
+        await initService.CreateCompoundIndexAsync<RecurrentEventProfile>(
+            CollectionName.RecurrentEventProfiles,
+            [("eventId", 1), ("profileId", 1)],
+            isUnique: true
+        );
+
+        // common
+        await initService.InitializeCollectionAsync(CollectionName.EventDetails, "eventId");
+
+        await initService.InitializeCollectionAsync(CollectionName.EventMedia, "parentId");
+        await initService.CreateIndexAsync<Media>(CollectionName.EventMedia, "creationDate");
     }
+
     private async Task InitialiseCommunitiesAsync()
     {
         // Community

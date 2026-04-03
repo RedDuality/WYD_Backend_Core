@@ -14,8 +14,6 @@ public class RecurrenceService()
         DateTimeOffset windowStart,
         DateTimeOffset windowEnd)
     {
-
-
         // Cap the upper bound at the series' own recurrence end, if defined.
         var effectiveEnd = recurrenceEnd.HasValue && recurrenceEnd.Value < windowEnd
             ? recurrenceEnd.Value
@@ -54,12 +52,12 @@ public class RecurrenceService()
             });
     }
 
-    public static DateTimeOffset? ExtractRecurrenceEnd(string recurrenceRule, TimeZoneInfo tz)
+    public static DateTimeOffset ExtractRecurrenceEnd(string recurrenceRule, TimeZoneInfo tz)
     {
         var pattern = new RecurrencePattern(recurrenceRule);
 
         if (pattern.Until == null)
-            return null;
+            return new DateTime(9999, 12, 31, 23, 59, 59, DateTimeKind.Utc);
 
         var dt = pattern.Until.Value;
 
@@ -68,4 +66,19 @@ public class RecurrenceService()
 
         return dto.ToUniversalTime();
     }
+
+    public static bool IsValidRRule(string rule)
+    {
+        if (string.IsNullOrWhiteSpace(rule)) return false;
+        try
+        {
+            var _ = new RecurrencePattern(rule); // if you use Ical.Net
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
 }

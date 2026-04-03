@@ -14,7 +14,12 @@ public class ProfileRecurrentEventService(
 {
     private readonly CollectionName profileRecurrentEventCollection = CollectionName.ProfileRecurrentEvents;
 
-    public async Task<ProfileRecurrentEvent> CreateProfileEventAsync(RecurrentEvent ev, ObjectId profileId, IClientSessionHandle session, bool confirmed = true)
+    public async Task<ProfileRecurrentEvent> CreateProfileEventAsync(
+        RecurrentEvent ev, 
+        ObjectId profileId, 
+        IClientSessionHandle session, 
+        bool confirmed = true, 
+        EventRole role = EventRole.Partecipant)
     {
         ProfileRecurrentEvent profileEvent = new(
                 ev,
@@ -22,6 +27,7 @@ public class ProfileRecurrentEventService(
             )
         {
             Confirmed = confirmed,
+            Role = role,
         };
 
         await dbService.CreateOneAsync(profileRecurrentEventCollection, profileEvent, session);
