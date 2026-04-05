@@ -27,35 +27,10 @@ public class RecurrentEventService(
 
     #region expand
 
-    /// Expands a RecurrentEvent into individual Event instances for all occurrences
-    /// that overlap with the given [startTime, endTime] window, then maps each to a DTO.
-    private static List<RetrieveEventResponseDto> ExpandRecurrentEvent(
-        RecurrentEvent ev,
-        ObjectId profileId,
-        DateTimeOffset startTime,
-        DateTimeOffset endTime)
-    {
-        TimeSpan eventDuration = ev.EndTime - ev.StartTime;
-
-        var dtos = RecurrenceService.GetOccurrences(
-            ev.RecurrenceRule,
-            ev.StartTime,
-            ev.RecurrenceEnd,
-            ev.TimeZone,
-            Duration.FromTimeSpanExact(eventDuration),
-            startTime,
-            endTime)
-            .Select(occurrenceStart => BuildEventInstance(ev, occurrenceStart, occurrenceStart.Add(eventDuration)))
-            .Select(instanceEvent => GetGeneratedEventDto(instanceEvent, profileId))
-            .ToList();
-
-        return dtos;
-    }
-
-    private static RetrieveEventResponseDto GetGeneratedEventDto(Event ev, ObjectId profileId, EventDetails? details = null)
+    private static RetrieveEventResponseDto GetGeneratedEventDto(Event generated, ObjectId profileId, EventDetails? details = null)
     {
         return new RetrieveEventResponseDto(
-                ev,
+                generated,
                 details: details,
                 profileEventDtos: [
                     new ProfileEventDto {
@@ -66,18 +41,16 @@ public class RecurrentEventService(
                     }
                 ]
             )
-        { Id = ev.MasterEventId.ToString() + '_' + ev.RecurrencyInstanceId };
+        { Id = generated.MasterEventId.ToString() + '_' + generated.RecurrencyInstanceId };
     }
 
-    /// Builds a transient (non-persisted) Event for one recurrence occurrence,
+    /// Generates a transient (non-persisted) Event for one recurrence occurrence,
     /// copying all relevant fields from the master RecurrentEvent.
-    private static Event BuildEventInstance(
+    private static Event GenerateRecurrenceInstance(
         RecurrentEvent master,
         DateTimeOffset occurrenceStart,
         DateTimeOffset occurrenceEnd)
     {
-        // Use compact ISO-8601 UTC instant as the instance identifier —
-        // uniquely identifies this slot within the recurrence series.
         var instanceId = master.IsAllDay
             ? occurrenceStart.UtcDateTime.ToString("yyyyMMdd")       // DATE
             : occurrenceStart.UtcDateTime.ToString("yyyyMMddTHHmmssZ"); // DATE-TIME
@@ -86,7 +59,7 @@ public class RecurrentEventService(
         {
             UpdatedAt = master.UpdatedAt,
             IsAllDay = master.IsAllDay,
-            MasterEventId = master.Id,     // links back to the RecurrentEvent
+            MasterEventId = master.Id,
             RecurrencyInstanceId = instanceId,
             DetachedInstance = false,
             ImportedAccountUid = master.ImportedAccountUid,
@@ -189,14 +162,14 @@ public class RecurrentEventService(
         if (!occurrenceExists)
             throw new ObjectDeletedException();
 
-        Event eventInstance = BuildEventInstance(master, occurrenceStart, occurrenceStart.Add(eventDuration));
+        Event eventInstance = GenerateRecurrenceInstance(master, occurrenceStart, occurrenceStart.Add(eventDuration));
 
         // EventDetails are stored against the master event, not individual instances.
         var eventDetails = await eventDetailsService.RetrieveByEventId(requestDto.MasterEventId);
         return GetGeneratedEventDto(eventInstance, profile.Id, eventDetails);
     }
 
-    /// Reverses the compact ISO-8601 instance ID produced in <see cref="BuildEventInstance"/>
+    /// Reverses the compact ISO-8601 instance ID produced in <see cref="GenerateRecurrenceInstance"/>
     /// back into a <see cref="DateTimeOffset"/>.
     /// DATE format:      yyyyMMdd         → interpreted in the event's local time zone
     /// DATE-TIME format: yyyyMMddTHHmmssZ → UTC instant
