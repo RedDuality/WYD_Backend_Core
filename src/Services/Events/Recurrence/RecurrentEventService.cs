@@ -108,6 +108,79 @@ public class RecurrentEventService(
     }
     #endregion
 
+    #region modify
+    public async Task<RetrieveRecurrentEventResponseDto> UpdateRecurrentEvent(UpdateRecurrentEventRequestDto updateDto)
+    {
+        if (updateDto.UpdateType == RecurrentUpdateType.AllTheSequence)
+        {
+            // update the master
+            // what about detached instances?
+            // update the details
+            // propagate
+
+            var master = await dbService.RetrieveByIdAsync<RecurrentEvent>(recurrentEventCollection, updateDto.MasterEventId);
+            var updates = GetUpdates(updateDto);
+
+            EventDetails? details = null;
+
+            var upatedEvent = await dbService.ExecuteInTransactionAsync(async (session) =>
+                {
+                    if (updateDto.Description != null)
+                    {
+                        details = await eventDetailsService.Update(master.Id, updateDto.Description, session);
+                    }
+
+                    // Check if there are any updates to perform
+                    if (updates.Count != 0)
+                    {
+                        var combinedUpdate = Builders<RecurrentEvent>.Update.Combine(updates);
+
+                        master = await dbService.FindOneByIdAndUpdateAsync(recurrentEventCollection, master.Id, combinedUpdate, session);
+
+                        var propagationMessage = new QueueMessage<RecurrentEventPayload>(MessageType.eventUpdate, new(master, EventUpdateType.update));
+                        await messageService.SendPropagationMessageAsync(propagationMessage);
+                    }
+
+                    return master;
+                });
+            return new RetrieveRecurrentEventResponseDto(upatedEvent, details: details);
+
+        }
+        throw new Exception();
+
+    }
+
+    private static List<UpdateDefinition<RecurrentEvent>> GetUpdates(UpdateRecurrentEventRequestDto updateDto)
+    {
+        var updates = new List<UpdateDefinition<RecurrentEvent>>();
+
+        // Add updates to the list based on non-null values
+        if (updateDto.Title != null)
+        {
+            updates.Add(Builders<RecurrentEvent>.Update.Set(e => e.Title, updateDto.Title));
+        }
+
+        if (updateDto.StartTime != null)
+        {
+            updates.Add(Builders<RecurrentEvent>.Update.Set(e => e.StartTime, updateDto.StartTime));
+        }
+
+        if (updateDto.EndTime != null)
+        {
+            updates.Add(Builders<RecurrentEvent>.Update.Set(e => e.EndTime, updateDto.EndTime));
+        }
+
+        if (updateDto.RecurrenceRule != null)
+        {
+            string validRule = RecurrenceService.GetValidRule(updateDto.RecurrenceRule);
+            updates.Add(Builders<RecurrentEvent>.Update.Set(e => e.RecurrenceRule, validRule));
+        }
+
+        return updates;
+    }
+
+    #endregion
+
     #region retrieve
     public async Task<RetrieveEventResponseDto> RetrieveDetailsById(Profile profile, RetrieveRecurrenceInstanceDetailsRequestDto requestDto)
     {

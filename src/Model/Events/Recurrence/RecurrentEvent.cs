@@ -35,17 +35,9 @@ public class RecurrentEvent : BaseEvent
         string recurrenceRule
     ) : base(title, startTime, endTime)
     {
+        var validRule = RecurrenceService.GetValidRule(recurrenceRule);
 
-        var normalizedRule = recurrenceRule.Trim();
-        const string prefix = "RRULE:";
-
-        if (normalizedRule.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
-            normalizedRule = normalizedRule[prefix.Length..];
-
-        if (!RecurrenceService.IsValidRRule(normalizedRule))
-            throw new ArgumentException($"Invalid recurrence rule: '{recurrenceRule}'.", nameof(recurrenceRule));
-
-        var recurrenceEnd = RecurrenceService.ExtractRecurrenceEnd(normalizedRule, timeZone);
+        var recurrenceEnd = RecurrenceService.ExtractRecurrenceEnd(validRule, timeZone);
 
         if (recurrenceEnd < startTime)
             throw new ArgumentException(
@@ -54,7 +46,7 @@ public class RecurrentEvent : BaseEvent
             );
 
         TimeZone = timeZone;
-        RecurrenceRule = normalizedRule;
+        RecurrenceRule = validRule;
         RecurrenceEnd = recurrenceEnd;
     }
 }

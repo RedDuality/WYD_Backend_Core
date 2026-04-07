@@ -67,7 +67,21 @@ public class RecurrenceService()
         return dto.ToUniversalTime();
     }
 
-    public static bool IsValidRRule(string rule)
+    public static string GetValidRule(string rule)
+    {
+        var normalizedRule = rule.Trim();
+        const string prefix = "RRULE:";
+
+        if (normalizedRule.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+            normalizedRule = normalizedRule[prefix.Length..];
+
+        if (IsValidRRule(normalizedRule))
+            return normalizedRule;
+
+        throw new ArgumentException($"Invalid recurrence rule: '{normalizedRule}'.");
+    }
+
+    private static bool IsValidRRule(string rule)
     {
         if (string.IsNullOrWhiteSpace(rule)) return false;
         try
