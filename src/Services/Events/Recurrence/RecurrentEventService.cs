@@ -111,43 +111,56 @@ public class RecurrentEventService(
     #region modify
     public async Task<RetrieveRecurrentEventResponseDto> UpdateRecurrentEvent(UpdateRecurrentEventRequestDto updateDto)
     {
-        if (updateDto.UpdateType == RecurrentUpdateType.AllTheSequence)
+        switch (updateDto.UpdateType)
         {
-            // update the master
-            // what about detached instances?
-            // update the details
-            // propagate
+            case RecurrentUpdateType.AllTheSequence:
+                // update the master
 
-            var master = await dbService.RetrieveByIdAsync<RecurrentEvent>(recurrentEventCollection, updateDto.MasterEventId);
-            var updates = GetUpdates(updateDto);
+                // what about detached instances?
 
-            EventDetails? details = null;
+                // update the details
+                // propagate
 
-            var upatedEvent = await dbService.ExecuteInTransactionAsync(async (session) =>
+                var master = await dbService.RetrieveByIdAsync<RecurrentEvent>(recurrentEventCollection, updateDto.MasterEventId);
+                var updates = GetUpdates(updateDto);
+
+                EventDetails? details = null;
+
+                var upatedEvent = await dbService.ExecuteInTransactionAsync(async (session) =>
+                    {
+                        if (updateDto.Description != null)
+                        {
+                            details = await eventDetailsService.Update(master.Id, updateDto.Description, session);
+                        }
+
+                        // Check if there are any updates to perform
+                        if (updates.Count != 0)
+                        {
+                            var combinedUpdate = Builders<RecurrentEvent>.Update.Combine(updates);
+
+                            master = await dbService.FindOneByIdAndUpdateAsync(recurrentEventCollection, master.Id, combinedUpdate, session);
+
+                            var propagationMessage = new QueueMessage<RecurrentEventPayload>(MessageType.eventUpdate, new(master, EventUpdateType.update));
+                            await messageService.SendPropagationMessageAsync(propagationMessage);
+                        }
+
+                        return master;
+                    });
+                return new RetrieveRecurrentEventResponseDto(upatedEvent, details: details);
+
+            case RecurrentUpdateType.ThisInstance:
+                if (updateDto.InstanceEventId.Contains(updateDto.MasterEventId)) //generated event
                 {
-                    if (updateDto.Description != null)
-                    {
-                        details = await eventDetailsService.Update(master.Id, updateDto.Description, session);
-                    }
 
-                    // Check if there are any updates to perform
-                    if (updates.Count != 0)
-                    {
-                        var combinedUpdate = Builders<RecurrentEvent>.Update.Combine(updates);
-
-                        master = await dbService.FindOneByIdAndUpdateAsync(recurrentEventCollection, master.Id, combinedUpdate, session);
-
-                        var propagationMessage = new QueueMessage<RecurrentEventPayload>(MessageType.eventUpdate, new(master, EventUpdateType.update));
-                        await messageService.SendPropagationMessageAsync(propagationMessage);
-                    }
-
-                    return master;
-                });
-            return new RetrieveRecurrentEventResponseDto(upatedEvent, details: details);
-
+                } else { //detached instance
+                    
+                }
+                throw new Exception();
+                break
+            case RecurrentUpdateType.ThisAndAllFollowing:
+                throw new Exception();
+                break;
         }
-        throw new Exception();
-
     }
 
     private static List<UpdateDefinition<RecurrentEvent>> GetUpdates(UpdateRecurrentEventRequestDto updateDto)
