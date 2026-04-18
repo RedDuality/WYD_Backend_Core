@@ -40,16 +40,8 @@ public class EventService(
 
         RetrieveEventResponseDto EventDto = await dbService.ExecuteInTransactionAsync(async (session) =>
         {
-            await dbService.CreateOneAsync(eventCollection, ev, session);
-            EventDetails eventDetails = await eventDetailsService.CreateAsync(ev, newEventDto.Description, session);
-            ProfileEvent profileEvent = await profileEventService.CreateProfileEventAsync(ev, creatorProfile.Id, session, role: EventRole.Owner);
-
-            if (sharedProfileIds.Count > 0)
-                ev = await ShareEvent(ev, sharedProfileIds, false, session);
-
-            await SendCreatePropagationMessage(ev, creatorProfile);
-
-            return new RetrieveEventResponseDto(ev, eventDetails, [profileEvent]);
+            var (newEvent, details, profileEvent) = await CreateEvent(ev, creatorProfile, sharedProfileIds, newEventDto.Description, session);
+            return new RetrieveEventResponseDto(newEvent, details, [profileEvent]);
         });
         return EventDto;
     }
@@ -63,6 +55,27 @@ public class EventService(
         }
         return sharedProfileIds;
     }
+
+    public async Task<(Event, EventDetails, ProfileEvent)> CreateEvent(
+        Event ev,
+        Profile creatorProfile,
+        HashSet<ObjectId> otherProfilesIds,
+        string? description,
+        IClientSessionHandle session)
+    {
+        await dbService.CreateOneAsync(eventCollection, ev, session);
+        EventDetails eventDetails = await eventDetailsService.CreateAsync(ev, description, session);
+        ProfileEvent profileEvent = await profileEventService.CreateProfileEventAsync(ev, creatorProfile.Id, session, role: EventRole.Owner);
+
+        if (otherProfilesIds.Count > 0)
+            ev = await ShareEvent(ev, otherProfilesIds, false, session);
+
+        await SendCreatePropagationMessage(ev, creatorProfile);
+
+        return (ev, eventDetails, profileEvent);
+    }
+
+
 
     private async Task SendCreatePropagationMessage(Event ev, Profile creatorProfile)
     {

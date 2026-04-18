@@ -154,7 +154,7 @@ public class MongoDbInitializer(
         );
 
     }
-    
+
     private async Task InitialiseEventsAsync()
     {
         // Events
@@ -176,6 +176,8 @@ public class MongoDbInitializer(
             [("eventId", 1), ("profileId", 1)],
             isUnique: true
         );
+
+        await initService.InitializeCollectionAsync(CollectionName.DetachedInstances, "masterId");
 
         // common
         await initService.InitializeCollectionAsync(CollectionName.EventDetails, "eventId");

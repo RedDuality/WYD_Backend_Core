@@ -1,5 +1,6 @@
 using Ical.Net.CalendarComponents;
 using Ical.Net.DataTypes;
+using MongoDB.Bson;
 
 namespace Core.Services.Util;
 
@@ -92,6 +93,39 @@ public class RecurrenceService()
         catch
         {
             return false;
+        }
+    }
+
+
+
+    public static bool CheckRecurrencyIdIsValid(ObjectId masterId, string recurrenceRule, string recurrencyId)
+    {
+        return false;
+    }
+
+    /// DATE format:      yyyyMMdd         → interpreted in the event's local time zone
+    /// DATE-TIME format: yyyyMMddTHHmmssZ → UTC instant
+    public static DateTimeOffset ParseInstanceId(string instanceId, TimeZoneInfo timeZone)
+    {
+        if (instanceId.Length == 8) // DATE: yyyyMMdd
+        {
+            var date = DateTime.ParseExact(
+                instanceId,
+                "yyyyMMdd",
+                System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.None);
+
+            return new DateTimeOffset(date, timeZone.GetUtcOffset(date));
+        }
+        else // DATE-TIME: yyyyMMddTHHmmssZ
+        {
+            var utcDt = DateTime.ParseExact(
+                instanceId,
+                "yyyyMMddTHHmmssZ",
+                System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.AssumeUniversal | System.Globalization.DateTimeStyles.AdjustToUniversal);
+
+            return new DateTimeOffset(utcDt, TimeSpan.Zero);
         }
     }
 

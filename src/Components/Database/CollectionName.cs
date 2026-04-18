@@ -30,6 +30,7 @@ public sealed class CollectionName
 
     public static readonly CollectionName RecurrentEvents = new("RecurrentEvents");
     public static readonly CollectionName RecurrentEventProfiles = new("RecurrentEventProfiles");
+    public static readonly CollectionName DetachedInstances = new("DetachedInstances");
 
     public static readonly CollectionName Communities = new("Communities");
     public static readonly CollectionName Groups = new("Groups");
