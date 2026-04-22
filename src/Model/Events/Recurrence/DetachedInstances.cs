@@ -18,11 +18,19 @@ public class DetachedInstances(ObjectId masterId, HashSet<DetachedInstance> inst
 public class DetachedInstance(ObjectId eventId, string recurrencyId, DateTimeOffset startTime)
 {
     [BsonElement("eventId")]
-    required public ObjectId EventId { get; set; } = eventId;
+    public ObjectId EventId { get; set; } = eventId;
 
     [BsonElement("recurrencyId")]
-    required public string RecurrencyId { get; set; } = recurrencyId;
+    public string RecurrencyId { get; set; } = recurrencyId;
 
     [BsonElement("startTime")]
-    required public DateTimeOffset StartTime { get; set; } = startTime;
+    public DateTimeOffset StartTime { get; set; } = startTime;
+
+    // RecurrencyId uniquely identifies a slot; two detached instances
+    // cannot occupy the same slot in the same series.
+    public bool Equals(DetachedInstance? other) =>
+        other is not null && RecurrencyId == other.RecurrencyId;
+
+    public override bool Equals(object? obj) => Equals(obj as DetachedInstance);
+    public override int GetHashCode() => RecurrencyId.GetHashCode();
 }

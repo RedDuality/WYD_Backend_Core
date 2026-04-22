@@ -38,12 +38,12 @@ public class EventService(
         var sharedProfileIds = await GetSharedProfileIds(newEventDto, creatorProfile);
         var ev = new Event(newEventDto.Title, newEventDto.StartTime, newEventDto.EndTime) { TotalProfilesMinusOne = sharedProfileIds.Count };
 
-        RetrieveEventResponseDto EventDto = await dbService.ExecuteInTransactionAsync(async (session) =>
+        RetrieveEventResponseDto eventDto = await dbService.ExecuteInTransactionAsync(async (session) =>
         {
             var (newEvent, details, profileEvent) = await CreateEvent(ev, creatorProfile, sharedProfileIds, newEventDto.Description, session);
             return new RetrieveEventResponseDto(newEvent, details, [profileEvent]);
         });
-        return EventDto;
+        return eventDto;
     }
 
     private async Task<HashSet<ObjectId>> GetSharedProfileIds(CreateEventRequestDto newEventDto, Profile profile)

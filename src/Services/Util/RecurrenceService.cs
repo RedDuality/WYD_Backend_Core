@@ -129,4 +129,63 @@ public class RecurrenceService()
         }
     }
 
+    public static string FormatInstanceId(DateTimeOffset occurrence)
+        => occurrence.ToUniversalTime().ToString("yyyyMMddTHHmmssZ");
+
+    /// <summary>
+    /// Given an old occurrence time (from a detached instance's recurrencyId),
+    /// finds the nearest occurrence in the new recurrence series and returns
+    /// its formatted instance id, or null if none is found within the search window.
+    /// </summary>
+    public static string? FindCorrespondingInstanceId(
+        string newRecurrenceRule,
+        DateTimeOffset newSeriesStart,
+        DateTimeOffset? newRecurrenceEnd,
+        TimeZoneInfo tz,
+        Duration singleEventDuration,
+        DateTimeOffset originalOccurrenceTime,
+        int searchWindowDays = 14)
+    {
+        var windowStart = originalOccurrenceTime.AddDays(-searchWindowDays);
+        var windowEnd = originalOccurrenceTime.AddDays(searchWindowDays);
+
+        var closest = GetOccurrences(
+                newRecurrenceRule, newSeriesStart, newRecurrenceEnd,
+                tz, singleEventDuration, windowStart, windowEnd)
+            .OrderBy(o => Math.Abs((o - originalOccurrenceTime).Ticks))
+            .Cast<DateTimeOffset?>()
+            .FirstOrDefault();
+
+        return closest.HasValue ? FormatInstanceId(closest.Value) : null;
+    }
+
+    /// <summary>
+    /// Returns a new recurrence rule string that is identical to <paramref name="recurrenceRule"/>
+    /// except that any existing UNTIL/COUNT clause is replaced by an UNTIL set to one second
+    /// before <paramref name="cutoff"/>. The cutoff occurrence itself therefore belongs to the
+    /// new master, not to the old one.
+    /// </summary>
+    public static string TruncateRuleUntil(
+        string recurrenceRule,
+        DateTimeOffset cutoff,
+        TimeZoneInfo tz)
+    {
+        // One second before the cutoff: the old series must not include the
+        // occurrence that starts the "this and following" split.
+        var until = cutoff.AddSeconds(-1).ToUniversalTime();
+
+        // RFC 5545 §3.3.5 DATE-TIME UTC form: yyyyMMddTHHmmssZ
+        var untilStr = until.ToString("yyyyMMddTHHmmssZ");
+
+        var parts = recurrenceRule
+            .Split(';')
+            .Where(p => !p.StartsWith("UNTIL=", StringComparison.OrdinalIgnoreCase)
+                     && !p.StartsWith("COUNT=", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        parts.Add($"UNTIL={untilStr}");
+
+        return string.Join(";", parts);
+    }
+
 }

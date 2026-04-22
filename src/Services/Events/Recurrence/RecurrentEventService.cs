@@ -181,21 +181,20 @@ public class RecurrentEventService(
                 throw new Exception();
                 break;
             case RecurrentUpdateType.ThisAndAllFollowing:
-
-                var stopTime = DateTime.Now;
+                var stopTime = updateDto.StartTime?.ToUniversalTime() ?? DateTime.UtcNo;
                 // stop previous masterevent
                 var oldMaster = await dbService.RetrieveByIdAsync<RecurrentEvent>(recurrentEventCollection, updateDto.MasterEventId);
 
                 var newRecurrenceEnd = stopTime;
-                var newOldRecurrenceRule = oldMaster.RecurrenceRule - stopTime;
-                var oldUpdates = new List<UpdateDefinition<RecurrentEvent>>
+                var truncatedRule = RecurrenceService.TruncateRuleUntil(oldMaster.RecurrenceRule, stopTime, oldMaster.TimeZone);
+                var oldMasterUpdates = new List<UpdateDefinition<RecurrentEvent>>
                 {
-                    Builders<RecurrentEvent>.Update.Set(m => m.RecurrenceRule, newOldRecurrenceRule),
+                    Builders<RecurrentEvent>.Update.Set(m => m.RecurrenceRule, truncatedRule),
                     Builders<RecurrentEvent>.Update.Set(m => m.RecurrenceEnd, newRecurrenceEnd)
                 };
 
-                var newNewRecurrenceRule = updateDto.RecurrenceRule ?? oldMaster.RecurrenceRule;
                 // create new master
+                var newNewRecurrenceRule = updateDto.RecurrenceRule ?? oldMaster.RecurrenceRule;
                 var newMaster = new RecurrentEvent(
                     updateDto.Title ?? oldMaster.Title,
                     updateDto.StartTime ?? oldMaster.StartTime,
@@ -203,54 +202,83 @@ public class RecurrentEventService(
                     oldMaster.TimeZone,
                     newNewRecurrenceRule);
 
-                await dbService.CreateOneAsync(recurrentEventCollection, newMaster, session);
-                var descr = updateDto.Description;
-                if (descr == null)
+                var description = updateDto.Description
+                    ?? (await dbService.RetrieveAsync(
+                           CollectionName.EventDetails,
+                           Builders<EventDetails>.Filter.Eq(d => d.EventId, oldMaster.Id)))
+                       .Description;
+                var singleEventDuration = new Duration((int)(newMaster.EndTime - newMaster.StartTime).TotalMinutes);
+
+                RetrieveRecurrentEventResponseDto eventDto = await dbService.ExecuteInTransactionAsync(async (session) =>
                 {
-                    var oldDetails = await dbService.RetrieveAsync(CollectionName.EventDetails, Builders<EventDetails>.Filter.Eq(d => d.EventId, oldMaster.Id));
-                    descr = oldDetails.Description;
-                }
-                EventDetails eventDetails = await eventDetailsService.CreateAsync(newMaster, descr, session);
-                ProfileRecurrentEvent profileRecurrentEvent = await profileEventService.CreateProfileEventAsync(newMaster, profile.Id, session, role: EventRole.Owner);
+                    await dbService.UpdateOneByIdAsync(recurrentEventCollection, oldMaster.Id, Builders<RecurrentEvent>.Update.Combine(oldMasterUpdates), session);
 
-                await SendCreatePropagationMessage(newMaster, profile);
+                    var (newEvent, eventDetails, profileRecurrentEvent) = await CreateRecurrentEvent(newMaster, profile, [], description, session);
 
-                var result = new RetrieveRecurrentEventResponseDto(newMaster, eventDetails, profileEventDtos: [new ProfileEventDto
-                {
-                    ProfileId = profileRecurrentEvent.ProfileId.ToString(),
-                    Role = profileRecurrentEvent.Role,
-                    Confirmed = profileRecurrentEvent.Confirmed,
-                    Trusted = false
-                }]);
+                    var response = new RetrieveRecurrentEventResponseDto(newEvent, eventDetails, profileEventDtos: [new ProfileEventDto
+                        {
+                            ProfileId = profileRecurrentEvent.ProfileId.ToString(),
+                            Role = profileRecurrentEvent.Role,
+                            Confirmed = profileRecurrentEvent.Confirmed,
+                            Trusted = false
+                        }]);
 
-                var oldMasterFilter = Builders<DetachedInstances>.Filter.Eq(list => list.MasterId, new ObjectId(updateDto.MasterEventId));
-                var oldDetachedInstances = await dbService.RetrieveOrNullAsync(detachedInstancesCollection, oldMasterFilter);
-                var instancesToMigrate = oldDetachedInstances != null ? oldDetachedInstances.Instances.Where(i => i.StartTime > stopTime).ToHashSet() : [];
-                if (instancesToMigrate.Count >= 0)
-                {
-                    // move older instances from old DetachedInstances to new DetachedInsances
-                    var oldDetachedInstaces = oldDetachedInstances!.Instances.Where(i => i.StartTime <= stopTime).ToHashSet();
-                    var update = Builders<DetachedInstances>.Update.Set(x => x.Instances, oldDetachedInstaces);
-                    await dbService.UpdateOneByIdAsync(detachedInstancesCollection, oldDetachedInstances.Id, update);
+                    // update the two DetachedInstances
+                    var oldMasterFilter = Builders<DetachedInstances>.Filter.Eq(list => list.MasterId, new ObjectId(updateDto.MasterEventId));
+                    var oldDetachedInstances = await dbService.RetrieveOrNullAsync(detachedInstancesCollection, oldMasterFilter);
 
-                    //TODO update recurrencyInstanceId in instanceToMigrate
-                    for( var i in instancesToMigrate)
+                    var allOldInstances = oldDetachedInstances?.Instances ?? [];
+
+                    // Split on cut-off
+                    var stayWithOldMaster = allOldInstances.Where(i => i.StartTime <= stopTime).ToHashSet();
+                    var migrateToNewMaster = allOldInstances.Where(i => i.StartTime > stopTime).ToHashSet();
+
+                    if (oldDetachedInstances != null)
                     {
-
+                        await dbService.UpdateOneByIdAsync(detachedInstancesCollection, oldDetachedInstances.Id, Builders<DetachedInstances>.Update.Set(x => x.Instances, stayWithOldMaster), session);
                     }
 
-                    var instances = new DetachedInstances(new ObjectId(updateDto.MasterEventId), instancesToMigrate);
-                    await dbService.CreateOneAsync(detachedInstancesCollection, instances, session: null);
+                    if (migrateToNewMaster.Count > 0)
+                    {
+                        var remappedInstances = new HashSet<DetachedInstance>();
 
-                    // update the master id in "after the date" detached instances
-                    var ids = instancesToMigrate.Select(i => i.EventId);
-                    var masterIdUpdate = Builders<Event>.Update.Set(e => e.MasterEventId, newMaster.Id);
-                    //TODO update the recurrency Id
-                    var filter = Builders<Event>.Filter.In(i => i.Id, ids);
-                    await dbService.UpdateManyAsync(CollectionName.Events, filter, masterIdUpdate);
-                }
+                        // update master and recurrence IDs in "after the date" detached instances
+                        foreach (var i in migrateToNewMaster)
+                        {
+                            // Parse the OLD scheduled time from the existing recurrencyId
+                            var originalOccurrenceStartTime = RecurrenceService.ParseInstanceId(i.RecurrencyId, oldMaster.TimeZone);
 
-                break;
+                            // Find the nearest slot in the NEW series
+                            string newRecurrencyId =
+                                RecurrenceService.FindCorrespondingInstanceId(
+                                    newMaster.RecurrenceRule,
+                                    newMaster.StartTime,
+                                    newMaster.RecurrenceEnd,
+                                    newMaster.TimeZone,
+                                    singleEventDuration,
+                                    originalOccurrenceStartTime)
+                                // If genuinely no nearby occurrence exists (e.g. the series ends
+                                // before this instance's week), keep the old id — the instance
+                                // becomes a free-standing event and won't block anything.
+                                ?? i.RecurrencyId;
+
+                            await dbService.UpdateOneByIdAsync(
+                                CollectionName.Events, i.EventId,
+                                Builders<Event>.Update.Combine(
+                                    Builders<Event>.Update.Set(e => e.RecurrencyInstanceId, newRecurrencyId),
+                                    Builders<Event>.Update.Set(e => e.MasterEventId, newEvent.Id)),
+                                session);
+
+                            remappedInstances.Add(new DetachedInstance(i.EventId, newRecurrencyId, i.StartTime));
+                        }
+
+                        var instances = new DetachedInstances(new ObjectId(updateDto.MasterEventId), remappedInstances);
+                        await dbService.CreateOneAsync(detachedInstancesCollection, instances, session: null);
+                    }
+
+                    return response;
+                });
+                return eventDto;
         }
     }
 
@@ -321,6 +349,9 @@ public class RecurrentEventService(
 
         DateTimeOffset occurrenceStart = RecurrenceService.ParseInstanceId(requestDto.RecurrencyInstanceId, master.TimeZone);
         TimeSpan eventDuration = master.EndTime - master.StartTime;
+
+        // TODO check no detachedInstance has been created over this instanceId (detachedInstancesCollection)
+
 
         // Verify the master's recurrence rule still generates this occurrence.
         // We query a window of [occurrenceStart, occurrenceStart + duration] so only
