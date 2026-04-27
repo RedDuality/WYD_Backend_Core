@@ -181,9 +181,24 @@ public class RecurrentEventService(
                 throw new Exception();
                 break;
             case RecurrentUpdateType.ThisAndAllFollowing:
-                var stopTime = updateDto.StartTime?.ToUniversalTime() ?? DateTime.UtcNo;
+
                 // stop previous masterevent
                 var oldMaster = await dbService.RetrieveByIdAsync<RecurrentEvent>(recurrentEventCollection, updateDto.MasterEventId);
+
+                DateTimeOffset stopTime;
+                if (updateDto.StartTime != null)
+                    stopTime = updateDto.StartTime.Value.ToUniversalTime();
+                else if (updateDto.InstanceEventId.Contains(updateDto.MasterEventId)) // generated
+                {
+                    // deduce it from the instanceId
+                    stopTime = RecurrenceService.ParseInstanceId(updateDto.InstanceEventId, oldMaster.TimeZone);
+                }
+                else // detached instance
+                {
+                    var det = await dbService.RetrieveByIdAsync<Event>(CollectionName.Events, updateDto.InstanceEventId);
+                    stopTime = det.StartTime;
+                }
+
 
                 var newRecurrenceEnd = stopTime;
                 var truncatedRule = RecurrenceService.TruncateRuleUntil(oldMaster.RecurrenceRule, stopTime, oldMaster.TimeZone);
@@ -262,11 +277,21 @@ public class RecurrentEventService(
                                 // becomes a free-standing event and won't block anything.
                                 ?? i.RecurrencyId;
 
+                            List<UpdateDefinition<Event>> detachedUpdates = [];
+                            detachedUpdates.Add(Builders<Event>.Update.Set(e => e.RecurrencyInstanceId, newRecurrencyId));
+                            detachedUpdates.Add(Builders<Event>.Update.Set(e => e.MasterEventId, newEvent.Id));
+
+                            if (updateDto.InstanceEventId.Equals(i.EventId)) // current instance is detached instance
+                            {
+                                detachedUpdates.AddRange(GetInstanceUpdates(updateDto));
+
+                                var detailsFilter = Builders<EventDetails>.Filter.Eq(d => d.EventId, i.EventId);
+                                await dbService.UpdateOneAsync(CollectionName.EventDetails, detailsFilter, Builders<EventDetails>.Update.Set(d => d.Description, updateDto.Description ?? ""), session);
+                            }
+
                             await dbService.UpdateOneByIdAsync(
                                 CollectionName.Events, i.EventId,
-                                Builders<Event>.Update.Combine(
-                                    Builders<Event>.Update.Set(e => e.RecurrencyInstanceId, newRecurrencyId),
-                                    Builders<Event>.Update.Set(e => e.MasterEventId, newEvent.Id)),
+                                Builders<Event>.Update.Combine(detachedUpdates),
                                 session);
 
                             remappedInstances.Add(new DetachedInstance(i.EventId, newRecurrencyId, i.StartTime));
@@ -280,6 +305,29 @@ public class RecurrentEventService(
                 });
                 return eventDto;
         }
+    }
+
+    private static List<UpdateDefinition<Event>> GetInstanceUpdates(UpdateRecurrentEventRequestDto updateDto)
+    {
+        var updates = new List<UpdateDefinition<Event>>();
+
+        // Add updates to the list based on non-null values
+        if (updateDto.Title != null)
+        {
+            updates.Add(Builders<Event>.Update.Set(e => e.Title, updateDto.Title));
+        }
+
+        if (updateDto.StartTime != null)
+        {
+            updates.Add(Builders<Event>.Update.Set(e => e.StartTime, updateDto.StartTime));
+        }
+
+        if (updateDto.EndTime != null)
+        {
+            updates.Add(Builders<Event>.Update.Set(e => e.EndTime, updateDto.EndTime));
+        }
+
+        return updates;
     }
 
     private static List<UpdateDefinition<RecurrentEvent>> GetUpdates(UpdateRecurrentEventRequestDto updateDto)

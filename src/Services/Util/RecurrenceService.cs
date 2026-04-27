@@ -105,12 +105,16 @@ public class RecurrenceService()
 
     /// DATE format:      yyyyMMdd         → interpreted in the event's local time zone
     /// DATE-TIME format: yyyyMMddTHHmmssZ → UTC instant
+    /// 
+    /// instanceId = DATE_MASTERID
     public static DateTimeOffset ParseInstanceId(string instanceId, TimeZoneInfo timeZone)
     {
-        if (instanceId.Length == 8) // DATE: yyyyMMdd
+        var dateString = instanceId.Split("_")[0];
+
+        if (dateString.Length == 8) // DATE: yyyyMMdd
         {
             var date = DateTime.ParseExact(
-                instanceId,
+                dateString,
                 "yyyyMMdd",
                 System.Globalization.CultureInfo.InvariantCulture,
                 System.Globalization.DateTimeStyles.None);
@@ -120,7 +124,7 @@ public class RecurrenceService()
         else // DATE-TIME: yyyyMMddTHHmmssZ
         {
             var utcDt = DateTime.ParseExact(
-                instanceId,
+                dateString,
                 "yyyyMMddTHHmmssZ",
                 System.Globalization.CultureInfo.InvariantCulture,
                 System.Globalization.DateTimeStyles.AssumeUniversal | System.Globalization.DateTimeStyles.AdjustToUniversal);
