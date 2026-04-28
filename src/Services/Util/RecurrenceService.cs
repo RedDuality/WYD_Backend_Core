@@ -1,3 +1,4 @@
+using Core.Model.Events.Recurrence;
 using Ical.Net.CalendarComponents;
 using Ical.Net.DataTypes;
 using MongoDB.Bson;
@@ -109,7 +110,9 @@ public class RecurrenceService()
     /// instanceId = DATE_MASTERID
     public static DateTimeOffset ParseInstanceId(string instanceId, TimeZoneInfo timeZone)
     {
-        var dateString = instanceId.Split("_")[0];
+        // Fix: Get the last part in case of MasterId_Date format
+        var parts = instanceId.Split("_");
+        var dateString = parts.Last();
 
         if (dateString.Length == 8) // DATE: yyyyMMdd
         {
@@ -130,6 +133,48 @@ public class RecurrenceService()
                 System.Globalization.DateTimeStyles.AssumeUniversal | System.Globalization.DateTimeStyles.AdjustToUniversal);
 
             return new DateTimeOffset(utcDt, TimeSpan.Zero);
+        }
+    }
+
+    /// <summary>
+    /// Verifies if a compound ID represents a valid occurrence in the master's sequence.
+    /// Returns the extracted date part (RecurrencyInstanceId) if valid.
+    /// </summary>
+    public static bool CheckRecurrencyIdIsValid(
+        string masterRecurrenceRule,
+        DateTimeOffset masterStartTime,
+        DateTimeOffset masterEndTime,
+        DateTimeOffset masterRecurrenceEnd,
+        TimeZoneInfo timeZone,
+        string compoundId,
+        out string datePart
+    )
+    {
+         datePart = string.Empty;
+        var parts = compoundId.Split('_');
+        if (parts.Length < 2) return false;
+
+        datePart = parts.Last();
+        try
+        {
+            DateTimeOffset occurrenceStart = ParseInstanceId(datePart, timeZone);
+            TimeSpan duration = masterEndTime - masterStartTime;
+
+            // Check if this specific occurrence exists in the rule
+            // We use a 1-second window to check for the exact start time
+            return GetOccurrences(
+                masterRecurrenceRule,
+                masterStartTime,
+                masterRecurrenceEnd,
+                timeZone,
+                Duration.FromTimeSpanExact(duration),
+                occurrenceStart,
+                occurrenceStart.AddSeconds(1)
+            ).Any(o => o.Equals(occurrenceStart));
+        }
+        catch
+        {
+            return false;
         }
     }
 

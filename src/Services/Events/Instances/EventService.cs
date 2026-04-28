@@ -119,9 +119,9 @@ public class EventService(
     private async Task SendSharePropagationMessage(Event ev)
     {
         var propagationMessage = new QueueMessage<EventPayload>(
-                        MessageType.eventUpdate,
-                        new(ev, EventUpdateType.share)
-                    );
+            MessageType.eventUpdate,
+            new(ev, EventUpdateType.share)
+        );
         await messageService.SendPropagationMessageAsync(propagationMessage);
     }
 
@@ -146,16 +146,16 @@ public class EventService(
 
         var pe = await profileEventService.FindByProfileAndEventId(profileId, eventId);
         pe ??= await dbService.ExecuteInTransactionAsync(async (session) =>
-            {
-                var createdPe = await profileEventService.CreateProfileEventAsync(ev, new ObjectId(profileId), session, false);
+        {
+            var createdPe = await profileEventService.CreateProfileEventAsync(ev, new ObjectId(profileId), session, false);
 
-                var updateDefinition = Builders<Event>.Update.Inc(e => e.TotalProfilesMinusOne, 1);
-                ev = await dbService.FindOneByIdAndUpdateAsync(eventCollection, ev.Id, updateDefinition, session);
+            var updateDefinition = Builders<Event>.Update.Inc(e => e.TotalProfilesMinusOne, 1);
+            ev = await dbService.FindOneByIdAndUpdateAsync(eventCollection, ev.Id, updateDefinition, session);
 
-                await SendSharePropagationMessage(ev);
+            await SendSharePropagationMessage(ev);
 
-                return createdPe;
-            });
+            return createdPe;
+        });
 
         return new RetrieveEventResponseDto(ev, details: eventDetails, profileEvents: [pe]);
     }
@@ -165,36 +165,46 @@ public class EventService(
     #region modify
     public async Task<RetrieveEventResponseDto> UpdateEventAsync(UpdateEventRequestDto updateDto)
     {
-        var ev = await dbService.RetrieveByIdAsync<Event>(eventCollection, updateDto.EventId);
-
         var updates = GetUpdates(updateDto);
 
+        RetrieveEventResponseDto returnDto = await dbService.ExecuteInTransactionAsync(async (session) =>
+        {
+            var (ev, details) = await UpdateEvent(updateDto, session);
+            return new RetrieveEventResponseDto(ev, details: details);
+        });
+        
+        return returnDto;
+    }
+
+    public async Task<(Event Event, EventDetails? Details)> UpdateEvent(
+    UpdateEventRequestDto updateDto,
+    IClientSessionHandle session)
+    {
+
+        var ev = await dbService.RetrieveByIdAsync<Event>(eventCollection, updateDto.EventId);
+        var updates = GetUpdates(updateDto);
         EventDetails? details = null;
 
-        var upatedEvent = await dbService.ExecuteInTransactionAsync(async (session) =>
+        if (updateDto.Description != null)
         {
-            if (updateDto.Description != null)
-            {
-                details = await eventDetailsService.Update(ev.Id, updateDto.Description, session);
-            }
+            details = await eventDetailsService.Update(ev.Id, updateDto.Description, session);
+        }
 
-            // Check if there are any updates to perform
-            if (updates.Count != 0)
-            {
-                var combinedUpdate = Builders<Event>.Update.Combine(updates);
+        if (updates.Count != 0)
+        {
+            var combinedUpdate = Builders<Event>.Update.Combine(updates);
+            ev = await dbService.FindOneByIdAndUpdateAsync(eventCollection, ev.Id, combinedUpdate, session);
 
-                ev = await dbService.FindOneByIdAndUpdateAsync(eventCollection, ev.Id, combinedUpdate, session);
+            var propagationMessage = new QueueMessage<EventPayload>(
+                MessageType.eventUpdate,
+                new(ev, EventUpdateType.update)
+            );
+            await messageService.SendPropagationMessageAsync(propagationMessage);
+        }
 
-                var propagationMessage = new QueueMessage<EventPayload>(MessageType.eventUpdate, new(ev, EventUpdateType.update));
-                await messageService.SendPropagationMessageAsync(propagationMessage);
-            }
-
-            return ev;
-        });
-
-
-        return new RetrieveEventResponseDto(upatedEvent, details: details);
+        return (ev, details);
     }
+
 
     private static List<UpdateDefinition<Event>> GetUpdates(UpdateEventRequestDto updateDto)
     {
