@@ -172,28 +172,23 @@ public class EventService(
             var (ev, details) = await UpdateEvent(updateDto, session);
             return new RetrieveEventResponseDto(ev, details: details);
         });
-        
+
         return returnDto;
     }
 
     public async Task<(Event Event, EventDetails? Details)> UpdateEvent(
-    UpdateEventRequestDto updateDto,
-    IClientSessionHandle session)
+        UpdateEventRequestDto updateDto,
+        IClientSessionHandle session)
     {
-
-        var ev = await dbService.RetrieveByIdAsync<Event>(eventCollection, updateDto.EventId);
-        var updates = GetUpdates(updateDto);
+        Event? ev;
         EventDetails? details = null;
 
-        if (updateDto.Description != null)
-        {
-            details = await eventDetailsService.Update(ev.Id, updateDto.Description, session);
-        }
+        var updates = GetUpdates(updateDto);
 
         if (updates.Count != 0)
         {
             var combinedUpdate = Builders<Event>.Update.Combine(updates);
-            ev = await dbService.FindOneByIdAndUpdateAsync(eventCollection, ev.Id, combinedUpdate, session);
+            ev = await dbService.FindOneByIdAndUpdateAsync(eventCollection, new ObjectId(updateDto.EventId), combinedUpdate, session);
 
             var propagationMessage = new QueueMessage<EventPayload>(
                 MessageType.eventUpdate,
@@ -201,6 +196,11 @@ public class EventService(
             );
             await messageService.SendPropagationMessageAsync(propagationMessage);
         }
+        else
+            ev = await dbService.RetrieveByIdAsync<Event>(eventCollection, updateDto.EventId);
+
+        if (updateDto.Description != null)
+            details = await eventDetailsService.Update(ev.Id, updateDto.Description, session);
 
         return (ev, details);
     }
@@ -210,21 +210,14 @@ public class EventService(
     {
         var updates = new List<UpdateDefinition<Event>>();
 
-        // Add updates to the list based on non-null values
         if (updateDto.Title != null)
-        {
             updates.Add(Builders<Event>.Update.Set(e => e.Title, updateDto.Title));
-        }
 
         if (updateDto.StartTime != null)
-        {
             updates.Add(Builders<Event>.Update.Set(e => e.StartTime, updateDto.StartTime));
-        }
 
         if (updateDto.EndTime != null)
-        {
             updates.Add(Builders<Event>.Update.Set(e => e.EndTime, updateDto.EndTime));
-        }
 
         return updates;
     }
