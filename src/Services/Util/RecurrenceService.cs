@@ -99,8 +99,7 @@ public class RecurrenceService()
 
 
 
-    public static bool CheckRecurrencyIdIsValid(ObjectId masterId, string recurrenceRule, string recurrencyId)
-    {
+    public static bool CheckRecurrencyIdIsValid(ObjectId masterId, string recurrenceRule, string recurrencyId) {
         return false;
     }
 
@@ -108,6 +107,11 @@ public class RecurrenceService()
     /// DATE-TIME format: yyyyMMddTHHmmssZ → UTC instant
     /// 
     /// instanceId = DATE_MASTERID
+    /// 
+    /// <summary>
+    /// Parses a recurrence instance identifier (MASTERID_DATE)and returns the corresponding
+    /// <see cref="DateTimeOffset"/> in the correct time zone.
+    /// </summary>
     public static DateTimeOffset ParseInstanceId(string instanceId, TimeZoneInfo timeZone)
     {
         // Fix: Get the last part in case of MasterId_Date format

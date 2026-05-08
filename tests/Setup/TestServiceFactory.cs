@@ -44,10 +44,15 @@ public static class TestServiceFactory
 
         services.AddScoped<EventRetrieveService>();
         services.AddScoped<EventUpdatePropagationService>();
+        services.AddScoped<EventProfileService>();
+
+        services.AddScoped<RecurrentEventService>();
+        services.AddScoped<RecurrentEventUpdateService>();
+        services.AddScoped<EventUpdatePropagationService>();
+        services.AddScoped<RecurrentEventProfileService>();
 
         services.AddScoped<EventDetailsService>();
         services.AddScoped<ProfileEventService>();
-        services.AddScoped<EventProfileService>();
 
         services.AddSingleton(_ => new Mock<MediaService>(dbService, null!).Object);
 

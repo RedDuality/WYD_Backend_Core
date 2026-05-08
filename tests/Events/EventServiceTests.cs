@@ -17,18 +17,16 @@ using Core.Services.Events.Instances;
 namespace Core.Tests.Events;
 
 [Collection("DatabaseTests")]
-public class EventServiceTests
-{
+public class EventServiceTests {
     private readonly ProfileService _profileService;
     private readonly EventService _eventService;
     private readonly MongoDbService _dbService;
-    private readonly Profile _creator;
+    private readonly Profile _creatorProfile;
 
     private readonly IClientSessionHandle _session;
 
 
-    public EventServiceTests(MongoDbFixture fixture)
-    {
+    public EventServiceTests(MongoDbFixture fixture) {
         Skip.If(fixture.InitializationFailed, fixture.InitializationError);
 
         _dbService = fixture.DbService!;
@@ -41,15 +39,14 @@ public class EventServiceTests
         _session = fixture.StartSessionAsync().GetAwaiter().GetResult();
 
         string uniqueTag = $"jdoe_{Guid.NewGuid().ToString()[..8]}";
-        _creator = _profileService.CreateAsync(uniqueTag, "John Doe", _session).GetAwaiter().GetResult();
+        _creatorProfile = _profileService.CreateAsync(uniqueTag, "John Doe", _session).GetAwaiter().GetResult();
     }
 
+    #region create & share
 
     [SkippableFact]
-    public async Task CreateEventAsync_ShouldPersistEventAndDetailsInDatabase()
-    {
-        var request = new CreateEventRequestDto
-        {
+    public async Task CreateEventAsync_ShouldPersistEventAndDetailsInDatabase() {
+        var request = new CreateEventRequestDto {
             Title = "Release Party",
             StartTime = DateTimeOffset.UtcNow.AddDays(1),
             EndTime = DateTimeOffset.UtcNow.AddDays(1).AddHours(2),
@@ -57,23 +54,22 @@ public class EventServiceTests
         };
 
         // ACT
-        var response = await _eventService.CreateEventAsync(request, _creator);
+        var response = await _eventService.CreateEventAsync(request, _creatorProfile);
 
         // ASSERT
-        await AssertEventCreation(response, request, _creator);
+        await AssertEventCreation(response, request, _creatorProfile);
     }
 
-    private async Task AssertEventCreation(RetrieveEventResponseDto response, CreateEventRequestDto request, Profile creator)
-    {
+    private async Task AssertEventCreation(RetrieveEventResponseDto response, CreateEventRequestDto request, Profile creator) {
         // create Event
-        ObjectId.TryParse(response.Hash, out _).Should().BeTrue("the returned Hash should be a valid 24-character hex ObjectId");
+        ObjectId.TryParse(response.Id, out _).Should().BeTrue("the returned Hash should be a valid 24-character hex ObjectId");
         response.Title.Should().Be("Release Party");
 
         var filter = Builders<Event>.Filter.Eq(e => e.Title, "Release Party");
         var savedEvent = await _dbService.RetrieveAsync(CollectionName.Events, filter);
 
         savedEvent.Should().NotBeNull();
-        savedEvent.Id.ToString().Should().Be(response.Hash);
+        savedEvent.Id.ToString().Should().Be(response.Id);
 
         // create Details
         var details = await _dbService.RetrieveAsync(
@@ -119,23 +115,21 @@ public class EventServiceTests
         creatorMask.Title.Should().Be(request.Title);
     }
 
-
     // TODO
     // create tests for groupService.GetProfilesByGroupIds
 
     [SkippableFact]
-    public async Task ShareEventAsync_ShouldCreateProfileEventsAndNotCreateMasks()
-    {
+    public async Task ShareEventAsync_ShouldCreateProfileEventsAndNotCreateMasks() {
         // 1. ARRANGE
         var sharedProfile = await _profileService.CreateAsync("asmith", "Alice Smith", _session);
 
         // Seed Community and Group so GroupService can resolve the shared profiles
-        var community = new Community("Test Community", _creator, CommunityType.Personal);
+        var community = new Community("Test Community", _creatorProfile, CommunityType.Personal);
         await _dbService.CreateOneAsync(CollectionName.Communities, community, null);
 
         var groupProfiles = new HashSet<GroupProfile>
         {
-            new(_creator, GroupRole.Owner),
+            new(_creatorProfile, GroupRole.Owner),
             new(sharedProfile, GroupRole.Viewer)
         };
 
@@ -143,18 +137,16 @@ public class EventServiceTests
         await _dbService.CreateOneAsync(CollectionName.Groups, group, null);
 
         // Create an existing event to share
-        var request = new CreateEventRequestDto
-        {
+        var request = new CreateEventRequestDto {
             Title = "Shared Celebration",
             StartTime = DateTimeOffset.UtcNow.AddDays(1),
             EndTime = DateTimeOffset.UtcNow.AddDays(1).AddHours(2),
             Description = "Celebrating the new test suite!"
         };
-        var createdEventDto = await _eventService.CreateEventAsync(request, _creator);
+        var createdEventDto = await _eventService.CreateEventAsync(request, _creatorProfile);
 
         // 2. ACT
-        var shareRequest = new ShareEventRequestDto
-        {
+        var shareRequest = new ShareEventRequestDto {
             SharedGroups = [
                 new ShareGroupIdentifierDto
                 {
@@ -164,14 +156,14 @@ public class EventServiceTests
             ]
         };
 
-        var response = await _eventService.ShareEventAsync(_creator, createdEventDto.Hash.ToString(), shareRequest);
+        var response = await _eventService.ShareEventAsync(_creatorProfile, createdEventDto.Id.ToString(), shareRequest);
 
         // wait for propagation
         await Task.Delay(200);
 
         // 3. ASSERT
         // event should have been updated
-        var ev = await _dbService.RetrieveByIdAsync<Event>(CollectionName.Events, createdEventDto.Hash.ToString());
+        var ev = await _dbService.RetrieveByIdAsync<Event>(CollectionName.Events, createdEventDto.Id.ToString());
 
         var peFilter = Builders<ProfileEvent>.Filter.And(
             Builders<ProfileEvent>.Filter.Eq(pe => pe.ProfileId, sharedProfile.Id),
@@ -188,7 +180,7 @@ public class EventServiceTests
 
         // verify propagation for the other profiles(creator)
         var creatorPeFilter = Builders<ProfileEvent>.Filter.And(
-            Builders<ProfileEvent>.Filter.Eq(pe => pe.ProfileId, _creator.Id),
+            Builders<ProfileEvent>.Filter.Eq(pe => pe.ProfileId, _creatorProfile.Id),
             Builders<ProfileEvent>.Filter.Eq(pe => pe.EventId, ev.Id)
         );
 
@@ -216,17 +208,16 @@ public class EventServiceTests
     // eventUpdatedAt equal in all profileEvents
 
     [SkippableFact]
-    public async Task CreateEventAsync_WithSharedProfiles_ShouldPersistAllEntitiesAndCreatorMask()
-    {
+    public async Task CreateEventAsync_WithSharedProfiles_ShouldPersistAllEntitiesAndCreatorMask() {
         // 1. ARRANGE
         var invitedProfile = await _profileService.CreateAsync("jsmith", "Jane Smith", _session);
 
-        var community = new Community("Test Community Two", _creator, CommunityType.Personal);
+        var community = new Community("Test Community Two", _creatorProfile, CommunityType.Personal);
         await _dbService.CreateOneAsync(CollectionName.Communities, community, null);
 
         var groupProfiles = new HashSet<GroupProfile>
         {
-            new(_creator, GroupRole.Owner),
+            new(_creatorProfile, GroupRole.Owner),
             new(invitedProfile, GroupRole.Viewer)
         };
 
@@ -234,8 +225,7 @@ public class EventServiceTests
         await _dbService.CreateOneAsync(CollectionName.Groups, group, null);
 
 
-        var shareRequest = new ShareEventRequestDto
-        {
+        var shareRequest = new ShareEventRequestDto {
             SharedGroups = [
                 new ShareGroupIdentifierDto
                 {
@@ -245,8 +235,7 @@ public class EventServiceTests
             ]
         };
 
-        var request = new CreateEventRequestDto
-        {
+        var request = new CreateEventRequestDto {
             Title = "Collaborative Workshop",
             StartTime = DateTimeOffset.UtcNow.AddDays(2),
             EndTime = DateTimeOffset.UtcNow.AddDays(2).AddHours(3),
@@ -255,11 +244,11 @@ public class EventServiceTests
         };
 
         // 2. ACT
-        var response = await _eventService.CreateEventAsync(request, _creator);
-        var eventId = new ObjectId(response.Hash);
+        var response = await _eventService.CreateEventAsync(request, _creatorProfile);
+        var eventId = new ObjectId(response.Id);
 
         // 3. ASSERT - Event & Details
-        var savedEvent = await _dbService.RetrieveByIdAsync<Event>(CollectionName.Events, response.Hash);
+        var savedEvent = await _dbService.RetrieveByIdAsync<Event>(CollectionName.Events, response.Id);
         savedEvent.Should().NotBeNull();
         savedEvent.TotalProfilesMinusOne.Should().Be(1);
 
@@ -276,7 +265,7 @@ public class EventServiceTests
 
         allProfileEvents.Should().HaveCount(2);
 
-        var creatorPE = allProfileEvents.First(pe => pe.ProfileId == _creator.Id);
+        var creatorPE = allProfileEvents.First(pe => pe.ProfileId == _creatorProfile.Id);
         var invitedPE = allProfileEvents.First(pe => pe.ProfileId == invitedProfile.Id);
 
         creatorPE.Confirmed.Should().BeTrue("Creator should be auto-confirmed");
@@ -291,7 +280,7 @@ public class EventServiceTests
         var creatorMask = await _dbService.RetrieveOrNullAsync<Mask>(
             CollectionName.Masks,
             Builders<Mask>.Filter.And(
-                Builders<Mask>.Filter.Eq("profileId", _creator.Id),
+                Builders<Mask>.Filter.Eq("profileId", _creatorProfile.Id),
                 Builders<Mask>.Filter.Eq("eventId", eventId)
             )
         );
@@ -315,4 +304,137 @@ public class EventServiceTests
 
         eventProfiles.Should().HaveCount(2, "Both profiles should have an entry in EventProfiles for indexing");
     }
+    #endregion
+
+    #region modify
+
+    [SkippableFact]
+    public async Task UpdateEvent_ShouldUpdateEventAndDetails() {
+        // 1. ARRANGE
+        var createRequest = new CreateEventRequestDto {
+            Title = "Original Title",
+            StartTime = DateTimeOffset.UtcNow.AddDays(1),
+            EndTime = DateTimeOffset.UtcNow.AddDays(1).AddHours(2),
+            Description = "Original description"
+        };
+        var created = await _eventService.CreateEventAsync(createRequest, _creatorProfile);
+
+        var updateDto = new UpdateEventRequestDto {
+            EventId = created.Id,
+            Title = "Updated Title",
+            Description = "Updated description",
+            StartTime = DateTimeOffset.UtcNow.AddDays(3),
+            EndTime = DateTimeOffset.UtcNow.AddDays(3).AddHours(4)
+        };
+
+        // 2. ACT
+        await _eventService.UpdateEvent(updateDto, _session);
+
+        // 3. ASSERT - Event document
+        var updatedEvent = await _dbService.RetrieveByIdAsync<Event>(CollectionName.Events, created.Id);
+        updatedEvent.Title.Should().Be("Updated Title");
+        updatedEvent.StartTime.Should().BeCloseTo(updateDto.StartTime.Value.ToUniversalTime(), precision: TimeSpan.FromMilliseconds(1));
+        updatedEvent.EndTime.Should().BeCloseTo(updateDto.EndTime.Value.ToUniversalTime(), precision: TimeSpan.FromMilliseconds(1));
+
+        // 4. ASSERT - EventDetails document
+        var details = await _dbService.RetrieveAsync(
+            CollectionName.EventDetails,
+            Builders<EventDetails>.Filter.Eq("eventId", updatedEvent.Id)
+        );
+        details.Description.Should().Be("Updated description");
+    }
+
+    [SkippableFact]
+    public async Task UpdateEvent_WithNullTitle_ShouldNotChangeTitle() {
+        // 1. ARRANGE
+        var createRequest = new CreateEventRequestDto {
+            Title = "Original Title",
+            StartTime = DateTimeOffset.UtcNow.AddDays(1),
+            EndTime = DateTimeOffset.UtcNow.AddDays(1).AddHours(2),
+            Description = "Original description"
+        };
+        var created = await _eventService.CreateEventAsync(createRequest, _creatorProfile);
+
+        var updateRequest = new UpdateEventRequestDto {
+            EventId = created.Id,
+            Title = null,
+            Description = "Updated description",
+            StartTime = DateTimeOffset.UtcNow.AddDays(3),
+            EndTime = DateTimeOffset.UtcNow.AddDays(3).AddHours(4)
+        };
+
+        // 2. ACT
+        await _eventService.UpdateEvent(updateRequest, _session);
+
+        // 3. ASSERT
+        var updatedEvent = await _dbService.RetrieveByIdAsync<Event>(CollectionName.Events, created.Id);
+        updatedEvent.Title.Should().Be("Original Title", "a null Title in the request should leave the field unchanged");
+    }
+
+    [SkippableFact]
+    public async Task UpdateEvent_WithNullDescription_ShouldNotChangeDescription() {
+        // 1. ARRANGE
+        var createRequest = new CreateEventRequestDto {
+            Title = "Original Title",
+            StartTime = DateTimeOffset.UtcNow.AddDays(1),
+            EndTime = DateTimeOffset.UtcNow.AddDays(1).AddHours(2),
+            Description = "Original description"
+        };
+        var created = await _eventService.CreateEventAsync(createRequest, _creatorProfile);
+
+        var updateRequest = new UpdateEventRequestDto {
+            EventId = created.Id,
+            Title = "Updated Title",
+            Description = null,
+            StartTime = DateTimeOffset.UtcNow.AddDays(3),
+            EndTime = DateTimeOffset.UtcNow.AddDays(3).AddHours(4)
+        };
+
+        // 2. ACT
+        await _eventService.UpdateEvent(updateRequest, _session);
+
+        // 3. ASSERT
+        var details = await _dbService.RetrieveAsync(
+            CollectionName.EventDetails,
+            Builders<EventDetails>.Filter.Eq("eventId", new ObjectId(created.Id))
+        );
+        details.Description.Should().Be("Original description", "a null Description in the request should leave the field unchanged");
+    }
+
+    [SkippableFact]
+    public async Task UpdateEvent_WithNullTimes_ShouldNotChangeTimes() {
+        // 1. ARRANGE
+        var originalStart = DateTimeOffset.UtcNow.AddDays(1);
+        var originalEnd = DateTimeOffset.UtcNow.AddDays(1).AddHours(2);
+
+        var createRequest = new CreateEventRequestDto {
+            Title = "Original Title",
+            StartTime = originalStart,
+            EndTime = originalEnd,
+            Description = "Original description"
+        };
+        var created = await _eventService.CreateEventAsync(createRequest, _creatorProfile);
+
+        var updateRequest = new UpdateEventRequestDto {
+            EventId = created.Id,
+            Title = "Updated Title",
+            Description = "Updated description",
+            StartTime = null,
+            EndTime = null
+        };
+
+        // 2. ACT
+        await _eventService.UpdateEvent(updateRequest, _session);
+
+        // 3. ASSERT
+        var updatedEvent = await _dbService.RetrieveByIdAsync<Event>(CollectionName.Events, created.Id);
+        updatedEvent.StartTime.Should().BeCloseTo(originalStart.ToUniversalTime(), precision: TimeSpan.FromMilliseconds(1),
+            because: "a null StartTime in the request should leave the field unchanged");
+        updatedEvent.EndTime.Should().BeCloseTo(originalEnd.ToUniversalTime(), precision: TimeSpan.FromMilliseconds(1),
+            because: "a null EndTime in the request should leave the field unchanged");
+    }
+
+
+    #endregion
+
 }

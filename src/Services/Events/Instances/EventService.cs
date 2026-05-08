@@ -23,34 +23,29 @@ public class EventService(
     GroupService groupService,
     MediaService mediaService,
     IMessageQueueService messageService
-)
-{
+) {
     private readonly CollectionName eventCollection = CollectionName.Events;
 
     private readonly CollectionName eventMediaCollection = CollectionName.EventMedia;
 
     private readonly BucketName eventBucket = BucketName.Events;
 
-    #region create
+    #region create & share
 
-    public async Task<RetrieveEventResponseDto> CreateEventAsync(CreateEventRequestDto newEventDto, Profile creatorProfile)
-    {
+    public async Task<RetrieveEventResponseDto> CreateEventAsync(CreateEventRequestDto newEventDto, Profile creatorProfile) {
         var sharedProfileIds = await GetSharedProfileIds(newEventDto, creatorProfile);
         var ev = new Event(newEventDto.Title, newEventDto.StartTime, newEventDto.EndTime) { TotalProfilesMinusOne = sharedProfileIds.Count };
 
-        RetrieveEventResponseDto eventDto = await dbService.ExecuteInTransactionAsync(async (session) =>
-        {
+        RetrieveEventResponseDto eventDto = await dbService.ExecuteInTransactionAsync(async (session) => {
             var (newEvent, details, profileEvent) = await CreateEvent(ev, creatorProfile, sharedProfileIds, newEventDto.Description, session);
             return new RetrieveEventResponseDto(newEvent, details, [profileEvent]);
         });
         return eventDto;
     }
 
-    private async Task<HashSet<ObjectId>> GetSharedProfileIds(CreateEventRequestDto newEventDto, Profile profile)
-    {
+    private async Task<HashSet<ObjectId>> GetSharedProfileIds(CreateEventRequestDto newEventDto, Profile profile) {
         HashSet<ObjectId> sharedProfileIds = [];
-        if (newEventDto.ShareDto != null && newEventDto.ShareDto.SharedGroups.Count > 0)
-        {
+        if (newEventDto.ShareDto != null && newEventDto.ShareDto.SharedGroups.Count > 0) {
             sharedProfileIds = await groupService.GetProfilesByGroupIds(newEventDto.ShareDto.SharedGroups, profile);
         }
         return sharedProfileIds;
@@ -61,8 +56,7 @@ public class EventService(
         Profile creatorProfile,
         HashSet<ObjectId> otherProfilesIds,
         string? description,
-        IClientSessionHandle session)
-    {
+        IClientSessionHandle session) {
         await dbService.CreateOneAsync(eventCollection, ev, session);
         EventDetails eventDetails = await eventDetailsService.CreateAsync(ev, description, session);
         ProfileEvent profileEvent = await profileEventService.CreateProfileEventAsync(ev, creatorProfile.Id, session, role: EventRole.Owner);
@@ -77,8 +71,7 @@ public class EventService(
 
 
 
-    private async Task SendCreatePropagationMessage(Event ev, Profile creatorProfile)
-    {
+    private async Task SendCreatePropagationMessage(Event ev, Profile creatorProfile) {
         var propagationMessage = new QueueMessage<EventPayload>(
                 MessageType.eventUpdate,
                 new(ev, EventUpdateType.create, actorId: creatorProfile.Id.ToString())
@@ -86,27 +79,24 @@ public class EventService(
         await messageService.SendPropagationMessageAsync(propagationMessage);
     }
 
-    public async Task<RetrieveEventResponseDto> ShareEventAsync(Profile profile, string eventId, ShareEventRequestDto shareDto)
-    {
+    public async Task<RetrieveEventResponseDto> ShareEventAsync(Profile profile, string eventId, ShareEventRequestDto shareDto) {
         var ev = await dbService.RetrieveByIdAsync<Event>(eventCollection, eventId);
 
         var profileIds = await FindAffectedByShare(shareDto, profile, ev);
 
         if (profileIds.Count > 0)
-            ev = await dbService.ExecuteInTransactionAsync(async (session) =>
-                {
-                    ev = await ShareEvent(ev, profileIds, true, session);
+            ev = await dbService.ExecuteInTransactionAsync(async (session) => {
+                ev = await ShareEvent(ev, profileIds, true, session);
 
-                    await SendSharePropagationMessage(ev);
+                await SendSharePropagationMessage(ev);
 
-                    return ev;
-                });
+                return ev;
+            });
 
         return new RetrieveEventResponseDto(ev);
     }
 
-    private async Task<HashSet<ObjectId>> FindAffectedByShare(ShareEventRequestDto shareDto, Profile currentProfile, Event ev)
-    {
+    private async Task<HashSet<ObjectId>> FindAffectedByShare(ShareEventRequestDto shareDto, Profile currentProfile, Event ev) {
         var profileIds = await groupService.GetProfilesByGroupIds(shareDto.SharedGroups, currentProfile);
 
         // remove profiles which event has already been shared
@@ -116,8 +106,7 @@ public class EventService(
         return profileIds;
     }
 
-    private async Task SendSharePropagationMessage(Event ev)
-    {
+    private async Task SendSharePropagationMessage(Event ev) {
         var propagationMessage = new QueueMessage<EventPayload>(
             MessageType.eventUpdate,
             new(ev, EventUpdateType.share)
@@ -125,12 +114,10 @@ public class EventService(
         await messageService.SendPropagationMessageAsync(propagationMessage);
     }
 
-    private async Task<Event> ShareEvent(Event ev, HashSet<ObjectId> profileIds, bool alreadyExisted, IClientSessionHandle session)
-    {
+    private async Task<Event> ShareEvent(Event ev, HashSet<ObjectId> profileIds, bool alreadyExisted, IClientSessionHandle session) {
         await profileEventService.CreateMultipleProfileEventAsync(ev, profileIds, session);
 
-        if (alreadyExisted)
-        {
+        if (alreadyExisted) {
             var updateDefinition = Builders<Event>.Update.Inc(e => e.TotalProfilesMinusOne, profileIds.Count);
             ev = await dbService.FindOneByIdAndUpdateAsync(eventCollection, ev.Id, updateDefinition, session);
         }
@@ -139,14 +126,12 @@ public class EventService(
     }
 
     // user open a link for an event it should not have, and, IF NOT ALREADY EXISTING, we create the related profileEvent 
-    public async Task<RetrieveEventResponseDto> CreateAndRetrieveSharedEvent(string eventId, string profileId)
-    {
+    public async Task<RetrieveEventResponseDto> CreateAndRetrieveSharedEvent(string eventId, string profileId) {
         var ev = await dbService.RetrieveByIdAsync<Event>(eventCollection, eventId);
         var eventDetails = await eventDetailsService.RetrieveByEventId(eventId);
 
         var pe = await profileEventService.FindByProfileAndEventId(profileId, eventId);
-        pe ??= await dbService.ExecuteInTransactionAsync(async (session) =>
-        {
+        pe ??= await dbService.ExecuteInTransactionAsync(async (session) => {
             var createdPe = await profileEventService.CreateProfileEventAsync(ev, new ObjectId(profileId), session, false);
 
             var updateDefinition = Builders<Event>.Update.Inc(e => e.TotalProfilesMinusOne, 1);
@@ -163,12 +148,10 @@ public class EventService(
     #endregion
 
     #region modify
-    public async Task<RetrieveEventResponseDto> UpdateEventAsync(UpdateEventRequestDto updateDto)
-    {
+    public async Task<RetrieveEventResponseDto> UpdateEventAsync(UpdateEventRequestDto updateDto) {
         var updates = GetUpdates(updateDto);
 
-        RetrieveEventResponseDto returnDto = await dbService.ExecuteInTransactionAsync(async (session) =>
-        {
+        RetrieveEventResponseDto returnDto = await dbService.ExecuteInTransactionAsync(async (session) => {
             var (ev, details) = await UpdateEvent(updateDto, session);
             return new RetrieveEventResponseDto(ev, details: details);
         });
@@ -178,15 +161,13 @@ public class EventService(
 
     public async Task<(Event Event, EventDetails? Details)> UpdateEvent(
         UpdateEventRequestDto updateDto,
-        IClientSessionHandle session)
-    {
+        IClientSessionHandle session) {
         Event? ev;
         EventDetails? details = null;
 
         var updates = GetUpdates(updateDto);
 
-        if (updates.Count != 0)
-        {
+        if (updates.Count != 0) {
             var combinedUpdate = Builders<Event>.Update.Combine(updates);
             ev = await dbService.FindOneByIdAndUpdateAsync(eventCollection, new ObjectId(updateDto.EventId), combinedUpdate, session);
 
@@ -206,8 +187,7 @@ public class EventService(
     }
 
 
-    private static List<UpdateDefinition<Event>> GetUpdates(UpdateEventRequestDto updateDto)
-    {
+    private static List<UpdateDefinition<Event>> GetUpdates(UpdateEventRequestDto updateDto) {
         var updates = new List<UpdateDefinition<Event>>();
 
         if (updateDto.Title != null)
@@ -222,13 +202,10 @@ public class EventService(
         return updates;
     }
 
-    public async Task Confirm(string eventId, string profileId)
-    {
-        await dbService.ExecuteInTransactionAsync<object?>(async (session) =>
-        {
+    public async Task Confirm(string eventId, string profileId) {
+        await dbService.ExecuteInTransactionAsync<object?>(async (session) => {
             var changed = await profileEventService.Confirm(profileId, eventId, session);
-            if (changed)
-            {
+            if (changed) {
                 var increaseUpdate = Builders<Event>.Update.Inc(ev => ev.TotalConfirmedMinusOne, 1);
                 var ev = await dbService.FindOneByIdAndUpdateAsync(eventCollection, new ObjectId(eventId), increaseUpdate, session);
 
@@ -239,13 +216,10 @@ public class EventService(
         });
     }
 
-    public async Task Decline(string eventId, string profileId)
-    {
-        await dbService.ExecuteInTransactionAsync<object?>(async (session) =>
-        {
+    public async Task Decline(string eventId, string profileId) {
+        await dbService.ExecuteInTransactionAsync<object?>(async (session) => {
             var changed = await profileEventService.Decline(profileId, eventId, session);
-            if (changed)
-            {
+            if (changed) {
                 var decreaseUpdate = Builders<Event>.Update.Inc(ev => ev.TotalConfirmedMinusOne, -1);
                 var ev = await dbService.FindOneByIdAndUpdateAsync(eventCollection, new ObjectId(eventId), decreaseUpdate, session);
 
@@ -261,28 +235,24 @@ public class EventService(
 
     #region retrieve
 
-    public async Task CheckEventExists(string id)
-    {
+    public async Task CheckEventExists(string id) {
         await dbService.ConfirmExists<Event>(eventCollection, id);
     }
 
     // for RT updates(creation/share of an event)
-    public async Task<RetrieveEventResponseDto> RetrieveEventById(string eventId, string profileId)
-    {
+    public async Task<RetrieveEventResponseDto> RetrieveEventById(string eventId, string profileId) {
         var ev = await dbService.RetrieveByIdAsync<Event>(eventCollection, eventId);
         var pe = await profileEventService.FindByProfileAndEventId(profileId, eventId);
         return new RetrieveEventResponseDto(ev, profileEvents: [pe!]);
     }
 
-    public async Task<RetrieveEventResponseDto> RetrieveEventWithDetailsById(string eventId)
-    {
+    public async Task<RetrieveEventResponseDto> RetrieveEventWithDetailsById(string eventId) {
         var ev = await dbService.RetrieveByIdAsync<Event>(eventCollection, eventId);
         var eventDetails = await eventDetailsService.RetrieveByEventId(eventId);
         return new RetrieveEventResponseDto(ev, details: eventDetails);
     }
 
-    public async Task<List<RetrieveEventResponseDto>> RetrieveEventsByProfileIds(List<ObjectId> profileIds, RetrieveMultipleEventsRequestDto requestDto)
-    {
+    public async Task<List<RetrieveEventResponseDto>> RetrieveEventsByProfileIds(List<ObjectId> profileIds, RetrieveMultipleEventsRequestDto requestDto) {
         // create pipeline, to have the db handle everything in one operation
         var aggregate = dbService.GetAggregate<ProfileEvent>(CollectionName.ProfileEvents);
 
@@ -306,8 +276,7 @@ public class EventService(
 
         // flat out the results on a new projected object
         var projections = lookupStage
-            .Project(pewce => new
-            {
+            .Project(pewce => new {
                 Event = pewce.Events[0],
                 pewce.ProfileId,
                 pewce.Role,
@@ -321,11 +290,9 @@ public class EventService(
         // we group them by eventId, listing the profiles into ProfileEventDto
         var grouped = projections.Group(
             projected => projected.Event.Id,
-            groupedEvents => new
-            {
+            groupedEvents => new {
                 ev = groupedEvents.First().Event,
-                ProfileEvents = groupedEvents.Select(projection => new ProfileEventDto
-                {
+                ProfileEvents = groupedEvents.Select(projection => new ProfileEventDto {
                     ProfileId = projection.ProfileId.ToString(),
                     Role = projection.Role,
                     Confirmed = projection.Confirmed,
@@ -343,8 +310,7 @@ public class EventService(
 
     }
 
-    public async Task<List<RetrieveEventResponseDto>> RetrieveUpdatesByProfileIds(RetrieveUpdatedEventsRequestDto requestDto)
-    {
+    public async Task<List<RetrieveEventResponseDto>> RetrieveUpdatesByProfileIds(RetrieveUpdatedEventsRequestDto requestDto) {
         var aggregate = dbService.GetAggregate<ProfileEvent>(CollectionName.ProfileEvents);
 
         var objectIds = requestDto.ProfileIds.Select(ph => new ObjectId(ph)).ToList();
@@ -368,8 +334,7 @@ public class EventService(
 
         //flat out the results on a new projected object
         var projected = lookupStage
-            .Project(pe => new
-            {
+            .Project(pe => new {
                 Event = pe.Events[0],
                 pe.ProfileId,
                 pe.Role,
@@ -381,11 +346,9 @@ public class EventService(
 
         var grouped = projected.Group(
             pe => pe.Event.Id,
-            group => new
-            {
+            group => new {
                 ev = group.First().Event,
-                ProfileEvents = group.Select(pe => new ProfileEventDto
-                {
+                ProfileEvents = group.Select(pe => new ProfileEventDto {
                     ProfileId = pe.ProfileId.ToString(),
                     Role = pe.Role,
                     Confirmed = pe.Confirmed,
@@ -403,8 +366,7 @@ public class EventService(
 
     }
 
-    public async Task<HashSet<ProfileEventDto>> GetProfileEventsAsync(string eventId)
-    {
+    public async Task<HashSet<ProfileEventDto>> GetProfileEventsAsync(string eventId) {
         var eps = await eventProfileService.FindAllByEventId(new ObjectId(eventId));
 
         // Build the (profileId, eventId) pairs
@@ -419,8 +381,7 @@ public class EventService(
 
     #region media
 
-    public async Task<List<MediaUploadResponseDto>> GetMediaUploadUrlsAsync(Profile profile, MediaUploadRequestDto dto)
-    {
+    public async Task<List<MediaUploadResponseDto>> GetMediaUploadUrlsAsync(Profile profile, MediaUploadRequestDto dto) {
         await CheckEventExists(dto.ParentHash);
 
         var dtos = await mediaService.GetUploadUrlsAsync(profile, eventBucket, eventMediaCollection, dto);
@@ -430,8 +391,7 @@ public class EventService(
         return dtos;
     }
 
-    public async Task<List<MediaReadResponseDto>> GetMediaReadUrlsAsync(Profile profile, MediaReadRequestDto mediaReadRequestDto)
-    {
+    public async Task<List<MediaReadResponseDto>> GetMediaReadUrlsAsync(Profile profile, MediaReadRequestDto mediaReadRequestDto) {
         // TODO check profile permits over events
         return await mediaService.GetReadUrlsAsync(eventBucket, mediaReadRequestDto);
     }

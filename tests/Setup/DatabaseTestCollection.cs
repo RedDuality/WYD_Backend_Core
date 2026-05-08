@@ -1,4 +1,3 @@
-using Core.Components.Database;
 using Xunit;
 
 namespace Core.Tests.Setup;
