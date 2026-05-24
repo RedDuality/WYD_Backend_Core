@@ -42,17 +42,19 @@ public static class TestServiceFactory
         services.AddScoped<MaskProfileService>();
         services.AddScoped<EventMaskService>();
 
+        services.AddScoped<EventService>();
         services.AddScoped<EventRetrieveService>();
         services.AddScoped<EventUpdatePropagationService>();
         services.AddScoped<EventProfileService>();
 
         services.AddScoped<RecurrentEventService>();
         services.AddScoped<RecurrentEventUpdateService>();
-        services.AddScoped<EventUpdatePropagationService>();
+        services.AddScoped<RecurrentEventUpdatePropagationService>();
         services.AddScoped<RecurrentEventProfileService>();
 
         services.AddScoped<EventDetailsService>();
         services.AddScoped<ProfileEventService>();
+        services.AddScoped<ProfileRecurrentEventService>();
 
         services.AddSingleton(_ => new Mock<MediaService>(dbService, null!).Object);
 

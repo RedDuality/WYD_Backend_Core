@@ -14,7 +14,7 @@ using MongoDB.Bson;
 using MongoDB.Driver;
 using Core.Services.Events.Instances;
 
-namespace Core.Tests.Events;
+namespace Core.Tests.Services.Events;
 
 [Collection("DatabaseTests")]
 public class EventServiceTests {

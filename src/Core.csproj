@@ -11,11 +11,11 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="AWSSDK.S3" Version="4.0.18.3" />
-    <PackageReference Include="FirebaseAdmin" Version="3.4.0" />
-    <PackageReference Include="Ical.Net" Version="5.2.1" />
-    <PackageReference Include="Microsoft.IdentityModel.Tokens" Version="8.15.0" />
-    <PackageReference Include="MongoDB.Driver" Version="3.6.0" />
-    <PackageReference Include="MongoDB.Bson" Version="3.6.0" />
+    <PackageReference Include="AWSSDK.S3" Version="4.0.23.4" />
+    <PackageReference Include="FirebaseAdmin" Version="3.5.0" />
+    <PackageReference Include="Ical.Net" Version="5.2.2" />
+    <PackageReference Include="Microsoft.IdentityModel.Tokens" Version="8.18.0" />
+    <PackageReference Include="MongoDB.Driver" Version="3.8.1" />
+    <PackageReference Include="MongoDB.Bson" Version="3.8.1" />
   </ItemGroup>
 </Project>

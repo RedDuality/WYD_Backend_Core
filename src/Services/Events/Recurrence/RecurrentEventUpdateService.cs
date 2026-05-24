@@ -32,35 +32,47 @@ public class RecurrentEventUpdateService(
         if (updateDto.RecurrenceRule != null && updateDto.RecurrenceRule.Length > 0)
             throw new ArgumentException("Cannot edit the recurrency rule for a single instance");
 
-        if (updateDto.InstanceEventId.Contains(updateDto.MasterEventId)) //generated
+        if (updateDto.IsGeneratedInstance())
             return await CreateDetachedInstance(updateDto, profile);
-        else //detached
+        else
             return await UpdateDetachedInstance(updateDto, profile);
     }
 
     private async Task<RetrieveEventResponseDto> CreateDetachedInstance(UpdateRecurrentEventRequestDto updateDto, Profile profile) {
         var master = await dbService.RetrieveByIdAsync<RecurrentEvent>(recurrentEventCollection, updateDto.MasterEventId);
 
-        // Validate the instanceId and extract the date part
-        if (!RecurrenceService.CheckRecurrencyIdIsValid(
-            master.RecurrenceRule,
-            master.StartTime,
-            master.EndTime,
-            master.RecurrenceEnd,
-            master.TimeZone,
-            updateDto.InstanceEventId,
-            out string datePart)
-        )
-            throw new ArgumentException("The provided InstanceEventId is not a valid occurrence of this series.");
+        var newInstance = GenerateEvent(master, updateDto);
 
         // check master's DetachedInstances   
-        var filter = Builders<DetachedInstances>.Filter.Eq(list => list.MasterId, master.Id);
-        var detachedInstances = await dbService.RetrieveOrNullAsync(detachedInstancesCollection, filter);
-
-        if (detachedInstances != null && detachedInstances.Instances.Any(i => i.RecurrencyId == updateDto.InstanceEventId))
+        var detachedInstances = await dbService.RetrieveOrNullAsync(detachedInstancesCollection, Builders<DetachedInstances>.Filter.Eq(list => list.MasterId, master.Id));
+        if (detachedInstances != null && detachedInstances.Instances.Any(i => i.RecurrencyId == updateDto.InstanceId))
             throw new ArgumentException("There already exists a detached instance for this slot");
 
-        // determine times
+        var (newDetachedInstance, details, profileEvent) = await dbService.ExecuteInTransactionAsync(async (session) => {
+            var (newDetachedInstance, details, profileEvent) = await eventService.CreateEvent(newInstance, profile, [], updateDto.Description, session);
+
+            await AddToDetachedInstancesAsync(newDetachedInstance, detachedInstances, updateDto, session);
+
+            return (newDetachedInstance, details, profileEvent);
+        });
+
+        return new RetrieveEventResponseDto(newDetachedInstance, details: details, profileEvents: [profileEvent]);
+    }
+
+    private static Event GenerateEvent(RecurrentEvent master, UpdateRecurrentEventRequestDto updateDto) {
+        // Validate the instanceId and extract the date part
+        var datePart = RecurrenceService.CheckRecurrencyId(master.RecurrenceRule, master.StartTime, master.EndTime, master.RecurrenceEnd, master.TimeZone, updateDto.InstanceId);
+
+        var (finalStart, finalEnd) = CalculateTimes(datePart, master, updateDto);
+
+        return new Event(updateDto.Title ?? master.Title, finalStart, finalEnd) {
+            RecurrencyInstanceId = updateDto.InstanceId,
+            MasterEventId = master.Id,
+            DetachedInstance = true,
+        };
+    }
+
+    private static (DateTimeOffset, DateTimeOffset) CalculateTimes(string datePart, RecurrentEvent master, UpdateRecurrentEventRequestDto updateDto) {
         DateTimeOffset originalOccurrenceStart = RecurrenceService.ParseInstanceId(datePart, master.TimeZone);
         TimeSpan masterDuration = master.EndTime - master.StartTime;
         DateTimeOffset originalOccurrenceEnd = originalOccurrenceStart.Add(masterDuration);
@@ -74,48 +86,30 @@ public class RecurrentEventUpdateService(
         if (finalEnd <= finalStart)
             throw new ArgumentException("End time must be after start time.");
 
+        return (finalStart, finalEnd);
+    }
 
-        var newInstance = new Event(
-            updateDto.Title ?? master.Title,
-            finalStart,
-            finalEnd) {
-            RecurrencyInstanceId = updateDto.InstanceEventId,
-            MasterEventId = master.Id,
-            DetachedInstance = true,
-        };
+    private async Task AddToDetachedInstancesAsync(Event newDetachedInstance, DetachedInstances? detachedInstances, UpdateRecurrentEventRequestDto updateDto, IClientSessionHandle session) {
+        var singleDetachedInstance = new DetachedInstance(newDetachedInstance.Id, newDetachedInstance.RecurrencyInstanceId!, newDetachedInstance.StartTime);
 
-        // create new event
-        var (newDetachedInstance, details, profileEvent) = await dbService.ExecuteInTransactionAsync(async (session) => {
-            var (newDetachedInstance, details, profileEvent) = await eventService.CreateEvent(newInstance, profile, [], updateDto.Description, session);
-
-            // update DetachedInstances
-            var singleDetachedInstance = new DetachedInstance(newDetachedInstance.Id, newDetachedInstance.RecurrencyInstanceId!, newDetachedInstance.StartTime);
-
-            if (detachedInstances == null) {
-                var instances = new DetachedInstances(new ObjectId(updateDto.MasterEventId), [singleDetachedInstance]);
-                await dbService.CreateOneAsync(detachedInstancesCollection, instances, session: null);
-            }
-            else {
-                var update = Builders<DetachedInstances>.Update.AddToSet(x => x.Instances, singleDetachedInstance);
-                await dbService.UpdateOneByIdAsync(detachedInstancesCollection, detachedInstances.Id, update);
-            }
-
-            return (newDetachedInstance, details, profileEvent);
-        });
-
-        return new RetrieveEventResponseDto(newDetachedInstance, details: details, profileEvents: [profileEvent]);
+        if (detachedInstances == null) {
+            var instances = new DetachedInstances(new ObjectId(updateDto.MasterEventId), [singleDetachedInstance]);
+            await dbService.CreateOneAsync(detachedInstancesCollection, instances, session: session);
+        }
+        else {
+            var update = Builders<DetachedInstances>.Update.AddToSet(x => x.Instances, singleDetachedInstance);
+            await dbService.UpdateOneByIdAsync(detachedInstancesCollection, detachedInstances.Id, update, session: session);
+        }
     }
 
     private async Task<RetrieveEventResponseDto> UpdateDetachedInstance(UpdateRecurrentEventRequestDto updateDto, Profile profile) {
         // check master's DetachedInstances   
-        var filter = Builders<DetachedInstances>.Filter.Eq(list => list.MasterId, new ObjectId(updateDto.MasterEventId));
-        var detachedInstances = await dbService.RetrieveOrNullAsync(detachedInstancesCollection, filter);
-
-        if (detachedInstances == null || !detachedInstances.Instances.Any(i => i.EventId == new ObjectId(updateDto.InstanceEventId)))
-            throw new ArgumentException("No detached instance found for the given master");
+        var detachedInstances = await dbService.RetrieveOrNullAsync(detachedInstancesCollection, Builders<DetachedInstances>.Filter.Eq(list => list.MasterId, new ObjectId(updateDto.MasterEventId)));
+        if (detachedInstances == null || !detachedInstances.Instances.Any(i => i.EventId == new ObjectId(updateDto.InstanceId)))
+            throw new ArgumentException("This detached instance was not found for the given master");
 
         var singleUpdateDto = new UpdateEventRequestDto() {
-            EventId = updateDto.InstanceEventId,
+            EventId = updateDto.InstanceId,
             Title = updateDto.Title,
             Description = updateDto.Description,
             StartTime = updateDto.StartTime,
@@ -125,24 +119,26 @@ public class RecurrentEventUpdateService(
         var (ev, details) = await dbService.ExecuteInTransactionAsync(async (session) => {
             var (ev, details) = await eventService.UpdateEvent(singleUpdateDto, session);
 
-            if (updateDto.StartTime != null) {
-                // update detachedInstances
-                var filter = Builders<DetachedInstances>.Filter.And(
-                    Builders<DetachedInstances>.Filter.Eq(di => di.MasterId, new ObjectId(updateDto.MasterEventId)),
-                    Builders<DetachedInstances>.Filter.Eq(di => di.Id, detachedInstances.Id),
-                    Builders<DetachedInstances>.Filter.ElemMatch(di => di.Instances, i => i.EventId == new ObjectId(updateDto.InstanceEventId))
-                );
-                var update = Builders<DetachedInstances>.Update.Set("instances.$.startTime", updateDto.StartTime);
-
-                await dbService.UpdateOneAsync(detachedInstancesCollection, filter, update, session);
-            }
+            if (updateDto.StartTime != null)
+                await PropagateToDetachedInstances(updateDto, detachedInstances, session);
 
             return (ev, details);
         });
 
         return new RetrieveEventResponseDto(ev, details: details);
     }
-    
+
+    private async Task PropagateToDetachedInstances(UpdateRecurrentEventRequestDto updateDto, DetachedInstances detachedInstances, IClientSessionHandle session) {
+        var filter = Builders<DetachedInstances>.Filter.And(
+            Builders<DetachedInstances>.Filter.Eq(di => di.MasterId, new ObjectId(updateDto.MasterEventId)),
+            Builders<DetachedInstances>.Filter.Eq(di => di.Id, detachedInstances.Id),
+            Builders<DetachedInstances>.Filter.ElemMatch(di => di.Instances, i => i.EventId == new ObjectId(updateDto.InstanceId))
+        );
+        var update = Builders<DetachedInstances>.Update.Set("instances.$.startTime", updateDto.StartTime);
+
+        await dbService.UpdateOneAsync(detachedInstancesCollection, filter, update, session);
+    }
+
     #endregion
 
     #region sequence
@@ -154,8 +150,10 @@ public class RecurrentEventUpdateService(
         };
     }
 
+    #region allsequence
     // to check:
     // profileEvents
+    // recurrenceid?
     private async Task<RetrieveRecurrentEventResponseDto> UpdateAllTheSequence(UpdateRecurrentEventRequestDto updateDto, Profile profile) {
         var updates = GetUpdates(updateDto);
 
@@ -163,9 +161,12 @@ public class RecurrentEventUpdateService(
             RecurrentEvent? master;
             EventDetails? eventDetails = null;
 
+            // eventually fail BEFORE applying to the whole sequence
+            if (!updateDto.IsGeneratedInstance())
+                await UpdateDetachedInstance(updateDto, profile);
+
             if (updates.Count >= 0) {
-                var combinedUpdate = Builders<RecurrentEvent>.Update.Combine(updates);
-                master = await dbService.FindOneByIdAndUpdateAsync(recurrentEventCollection, new ObjectId(updateDto.MasterEventId), combinedUpdate, session);
+                master = await dbService.FindOneByIdAndUpdateAsync(recurrentEventCollection, new ObjectId(updateDto.MasterEventId), Builders<RecurrentEvent>.Update.Combine(updates), session);
 
                 var propagationMessage = new QueueMessage<RecurrentEventPayload>(MessageType.eventUpdate, new(master, EventUpdateType.update));
                 await messageService.SendPropagationMessageAsync(propagationMessage);
@@ -176,10 +177,6 @@ public class RecurrentEventUpdateService(
             if (updateDto.Description != null)
                 eventDetails = await eventDetailsService.Update(new ObjectId(updateDto.MasterEventId), updateDto.Description, session);
 
-            // update current instance
-            if (!updateDto.InstanceEventId.Contains(updateDto.MasterEventId)) {
-                await UpdateDetachedInstance(updateDto, profile);
-            }
             return (master, eventDetails);
         });
         return new RetrieveRecurrentEventResponseDto(upatedEvent, details: details);
@@ -203,16 +200,18 @@ public class RecurrentEventUpdateService(
         return updates;
     }
 
+    #endregion
+
+    #region thisandfollowing
     private async Task<RetrieveRecurrentEventResponseDto> UpdateThisAndAllFollowing(UpdateRecurrentEventRequestDto updateDto, Profile profile) {
 
         var oldMaster = await dbService.RetrieveByIdAsync<RecurrentEvent>(recurrentEventCollection, updateDto.MasterEventId);
         var stopTime = await GetStopTime(updateDto, oldMaster);
 
         RetrieveRecurrentEventResponseDto eventDto = await dbService.ExecuteInTransactionAsync(async (session) => {
-            // stop previous masterevent
-            await UpdateOldMaster(stopTime, updateDto, oldMaster, session);
+            await StopPreviousMaster(stopTime, updateDto, oldMaster, session);
 
-            var (newMaster, eventDetails, profileRecurrentEvent) = await CreateNewMaster(updateDto, profile, oldMaster, session);
+            var (newMaster, eventDetails, profileRecurrentEvent) = await CreateNewMaster(stopTime, updateDto, profile, oldMaster, session);
 
             await UpdateDetachedInstances(oldMaster, newMaster, stopTime, updateDto, session);
 
@@ -237,18 +236,18 @@ public class RecurrentEventUpdateService(
         DateTimeOffset stopTime;
         if (updateDto.StartTime != null)
             stopTime = updateDto.StartTime.Value.ToUniversalTime();
-        else if (updateDto.InstanceEventId.Contains(updateDto.MasterEventId)) // generated
-            stopTime = RecurrenceService.ParseInstanceId(updateDto.InstanceEventId, oldMaster.TimeZone);
+        else if (updateDto.IsGeneratedInstance())
+            stopTime = RecurrenceService.ParseInstanceId(updateDto.InstanceId, oldMaster.TimeZone);
         else {  // detached
-            var det = await dbService.RetrieveByIdAsync<Event>(CollectionName.Events, updateDto.InstanceEventId);
+            var det = await dbService.RetrieveByIdAsync<Event>(CollectionName.Events, updateDto.InstanceId);
             stopTime = det.StartTime;
         }
-        return stopTime.AddSeconds(-1);
+        return stopTime.AddSeconds(-2);
     }
 
-    private async Task UpdateOldMaster(DateTimeOffset stopTime, UpdateRecurrentEventRequestDto updateDto, RecurrentEvent oldMaster, IClientSessionHandle session) {
+    private async Task StopPreviousMaster(DateTimeOffset stopTime, UpdateRecurrentEventRequestDto updateDto, RecurrentEvent oldMaster, IClientSessionHandle session) {
         var newRecurrenceEnd = stopTime;
-        var truncatedRule = RecurrenceService.TruncateRuleUntil(oldMaster.RecurrenceRule, stopTime, oldMaster.TimeZone);
+        var truncatedRule = RecurrenceService.TruncateRuleUntil(oldMaster.RecurrenceRule, stopTime);
         var oldMasterUpdates = new List<UpdateDefinition<RecurrentEvent>> {
             Builders<RecurrentEvent>.Update.Set(m => m.RecurrenceRule, truncatedRule),
             Builders<RecurrentEvent>.Update.Set(m => m.RecurrenceEnd, newRecurrenceEnd)
@@ -257,20 +256,58 @@ public class RecurrentEventUpdateService(
         await dbService.UpdateOneByIdAsync(recurrentEventCollection, oldMaster.Id, Builders<RecurrentEvent>.Update.Combine(oldMasterUpdates), session);
     }
 
-    private async Task<(RecurrentEvent, EventDetails, ProfileRecurrentEvent)> CreateNewMaster(UpdateRecurrentEventRequestDto updateDto, Profile profile, RecurrentEvent oldMaster, IClientSessionHandle session) {
+    private async Task<(RecurrentEvent, EventDetails, ProfileRecurrentEvent)> CreateNewMaster(DateTimeOffset stopTime, UpdateRecurrentEventRequestDto updateDto, Profile profile, RecurrentEvent oldMaster, IClientSessionHandle session) {
         var description = updateDto.Description ?? (await dbService.RetrieveAsync(
            CollectionName.EventDetails,
            Builders<EventDetails>.Filter.Eq(d => d.EventId, oldMaster.Id)))
        .Description;
 
-        var newNewRecurrenceRule = updateDto.RecurrenceRule ?? oldMaster.RecurrenceRule;
+
+        var newRecurrenceRule = BuildNewMasterRule(updateDto.RecurrenceRule, oldMaster, stopTime);
+
+        var newStartTime = updateDto.StartTime ?? stopTime.AddSeconds(2);
+        var newEndTime = updateDto.EndTime ?? newStartTime.Add(oldMaster.GetTimeSpan());
+
         var newMaster = new RecurrentEvent(
             updateDto.Title ?? oldMaster.Title,
-            updateDto.StartTime ?? oldMaster.StartTime,
-            updateDto.EndTime ?? oldMaster.EndTime,
+            newStartTime,
+            newEndTime,
             oldMaster.TimeZone,
-            newNewRecurrenceRule);
+            newRecurrenceRule);
         return await recurrentEventService.CreateRecurrentEvent(newMaster, profile, [], description, session);
+    }
+
+    private static string BuildNewMasterRule(string? overrideRule, RecurrentEvent oldMaster, DateTimeOffset splitOccurrenceTime) {
+        if (overrideRule != null)
+            return overrideRule;
+
+        var oldRule = oldMaster.RecurrenceRule;
+        var parts = oldRule.Split(';');
+        var countPart = parts.FirstOrDefault(p => p.StartsWith("COUNT=", StringComparison.OrdinalIgnoreCase));
+
+        // No COUNT clause → UNTIL or infinite; the rule is correct as-is for the new series.
+        if (countPart == null)
+            return oldRule;
+
+        var totalCount = int.Parse(countPart["COUNT=".Length..]);
+        var eventDuration = Duration.FromTimeSpanExact(oldMaster.GetTimeSpan());
+
+        // Count occurrences that stay with the OLD master (strictly before the split).
+        var occurrencesBefore = RecurrenceService.GetOccurrences(
+            oldRule,
+            oldMaster.StartTime,
+            recurrenceEnd: null,                          // COUNT already limits the series
+            oldMaster.TimeZone,
+            eventDuration,
+            windowStart: oldMaster.StartTime,
+            windowEnd: splitOccurrenceTime.AddTicks(-1) // exclusive of the split occurrence
+        ).Count();
+
+        var remainingCount = Math.Max(1, totalCount - occurrencesBefore);
+
+        return string.Join(";", parts
+            .Where(p => !p.StartsWith("COUNT=", StringComparison.OrdinalIgnoreCase))
+            .Append($"COUNT={remainingCount}"));
     }
 
     private async Task UpdateDetachedInstances(RecurrentEvent oldMaster, RecurrentEvent newMaster, DateTimeOffset stopTime, UpdateRecurrentEventRequestDto updateDto, IClientSessionHandle session) {
@@ -324,7 +361,7 @@ public class RecurrentEventUpdateService(
 
         // update current instance if detached
         // TODO profileEvents?
-        if (updateDto.InstanceEventId.Equals(detachedInstance.EventId)) {
+        if (updateDto.InstanceId.Equals(detachedInstance.EventId)) {
             detachedUpdates.AddRange(GetInstanceUpdates(updateDto));
 
             // details
@@ -351,6 +388,7 @@ public class RecurrentEventUpdateService(
 
         return updates;
     }
+    #endregion
 
     #endregion
 }

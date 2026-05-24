@@ -23,7 +23,6 @@ public class RecurrentEventService(
     IMessageQueueService messageService
 ) {
     private readonly CollectionName recurrentEventCollection = CollectionName.RecurrentEvents;
-    private readonly CollectionName detachedInstancesCollection = CollectionName.DetachedInstances;
 
     #region create
     public async Task<RetrieveRecurrentEventResponseDto> CreateRecurrentEventAsync(CreateRecurrentEventRequestDto newEventDto, Profile creatorProfile) {

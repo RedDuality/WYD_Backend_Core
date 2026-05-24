@@ -1,12 +1,10 @@
-using Core.Model.Events.Recurrence;
 using Ical.Net.CalendarComponents;
 using Ical.Net.DataTypes;
 using MongoDB.Bson;
 
 namespace Core.Services.Util;
 
-public class RecurrenceService()
-{
+public class RecurrenceService() {
     public static IEnumerable<DateTimeOffset> GetOccurrences(
         string recurrenceRule,
         DateTimeOffset startTime,
@@ -14,8 +12,7 @@ public class RecurrenceService()
         TimeZoneInfo tz,
         Duration singleEventDuration,
         DateTimeOffset windowStart,
-        DateTimeOffset windowEnd)
-    {
+        DateTimeOffset windowEnd) {
         // Cap the upper bound at the series' own recurrence end, if defined.
         var effectiveEnd = recurrenceEnd.HasValue && recurrenceEnd.Value < windowEnd
             ? recurrenceEnd.Value
@@ -26,14 +23,10 @@ public class RecurrenceService()
         var searchStartLocal = TimeZoneInfo.ConvertTime(windowStart, tz).DateTime;
         var searchEndLocal = TimeZoneInfo.ConvertTime(effectiveEnd, tz).DateTime;
 
-        var calEvent = new CalendarEvent
-        {
+        var calEvent = new CalendarEvent {
             DtStart = new CalDateTime(dtStartLocal, tz.Id),
             Duration = singleEventDuration,
-            RecurrenceRules =
-            [
-                new(recurrenceRule)
-            ]
+            RecurrenceRule = new(recurrenceRule)
         };
 
 
@@ -44,8 +37,7 @@ public class RecurrenceService()
         return calendar
             .GetOccurrences(new CalDateTime(searchStartLocal, tz.Id))
             .Where(o => o.Period.StartTime.Value <= searchEndLocal)
-            .Select(o =>
-            {
+            .Select(o => {
                 var localDt = o.Period.StartTime.Value;
                 var offset = tz.GetUtcOffset(localDt);
                 return new DateTimeOffset(
@@ -54,8 +46,7 @@ public class RecurrenceService()
             });
     }
 
-    public static DateTimeOffset ExtractRecurrenceEnd(string recurrenceRule, TimeZoneInfo tz)
-    {
+    public static DateTimeOffset ExtractRecurrenceEnd(string recurrenceRule, TimeZoneInfo tz) {
         var pattern = new RecurrencePattern(recurrenceRule);
 
         if (pattern.Until == null)
@@ -69,8 +60,7 @@ public class RecurrenceService()
         return dto.ToUniversalTime();
     }
 
-    public static string GetValidRule(string rule)
-    {
+    public static string GetValidRule(string rule) {
         var normalizedRule = rule.Trim();
         const string prefix = "RRULE:";
 
@@ -83,16 +73,13 @@ public class RecurrenceService()
         throw new ArgumentException($"Invalid recurrence rule: '{normalizedRule}'.");
     }
 
-    private static bool IsValidRRule(string rule)
-    {
+    private static bool IsValidRRule(string rule) {
         if (string.IsNullOrWhiteSpace(rule)) return false;
-        try
-        {
+        try {
             var _ = new RecurrencePattern(rule); // if you use Ical.Net
             return true;
         }
-        catch
-        {
+        catch {
             return false;
         }
     }
@@ -112,8 +99,7 @@ public class RecurrenceService()
     /// Parses a recurrence instance identifier (MASTERID_DATE)and returns the corresponding
     /// <see cref="DateTimeOffset"/> in the correct time zone.
     /// </summary>
-    public static DateTimeOffset ParseInstanceId(string instanceId, TimeZoneInfo timeZone)
-    {
+    public static DateTimeOffset ParseInstanceId(string instanceId, TimeZoneInfo timeZone) {
         // Fix: Get the last part in case of MasterId_Date format
         var parts = instanceId.Split("_");
         var dateString = parts.Last();
@@ -144,29 +130,28 @@ public class RecurrenceService()
     /// Verifies if a compound ID represents a valid occurrence in the master's sequence.
     /// Returns the extracted date part (RecurrencyInstanceId) if valid.
     /// </summary>
-    public static bool CheckRecurrencyIdIsValid(
+    public static string CheckRecurrencyId(
         string masterRecurrenceRule,
         DateTimeOffset masterStartTime,
         DateTimeOffset masterEndTime,
         DateTimeOffset masterRecurrenceEnd,
         TimeZoneInfo timeZone,
-        string compoundId,
-        out string datePart
-    )
-    {
-         datePart = string.Empty;
-        var parts = compoundId.Split('_');
-        if (parts.Length < 2) return false;
+        string compoundId
+    ) {
+        var datePart = string.Empty;
 
-        datePart = parts.Last();
-        try
-        {
+        try {
+            var parts = compoundId.Split('_');
+            if (parts.Length < 2) throw new Exception();
+
+            datePart = parts.Last();
+
             DateTimeOffset occurrenceStart = ParseInstanceId(datePart, timeZone);
             TimeSpan duration = masterEndTime - masterStartTime;
 
             // Check if this specific occurrence exists in the rule
             // We use a 1-second window to check for the exact start time
-            return GetOccurrences(
+            var occurenceExists = GetOccurrences(
                 masterRecurrenceRule,
                 masterStartTime,
                 masterRecurrenceEnd,
@@ -175,11 +160,14 @@ public class RecurrenceService()
                 occurrenceStart,
                 occurrenceStart.AddSeconds(1)
             ).Any(o => o.Equals(occurrenceStart));
+
+            if (!occurenceExists) throw new Exception();
         }
-        catch
-        {
-            return false;
+        catch {
+            throw new ArgumentException("The provided InstanceEventId is not a valid occurrence of this series.");
         }
+
+        return datePart;
     }
 
     public static string FormatInstanceId(DateTimeOffset occurrence)
@@ -197,8 +185,7 @@ public class RecurrenceService()
         TimeZoneInfo tz,
         Duration singleEventDuration,
         DateTimeOffset originalOccurrenceTime,
-        int searchWindowDays = 14)
-    {
+        int searchWindowDays = 14) {
         var windowStart = originalOccurrenceTime.AddDays(-searchWindowDays);
         var windowEnd = originalOccurrenceTime.AddDays(searchWindowDays);
 
@@ -218,17 +205,8 @@ public class RecurrenceService()
     /// before <paramref name="cutoff"/>. The cutoff occurrence itself therefore belongs to the
     /// new master, not to the old one.
     /// </summary>
-    public static string TruncateRuleUntil(
-        string recurrenceRule,
-        DateTimeOffset cutoff,
-        TimeZoneInfo tz)
-    {
-        // One second before the cutoff: the old series must not include the
-        // occurrence that starts the "this and following" split.
-        var until = cutoff.AddSeconds(-1).ToUniversalTime();
-
-        // RFC 5545 §3.3.5 DATE-TIME UTC form: yyyyMMddTHHmmssZ
-        var untilStr = until.ToString("yyyyMMddTHHmmssZ");
+    public static string TruncateRuleUntil(string recurrenceRule, DateTimeOffset cutoff) {
+        var untilStr = cutoff.ToUniversalTime().ToString("yyyyMMddTHHmmssZ");
 
         var parts = recurrenceRule
             .Split(';')

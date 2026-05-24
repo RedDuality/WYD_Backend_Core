@@ -1,11 +1,11 @@
 using Core.Model.Base;
+using Ical.Net.DataTypes;
 using MongoDB.Bson;
 using MongoDB.Bson.Serialization.Attributes;
 
 namespace Core.Model.Events;
 
-public abstract class BaseEvent : BaseDateEntity
-{
+public abstract class BaseEvent : BaseDateEntity {
     [BsonElement("title")]
     public string Title { get; set; }
 
@@ -22,13 +22,20 @@ public abstract class BaseEvent : BaseDateEntity
     public BaseEvent(
         string title,
         DateTimeOffset startTime,
-        DateTimeOffset endTime)
-    {
+        DateTimeOffset endTime) {
         if (endTime < startTime)
             throw new ArgumentException("EndTime cannot be earlier than StartTime.");
 
         Title = title;
         StartTime = startTime;
         EndTime = endTime;
+    }
+
+    public TimeSpan GetTimeSpan() {
+        return EndTime - StartTime;
+    }
+
+    public Duration GetDuration() {
+        return Duration.FromTimeSpanExact(GetTimeSpan());
     }
 }

@@ -4,8 +4,7 @@ using MongoDB.Bson.Serialization.Attributes;
 
 namespace Core.Model.Events.Recurrence;
 
-public class RecurrentEvent : BaseEvent
-{
+public class RecurrentEvent : BaseEvent {
     // --- Recurrence ---
 
     [BsonElement("recurrenceEnd")]
@@ -33,8 +32,7 @@ public class RecurrentEvent : BaseEvent
         DateTimeOffset endTime,
         TimeZoneInfo timeZone,
         string recurrenceRule
-    ) : base(title, startTime, endTime)
-    {
+    ) : base(title, startTime, endTime) {
         var validRule = RecurrenceService.GetValidRule(recurrenceRule);
 
         var recurrenceEnd = RecurrenceService.ExtractRecurrenceEnd(validRule, timeZone);

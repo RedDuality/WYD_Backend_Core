@@ -10,7 +10,7 @@ public enum RecurrentUpdateType
 public class UpdateRecurrentEventRequestDto
 {
     public required RecurrentUpdateType UpdateType { get; set; }
-    public required string InstanceEventId { get; set; } // recurrencyId if generated, eventId if detached
+    public required string InstanceId { get; set; } // recurrencyId if generated, eventId if detached
     public required string MasterEventId { get; set; }
     public string? Title { get; set; }
     public string? Description { get; set; }
@@ -20,5 +20,9 @@ public class UpdateRecurrentEventRequestDto
 
     // Parameterless constructor for deserialization
     public UpdateRecurrentEventRequestDto() { }
+
+    public bool IsGeneratedInstance() {
+        return InstanceId.Contains(MasterEventId);
+    }
 
 }
