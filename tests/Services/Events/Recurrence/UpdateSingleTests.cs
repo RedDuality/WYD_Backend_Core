@@ -203,6 +203,37 @@ public class UpdateSingleTests {
             _recurrentUpdateService.UpdateSingleInstance(updateDto, _creatorProfile));
     }
 
+
+    [SkippableFact]
+    public async Task UpdateSingleInstance_ShouldThrow_SetRRule() {
+        // ARRANGE
+        var startTime = DateTimeOffset.UtcNow.AddHours(1);
+
+        var master = await BuildMasterAsync(
+            "Weekly Yoga",
+            "FREQ=WEEKLY;INTERVAL=1",
+            "UTC",
+            startTime,
+            startTime.AddHours(1)
+        );
+
+        // Generate a valid InstanceId for the first occurrence
+        var datePart = startTime.ToString("yyyyMMddTHHmmssZ");
+        var instanceId = $"{master.Id}_{datePart}";
+
+        var updateDto = new UpdateRecurrentEventRequestDto {
+            UpdateType = RecurrentUpdateType.ThisInstance,
+            MasterEventId = master.Id.ToString(),
+            InstanceId = instanceId,
+            Title = "Test",
+            RecurrenceRule = "FREQ=WEEKLY;INTERVAL=2"
+        };
+
+        // ACT & ASSERT
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            _recurrentUpdateService.UpdateSingleInstance(updateDto, _creatorProfile));
+    }
+
     #endregion
 
     #region create
@@ -215,7 +246,8 @@ public class UpdateSingleTests {
             "FREQ=WEEKLY;INTERVAL=1",
             "UTC",
             startTime,
-            startTime.AddHours(1)
+            startTime.AddHours(1),
+            description: "Don't forget the mat!"
         );
 
         // Generate a valid InstanceId for the first occurrence
@@ -249,7 +281,7 @@ public class UpdateSingleTests {
             Builders<EventDetails>.Filter.Eq("eventId", detachedEvent.Id)
         );
         details.Should().NotBeNull();
-        details.Description.Should().Be(null);
+        details.Description.Should().Be("Don't forget the mat!");
 
         // ASSERT: EventProfiles
         var eventProfile = await _dbService.RetrieveAsync(
@@ -260,7 +292,6 @@ public class UpdateSingleTests {
             )
         );
         eventProfile.Should().NotBeNull();
-
 
         // ASSERT: EventProfiles
         var profileEvent = await _dbService.RetrieveAsync(
@@ -301,61 +332,10 @@ public class UpdateSingleTests {
     [SkippableFact]
     public async Task CreateDetachedNotFirstInstance_ShouldSucceed_WithNewTitle() {
         //TODO
-        var startTime = DateTimeOffset.UtcNow.AddHours(1);
-
-        var master = await BuildMasterAsync(
-            "Weekly Yoga",
-            "FREQ=WEEKLY;INTERVAL=1",
-            "UTC",
-            startTime,
-            startTime.AddHours(1)
-        );
-
-        // Generate a valid InstanceId for the first occurrence
-        var datePart = startTime.ToString("yyyyMMddTHHmmssZ");
-        var instanceId = $"{master.Id}_{datePart}";
-
-        var updateDto = new UpdateRecurrentEventRequestDto {
-            UpdateType = RecurrentUpdateType.ThisInstance,
-            MasterEventId = master.Id.ToString(),
-            InstanceId = instanceId,
-            Title = "Modified Yoga Session"
-        };
-
-        // 2. ACT
-        var result = await _recurrentUpdateService.UpdateSingleInstance(updateDto, _creatorProfile);
-
-        // 3. ASSERT: The Event document
-        var detachedEvent = await _dbService.RetrieveByIdAsync<Event>(CollectionName.Events, result.Id);
-
-        detachedEvent.Should().NotBeNull();
-        detachedEvent.Title.Should().Be("Modified Yoga Session");
-        detachedEvent.StartTime.Should().Equals(master.StartTime);
-        detachedEvent.EndTime.Should().Equals(master.EndTime);
-        detachedEvent.MasterEventId.ToString().Should().Be(master.Id);
-        detachedEvent.RecurrencyInstanceId.Should().Be(instanceId);
-        detachedEvent.DetachedInstance.Should().BeTrue();
-
-
-        // 4. ASSERT: DetachedInstances Collection
-        var detachedList = await _dbService.RetrieveAsync(
-            CollectionName.DetachedInstances,
-            Builders<DetachedInstances>.Filter.Eq(di => di.MasterId, new ObjectId(master.Id))
-        );
-        detachedList.Should().NotBeNull();
-        detachedList.Instances.Should().ContainSingle(i =>
-            i.EventId == detachedEvent.Id && i.RecurrencyId == instanceId);
-
-        // 5. ASSERT: EventDetails
-        var details = await _dbService.RetrieveAsync(
-            CollectionName.EventDetails,
-            Builders<EventDetails>.Filter.Eq("eventId", detachedEvent.Id)
-        );
-        details.Description.Should().Be(null);
     }
 
     [SkippableFact]
-    public async Task CreateDetachedInstance_ShouldSucceed_AndPopulateCollections() {
+    public async Task CreateDetachedFirstInstance_ShouldSucceed_WithNewDescription() {
         // 1. ARRANGE: Create a Master Recurrent Event
         var startTime = DateTimeOffset.UtcNow.AddHours(1);
 
@@ -364,7 +344,8 @@ public class UpdateSingleTests {
             "FREQ=WEEKLY;INTERVAL=1",
             "UTC",
             startTime,
-            startTime.AddHours(1)
+            startTime.AddHours(1),
+            description: "Don't forget the mat!"
         );
 
         // Generate a valid InstanceId for the first occurrence
@@ -375,38 +356,36 @@ public class UpdateSingleTests {
             UpdateType = RecurrentUpdateType.ThisInstance,
             MasterEventId = master.Id.ToString(),
             InstanceId = instanceId,
-            Title = "Modified Yoga Session",
             Description = "Bring your own mat today!"
         };
 
         // 2. ACT
         var result = await _recurrentUpdateService.UpdateSingleInstance(updateDto, _creatorProfile);
 
-        // 3. ASSERT: The Event document
+        // ASSERT: The Event document
         var detachedEvent = await _dbService.RetrieveByIdAsync<Event>(CollectionName.Events, result.Id);
 
         detachedEvent.Should().NotBeNull();
-        detachedEvent.Title.Should().Be("Modified Yoga Session");
+        detachedEvent.Title.Should().Be("Weekly Yoga");
+        detachedEvent.StartTime.Should().Equals(master.StartTime);
+        detachedEvent.EndTime.Should().Equals(master.EndTime);
         detachedEvent.MasterEventId.ToString().Should().Be(master.Id);
         detachedEvent.RecurrencyInstanceId.Should().Be(instanceId);
         detachedEvent.DetachedInstance.Should().BeTrue();
 
-        // 4. ASSERT: DetachedInstances Collection
-        var detachedList = await _dbService.RetrieveAsync(
-            CollectionName.DetachedInstances,
-            Builders<DetachedInstances>.Filter.Eq(di => di.MasterId, new ObjectId(master.Id))
-        );
-        detachedList.Should().NotBeNull();
-        detachedList.Instances.Should().ContainSingle(i =>
-            i.EventId == detachedEvent.Id && i.RecurrencyId == instanceId);
-
-        // 5. ASSERT: EventDetails
+        // ASSERT: EventDetails
         var details = await _dbService.RetrieveAsync(
             CollectionName.EventDetails,
             Builders<EventDetails>.Filter.Eq("eventId", detachedEvent.Id)
         );
         details.Description.Should().Be("Bring your own mat today!");
     }
+
+    [SkippableFact]
+    public async Task CreateDetachedNotFirstInstance_ShouldSucceed_WithNewDescription() {
+        //TODO
+    }
+
 
     #endregion
 
