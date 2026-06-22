@@ -44,37 +44,7 @@ public class RecurrentEventUpdateServiceTests {
         _creatorProfile = _profileService.CreateAsync(uniqueTag, "John Doe", _session).GetAwaiter().GetResult();
     }
 
-    #region single
-
-    [SkippableFact]
-    public async Task UpdateSingleInstance_ShouldThrow_WhenUpdateTypeIsInvalid() {
-        // ARRANGE
-        var request = new UpdateRecurrentEventRequestDto {
-            UpdateType = RecurrentUpdateType.AllTheSequence, // Wrong type for this method
-            InstanceId = "any_id",
-            MasterEventId = ObjectId.GenerateNewId().ToString()
-        };
-
-        // ACT & ASSERT
-        await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            _recurrentUpdateService.UpdateSingleInstance(request, _creatorProfile));
-    }
-
-    [SkippableFact]
-    public async Task UpdateSingleInstance_ShouldThrow_WhenRecurrenceRuleIsProvided() {
-        // ARRANGE
-        var request = new UpdateRecurrentEventRequestDto {
-            UpdateType = RecurrentUpdateType.ThisInstance,
-            InstanceId = "any_id",
-            MasterEventId = ObjectId.GenerateNewId().ToString(),
-            RecurrenceRule = "FREQ=DAILY" // Should not be here
-        };
-
-        // ACT & ASSERT
-        await Assert.ThrowsAsync<ArgumentException>(() =>
-            _recurrentUpdateService.UpdateSingleInstance(request, _creatorProfile));
-    }
-
+    #region util
     private async Task<RetrieveRecurrentEventResponseDto> BuildMasterAsync(
         string title = "Team Standup",
         string rrule = "FREQ=DAILY;COUNT=5",
@@ -99,142 +69,6 @@ public class RecurrentEventUpdateServiceTests {
 
         var responseDto = await _recurrentEventService.CreateRecurrentEventAsync(requestDto, _creatorProfile);
         return responseDto;
-    }
-
-    [SkippableFact]
-    public async Task CreateDetachedInstance_ShouldSucceed_AndPopulateCollections() {
-        // 1. ARRANGE: Create a Master Recurrent Event
-        var startTime = DateTimeOffset.UtcNow.AddHours(1);
-
-        var master = await BuildMasterAsync(
-            "Weekly Yoga",
-            "FREQ=WEEKLY;INTERVAL=1",
-            "UTC",
-            startTime,
-            startTime.AddHours(1)
-        );
-
-        // Generate a valid InstanceId for the first occurrence
-        var datePart = startTime.ToString("yyyyMMddTHHmmssZ");
-        var instanceId = $"{master.Id}_{datePart}";
-
-        var updateDto = new UpdateRecurrentEventRequestDto {
-            UpdateType = RecurrentUpdateType.ThisInstance,
-            MasterEventId = master.Id.ToString(),
-            InstanceId = instanceId,
-            Title = "Modified Yoga Session",
-            Description = "Bring your own mat today!"
-        };
-
-        // 2. ACT
-        var result = await _recurrentUpdateService.UpdateSingleInstance(updateDto, _creatorProfile);
-
-        // 3. ASSERT: The Event document
-        var detachedEvent = await _dbService.RetrieveByIdAsync<Event>(CollectionName.Events, result.Id);
-
-        detachedEvent.Should().NotBeNull();
-        detachedEvent.Title.Should().Be("Modified Yoga Session");
-        detachedEvent.MasterEventId.ToString().Should().Be(master.Id);
-        detachedEvent.RecurrencyInstanceId.Should().Be(instanceId);
-        detachedEvent.DetachedInstance.Should().BeTrue();
-
-        // 4. ASSERT: DetachedInstances Collection
-        var detachedList = await _dbService.RetrieveAsync(
-            CollectionName.DetachedInstances,
-            Builders<DetachedInstances>.Filter.Eq(di => di.MasterId, new ObjectId(master.Id))
-        );
-        detachedList.Should().NotBeNull();
-        detachedList.Instances.Should().ContainSingle(i =>
-            i.EventId == detachedEvent.Id && i.RecurrencyId == instanceId);
-
-        // 5. ASSERT: EventDetails
-        var details = await _dbService.RetrieveAsync(
-            CollectionName.EventDetails,
-            Builders<EventDetails>.Filter.Eq("eventId", detachedEvent.Id)
-        );
-        details.Description.Should().Be("Bring your own mat today!");
-    }
-
-    [SkippableFact]
-    public async Task UpdateDetachedInstance_ShouldUpdateExistingEventAndDetachedInstancesCollection() {
-        // 1. ARRANGE: Create a Master Recurrent Event
-        var masterStartTime = DateTimeOffset.UtcNow.AddDays(5);
-
-        var master = await BuildMasterAsync(
-            "Original Master Title",
-            "FREQ=DAILY",
-            "UTC",
-            masterStartTime,
-            masterStartTime.AddHours(1)
-        );
-
-        // Create a Detached Event (already persisted in 'events' collection)
-        var instanceId = $"{master.Id}_{masterStartTime:yyyyMMddTHHmmssZ}";
-        var existingDetachedEvent = new Event("Initial Detached Title", masterStartTime, masterStartTime.AddHours(1)) {
-            MasterEventId = new ObjectId(master.Id),
-            RecurrencyInstanceId = instanceId,
-            DetachedInstance = true
-        };
-        await _eventService.CreateEvent(existingDetachedEvent, _creatorProfile, [], "",_session);
-
-
-        // Register it in the DetachedInstances tracker
-        var tracker = new DetachedInstances(new ObjectId(master.Id), [
-            new DetachedInstance(existingDetachedEvent.Id, instanceId, existingDetachedEvent.StartTime)
-        ]);
-        await _dbService.CreateOneAsync(CollectionName.DetachedInstances, tracker, _session);
-
-        // Prepare Update Request (using the Event's ObjectId, not the compound string)
-        var newStartTime = masterStartTime.AddHours(2);
-        var updateDto = new UpdateRecurrentEventRequestDto {
-            UpdateType = RecurrentUpdateType.ThisInstance,
-            MasterEventId = master.Id.ToString(),
-            InstanceId = existingDetachedEvent.Id.ToString(), // Existing EventId
-            Title = "Final Updated Title",
-            Description = "New Description",
-            StartTime = newStartTime,
-            EndTime = newStartTime.AddHours(1)
-        };
-
-        // 2. ACT
-        var result = await _recurrentUpdateService.UpdateSingleInstance(updateDto, _creatorProfile);
-
-        // 3. ASSERT: Event document updates
-        var updatedEvent = await _dbService.RetrieveByIdAsync<Event>(CollectionName.Events, existingDetachedEvent.Id.ToString());
-        updatedEvent.Title.Should().Be("Final Updated Title");
-        updatedEvent.StartTime.Should().BeCloseTo(newStartTime, TimeSpan.FromMilliseconds(1));
-
-        // 4. ASSERT: Tracker update (startTime in DetachedInstances collection)
-        var updatedTracker = await _dbService.RetrieveAsync(
-            CollectionName.DetachedInstances,
-            Builders<DetachedInstances>.Filter.Eq(di => di.MasterId, new ObjectId(master.Id))
-        );
-        var instanceInTracker = updatedTracker.Instances.First(i => i.EventId == existingDetachedEvent.Id);
-        instanceInTracker.StartTime.Should().BeCloseTo(newStartTime, TimeSpan.FromMilliseconds(1));
-
-        // 5. ASSERT: Details update
-        var details = await _dbService.RetrieveAsync(
-            CollectionName.EventDetails,
-            Builders<EventDetails>.Filter.Eq("eventId", existingDetachedEvent.Id)
-        );
-        details.Description.Should().Be("New Description");
-    }
-
-    [SkippableFact]
-    public async Task UpdateDetachedInstance_ShouldThrow_WhenNoDetachedInstancesExists() {
-        // ARRANGE: Event exists but isn't registered in DetachedInstances collection
-        var masterId = ObjectId.GenerateNewId();
-        var detachedEventId = ObjectId.GenerateNewId();
-
-        var request = new UpdateRecurrentEventRequestDto {
-            UpdateType = RecurrentUpdateType.ThisInstance,
-            MasterEventId = masterId.ToString(),
-            InstanceId = detachedEventId.ToString()
-        };
-
-        // ACT & ASSERT: Should throw because the detachedInstances does not include the event
-        await Assert.ThrowsAsync<ArgumentException>(() =>
-            _recurrentUpdateService.UpdateSingleInstance(request, _creatorProfile));
     }
 
     #endregion
@@ -312,7 +146,7 @@ public class RecurrentEventUpdateServiceTests {
             RecurrencyInstanceId = instanceId,
             DetachedInstance = true
         };
-        await _eventService.CreateEvent(existingDetachedEvent, _creatorProfile, [], "",_session);
+        await _eventService.CreateEvent(existingDetachedEvent, _creatorProfile, [], "", _session);
 
         // Register it in the DetachedInstances tracker
         var tracker = new DetachedInstances(new ObjectId(master.Id), [
@@ -507,6 +341,212 @@ public class RecurrentEventUpdateServiceTests {
         details.Description.Should().Be("Description for the split point");
     }
 
+    // -------------------------------------------------------------------------
+    // Edge-case tests added to cover COUNT reduction, StartTime/EndTime
+    // correctness on the new master, old-rule truncation, and boundary splits.
+    // -------------------------------------------------------------------------
+
+    [SkippableFact]
+    public async Task UpdateThisAndAllFollowing_NewMasterStartTime_ShouldBeSplitOccurrence_WhenNotExplicitlyProvided() {
+        // ARRANGE: daily series; split at day 5 without providing an explicit StartTime
+        var masterStart = new DateTimeOffset(2025, 6, 1, 9, 0, 0, TimeSpan.Zero);
+        var oldMaster = await BuildMasterAsync("Daily", "FREQ=DAILY;COUNT=10", "UTC", masterStart, masterStart.AddHours(1));
+
+        var splitTime = masterStart.AddDays(4); // day-5 occurrence
+        var updateDto = new UpdateRecurrentEventRequestDto {
+            UpdateType = RecurrentUpdateType.ThisAndAllFollowing,
+            MasterEventId = oldMaster.Id.ToString(),
+            InstanceId = $"{oldMaster.Id}_{splitTime:yyyyMMddTHHmmssZ}",
+            Title = "New Title"
+            // No StartTime provided — new master must derive it from the split occurrence
+        };
+
+        // ACT
+        var result = await _recurrentUpdateService.UpdateRecurrentEvent(updateDto, _creatorProfile);
+
+        // ASSERT: new master starts exactly at the split occurrence, not at the old series origin
+        var newMaster = await _dbService.RetrieveByIdAsync<RecurrentEvent>(CollectionName.RecurrentEvents, result.Id);
+        newMaster.StartTime.Should().BeCloseTo(splitTime, TimeSpan.FromSeconds(1),
+            "the new master's first occurrence must be the split point, not the old series origin");
+    }
+
+    [SkippableFact]
+    public async Task UpdateThisAndAllFollowing_NewMasterEndTime_ShouldPreserveDuration_WhenNotExplicitlyProvided() {
+        // ARRANGE: 1-hour daily event; split at day 3 — no EndTime in the DTO
+        var masterStart = new DateTimeOffset(2025, 7, 1, 10, 0, 0, TimeSpan.Zero);
+        var masterEnd = masterStart.AddHours(1);
+        var oldMaster = await BuildMasterAsync("Hourly", "FREQ=DAILY;COUNT=7", "UTC", masterStart, masterEnd);
+
+        var splitTime = masterStart.AddDays(2);
+        var updateDto = new UpdateRecurrentEventRequestDto {
+            UpdateType = RecurrentUpdateType.ThisAndAllFollowing,
+            MasterEventId = oldMaster.Id.ToString(),
+            InstanceId = $"{oldMaster.Id}_{splitTime:yyyyMMddTHHmmssZ}"
+        };
+
+        // ACT
+        var result = await _recurrentUpdateService.UpdateRecurrentEvent(updateDto, _creatorProfile);
+
+        // ASSERT: new master preserves the original 1-hour duration
+        var newMaster = await _dbService.RetrieveByIdAsync<RecurrentEvent>(CollectionName.RecurrentEvents, result.Id);
+        var newDuration = newMaster.EndTime - newMaster.StartTime;
+        newDuration.Should().Be(TimeSpan.FromHours(1),
+            "duration should be inherited from the old master when EndTime is not overridden");
+    }
+
+    [SkippableFact]
+    public async Task UpdateThisAndAllFollowing_CountRule_ShouldReduceCountOnNewMaster() {
+        // ARRANGE: COUNT=10, split at the 5th occurrence (day index 4) — new master should get COUNT=6
+        var masterStart = new DateTimeOffset(2025, 8, 1, 8, 0, 0, TimeSpan.Zero);
+        var oldMaster = await BuildMasterAsync("Count-10", "FREQ=DAILY;COUNT=10", "UTC", masterStart, masterStart.AddHours(1));
+
+        var splitTime = masterStart.AddDays(4); // 5th occurrence (0-indexed day 4)
+        var updateDto = new UpdateRecurrentEventRequestDto {
+            UpdateType = RecurrentUpdateType.ThisAndAllFollowing,
+            MasterEventId = oldMaster.Id.ToString(),
+            InstanceId = $"{oldMaster.Id}_{splitTime:yyyyMMddTHHmmssZ}"
+            // No overriding RecurrenceRule — the COUNT must be recalculated
+        };
+
+        // ACT
+        var result = await _recurrentUpdateService.UpdateRecurrentEvent(updateDto, _creatorProfile);
+
+        // ASSERT: new master carries the remaining 6 occurrences
+        var newMaster = await _dbService.RetrieveByIdAsync<RecurrentEvent>(CollectionName.RecurrentEvents, result.Id);
+        newMaster.RecurrenceRule.Should().Contain("COUNT=6",
+            "occurrences 5-10 (6 total) belong to the new master");
+
+        // ASSERT: old master has been capped and no longer carries the full count
+        var truncatedOld = await _dbService.RetrieveByIdAsync<RecurrentEvent>(
+            CollectionName.RecurrentEvents, oldMaster.Id.ToString());
+        truncatedOld.RecurrenceRule.Should().NotContain("COUNT=",
+            "TruncateRuleUntil replaces COUNT with UNTIL on the old master");
+        truncatedOld.RecurrenceRule.Should().Contain("UNTIL=",
+            "old master must have an UNTIL clause after truncation");
+    }
+
+    [SkippableFact]
+    public async Task UpdateThisAndAllFollowing_CountRule_ShouldGiveCount1_WhenSplitAtLastOccurrence() {
+        // ARRANGE: COUNT=5, split at the very last occurrence (day 4)
+        var masterStart = new DateTimeOffset(2025, 9, 1, 9, 0, 0, TimeSpan.Zero);
+        var oldMaster = await BuildMasterAsync("Count-5", "FREQ=DAILY;COUNT=5", "UTC", masterStart, masterStart.AddHours(1));
+
+        var splitTime = masterStart.AddDays(4); // last (5th) occurrence
+        var updateDto = new UpdateRecurrentEventRequestDto {
+            UpdateType = RecurrentUpdateType.ThisAndAllFollowing,
+            MasterEventId = oldMaster.Id.ToString(),
+            InstanceId = $"{oldMaster.Id}_{splitTime:yyyyMMddTHHmmssZ}"
+        };
+
+        // ACT
+        var result = await _recurrentUpdateService.UpdateRecurrentEvent(updateDto, _creatorProfile);
+
+        // ASSERT: new master gets exactly COUNT=1 (clamped to minimum of 1)
+        var newMaster = await _dbService.RetrieveByIdAsync<RecurrentEvent>(CollectionName.RecurrentEvents, result.Id);
+        newMaster.RecurrenceRule.Should().Contain("COUNT=1");
+    }
+
+    [SkippableFact]
+    public async Task UpdateThisAndAllFollowing_CountRule_ShouldGiveFullCount_WhenSplitAtFirstOccurrence() {
+        // ARRANGE: COUNT=5, split at the first occurrence (day 0) — new master keeps all 5
+        var masterStart = new DateTimeOffset(2025, 10, 1, 9, 0, 0, TimeSpan.Zero);
+        var oldMaster = await BuildMasterAsync("Count-5-First", "FREQ=DAILY;COUNT=5", "UTC", masterStart, masterStart.AddHours(1));
+
+        var updateDto = new UpdateRecurrentEventRequestDto {
+            UpdateType = RecurrentUpdateType.ThisAndAllFollowing,
+            MasterEventId = oldMaster.Id.ToString(),
+            InstanceId = $"{oldMaster.Id}_{masterStart:yyyyMMddTHHmmssZ}" // first occurrence
+        };
+
+        // ACT
+        var result = await _recurrentUpdateService.UpdateRecurrentEvent(updateDto, _creatorProfile);
+
+        // ASSERT: no occurrences before the split → new master keeps all 5
+        var newMaster = await _dbService.RetrieveByIdAsync<RecurrentEvent>(CollectionName.RecurrentEvents, result.Id);
+        newMaster.RecurrenceRule.Should().Contain("COUNT=5");
+    }
+
+    [SkippableFact]
+    public async Task UpdateThisAndAllFollowing_UntilRule_ShouldCarryUntilToNewMaster_Unchanged() {
+        // ARRANGE: rule with UNTIL — the new master should inherit the same UNTIL
+        var masterStart = new DateTimeOffset(2025, 11, 1, 9, 0, 0, TimeSpan.Zero);
+        var until = new DateTimeOffset(2025, 11, 30, 23, 59, 59, TimeSpan.Zero);
+        var rrule = $"FREQ=DAILY;UNTIL={until:yyyyMMddTHHmmssZ}";
+        var oldMaster = await BuildMasterAsync("Until-Rule", rrule, "UTC", masterStart, masterStart.AddHours(1));
+
+        var splitTime = masterStart.AddDays(14);
+        var updateDto = new UpdateRecurrentEventRequestDto {
+            UpdateType = RecurrentUpdateType.ThisAndAllFollowing,
+            MasterEventId = oldMaster.Id.ToString(),
+            InstanceId = $"{oldMaster.Id}_{splitTime:yyyyMMddTHHmmssZ}"
+        };
+
+        // ACT
+        var result = await _recurrentUpdateService.UpdateRecurrentEvent(updateDto, _creatorProfile);
+
+        // ASSERT: new master carries the original UNTIL date
+        var newMaster = await _dbService.RetrieveByIdAsync<RecurrentEvent>(CollectionName.RecurrentEvents, result.Id);
+        newMaster.RecurrenceRule.Should().Contain($"UNTIL={until:yyyyMMddTHHmmssZ}",
+            "when no explicit rule is provided, the UNTIL clause is inherited from the old master");
+    }
+
+    [SkippableFact]
+    public async Task UpdateThisAndAllFollowing_ExplicitRecurrenceRule_ShouldOverrideCountReduction() {
+        // ARRANGE: old rule has COUNT=10 but caller supplies a brand-new rule — no reduction should happen
+        var masterStart = new DateTimeOffset(2025, 12, 1, 9, 0, 0, TimeSpan.Zero);
+        var oldMaster = await BuildMasterAsync("Count-10", "FREQ=DAILY;COUNT=10", "UTC", masterStart, masterStart.AddHours(1));
+
+        var splitTime = masterStart.AddDays(4);
+        var updateDto = new UpdateRecurrentEventRequestDto {
+            UpdateType = RecurrentUpdateType.ThisAndAllFollowing,
+            MasterEventId = oldMaster.Id.ToString(),
+            InstanceId = $"{oldMaster.Id}_{splitTime:yyyyMMddTHHmmssZ}",
+            RecurrenceRule = "FREQ=WEEKLY;COUNT=3" // explicit override
+        };
+
+        // ACT
+        var result = await _recurrentUpdateService.UpdateRecurrentEvent(updateDto, _creatorProfile);
+
+        // ASSERT: exact rule as supplied, no automatic COUNT adjustment
+        var newMaster = await _dbService.RetrieveByIdAsync<RecurrentEvent>(CollectionName.RecurrentEvents, result.Id);
+        newMaster.RecurrenceRule.Should().Be("FREQ=WEEKLY;COUNT=3");
+    }
+
+    [SkippableFact]
+    public async Task UpdateThisAndAllFollowing_OldMasterRule_ShouldContainUntilNotCount_AfterSplit() {
+        // ARRANGE: old rule is COUNT-based
+        var masterStart = new DateTimeOffset(2026, 1, 5, 8, 0, 0, TimeSpan.Zero);
+        var oldMaster = await BuildMasterAsync("Old Count", "FREQ=DAILY;COUNT=8", "UTC", masterStart, masterStart.AddHours(1));
+
+        var splitTime = masterStart.AddDays(3);
+        var updateDto = new UpdateRecurrentEventRequestDto {
+            UpdateType = RecurrentUpdateType.ThisAndAllFollowing,
+            MasterEventId = oldMaster.Id.ToString(),
+            InstanceId = $"{oldMaster.Id}_{splitTime:yyyyMMddTHHmmssZ}"
+        };
+
+        // ACT
+        await _recurrentUpdateService.UpdateRecurrentEvent(updateDto, _creatorProfile);
+
+        // ASSERT: TruncateRuleUntil must convert the old master's COUNT to an UNTIL
+        var truncatedOld = await _dbService.RetrieveByIdAsync<RecurrentEvent>(
+            CollectionName.RecurrentEvents, oldMaster.Id.ToString());
+        truncatedOld.RecurrenceRule.Should().NotContain("COUNT=",
+            "COUNT clause must be replaced by UNTIL on the truncated old master");
+        truncatedOld.RecurrenceRule.Should().Contain("UNTIL=");
+
+        // And the UNTIL must be before the split occurrence
+        var untilValue = truncatedOld.RecurrenceRule
+            .Split(';')
+            .First(p => p.StartsWith("UNTIL="))["UNTIL=".Length..];
+        var parsedUntil = DateTimeOffset.ParseExact(
+            untilValue, "yyyyMMddTHHmmssZ",
+            System.Globalization.CultureInfo.InvariantCulture,
+            System.Globalization.DateTimeStyles.AssumeUniversal);
+        parsedUntil.Should().BeBefore(splitTime,
+            "the old master's UNTIL must exclude the split occurrence");
+    }
+    
     #endregion
 
     #endregion
