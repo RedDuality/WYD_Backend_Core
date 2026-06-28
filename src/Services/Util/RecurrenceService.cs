@@ -46,20 +46,9 @@ public class RecurrenceService() {
             });
     }
 
-    public static DateTimeOffset ExtractRecurrenceEnd(string recurrenceRule, TimeZoneInfo tz) {
-        var pattern = new RecurrencePattern(recurrenceRule);
 
-        if (pattern.Until == null)
-            return new DateTime(9999, 12, 31, 23, 59, 59, DateTimeKind.Utc);
 
-        var dt = pattern.Until.Value;
-
-        var offset = tz.GetUtcOffset(dt);
-        var dto = new DateTimeOffset(DateTime.SpecifyKind(dt, DateTimeKind.Unspecified), offset);
-
-        return dto.ToUniversalTime();
-    }
-
+    #region rule
     public static string GetValidRule(string rule) {
         var normalizedRule = rule.Trim();
         const string prefix = "RRULE:";
@@ -76,7 +65,7 @@ public class RecurrenceService() {
     private static bool IsValidRRule(string rule) {
         if (string.IsNullOrWhiteSpace(rule)) return false;
         try {
-            var _ = new RecurrencePattern(rule); // if you use Ical.Net
+            var _ = new RecurrencePattern(rule);
             return true;
         }
         catch {
@@ -85,45 +74,51 @@ public class RecurrenceService() {
     }
 
 
+    public static DateTimeOffset ExtractRecurrenceEnd(string recurrenceRule, TimeZoneInfo tz) {
+        var pattern = new RecurrencePattern(recurrenceRule);
 
-    public static bool CheckRecurrencyIdIsValid(ObjectId masterId, string recurrenceRule, string recurrencyId) {
-        return false;
+        if (pattern.Until == null)
+            return new DateTime(9999, 12, 31, 23, 59, 59, DateTimeKind.Utc);
+
+        var dt = pattern.Until.Value;
+
+        var offset = tz.GetUtcOffset(dt);
+        var dto = new DateTimeOffset(DateTime.SpecifyKind(dt, DateTimeKind.Unspecified), offset);
+
+        return dto.ToUniversalTime();
     }
 
-    /// DATE format:      yyyyMMdd         → interpreted in the event's local time zone
-    /// DATE-TIME format: yyyyMMddTHHmmssZ → UTC instant
-    /// 
-    /// instanceId = DATE_MASTERID
-    /// 
     /// <summary>
-    /// Parses a recurrence instance identifier (MASTERID_DATE)and returns the corresponding
-    /// <see cref="DateTimeOffset"/> in the correct time zone.
+    /// Returns a new recurrence rule string that is identical to <paramref name="recurrenceRule"/>
+    /// except that any existing UNTIL/COUNT clause is replaced by an UNTIL set to one second
+    /// before <paramref name="cutoff"/>. The cutoff occurrence itself therefore belongs to the
+    /// new master, not to the old one.
     /// </summary>
-    public static DateTimeOffset ParseInstanceId(string instanceId, TimeZoneInfo timeZone) {
-        // Fix: Get the last part in case of MasterId_Date format
-        var parts = instanceId.Split("_");
-        var dateString = parts.Last();
+    public static string TruncateRuleUntil(string recurrenceRule, DateTimeOffset cutoff) {
+        var untilStr = cutoff.ToUniversalTime().ToString("yyyyMMddTHHmmssZ");
 
-        if (dateString.Length == 8) // DATE: yyyyMMdd
-        {
-            var date = DateTime.ParseExact(
-                dateString,
-                "yyyyMMdd",
-                System.Globalization.CultureInfo.InvariantCulture,
-                System.Globalization.DateTimeStyles.None);
+        var parts = recurrenceRule
+            .Split(';')
+            .Where(p => !p.StartsWith("UNTIL=", StringComparison.OrdinalIgnoreCase)
+                     && !p.StartsWith("COUNT=", StringComparison.OrdinalIgnoreCase))
+            .ToList();
 
-            return new DateTimeOffset(date, timeZone.GetUtcOffset(date));
-        }
-        else // DATE-TIME: yyyyMMddTHHmmssZ
-        {
-            var utcDt = DateTime.ParseExact(
-                dateString,
-                "yyyyMMddTHHmmssZ",
-                System.Globalization.CultureInfo.InvariantCulture,
-                System.Globalization.DateTimeStyles.AssumeUniversal | System.Globalization.DateTimeStyles.AdjustToUniversal);
+        parts.Add($"UNTIL={untilStr}");
 
-            return new DateTimeOffset(utcDt, TimeSpan.Zero);
-        }
+        return string.Join(";", parts);
+    }
+
+    #endregion
+
+    #region recurrencyId
+
+    public static string FormatInstanceId(DateTimeOffset occurrence)
+        => occurrence.ToUniversalTime().ToString("yyyyMMddTHHmmssZ");
+
+
+    public static bool CheckRecurrencyIdIsValid(ObjectId masterId, string recurrenceRule, string recurrencyId) {
+        // TODO
+        return false;
     }
 
     /// <summary>
@@ -170,8 +165,35 @@ public class RecurrenceService() {
         return datePart;
     }
 
-    public static string FormatInstanceId(DateTimeOffset occurrence)
-        => occurrence.ToUniversalTime().ToString("yyyyMMddTHHmmssZ");
+    /// DATE format:      yyyyMMdd         → interpreted in the event's local time zone
+    /// DATE-TIME format: yyyyMMddTHHmmssZ → UTC instant
+    /// 
+    /// instanceId = MASTERID_DATE
+    public static DateTimeOffset ParseInstanceId(string instanceId, TimeZoneInfo timeZone) {
+        var parts = instanceId.Split("_");
+        var dateString = parts.Last();
+
+        if (dateString.Length == 8)
+        {
+            var date = DateTime.ParseExact(
+                dateString,
+                "yyyyMMdd",
+                System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.None);
+
+            return new DateTimeOffset(date, timeZone.GetUtcOffset(date));
+        }
+        else
+        {
+            var utcDt = DateTime.ParseExact(
+                dateString,
+                "yyyyMMddTHHmmssZ",
+                System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.AssumeUniversal | System.Globalization.DateTimeStyles.AdjustToUniversal);
+
+            return new DateTimeOffset(utcDt, TimeSpan.Zero);
+        }
+    }
 
     /// <summary>
     /// Given an old occurrence time (from a detached instance's recurrencyId),
@@ -186,6 +208,7 @@ public class RecurrenceService() {
         Duration singleEventDuration,
         DateTimeOffset originalOccurrenceTime,
         int searchWindowDays = 14) {
+            
         var windowStart = originalOccurrenceTime.AddDays(-searchWindowDays);
         var windowEnd = originalOccurrenceTime.AddDays(searchWindowDays);
 
@@ -198,25 +221,6 @@ public class RecurrenceService() {
 
         return closest.HasValue ? FormatInstanceId(closest.Value) : null;
     }
-
-    /// <summary>
-    /// Returns a new recurrence rule string that is identical to <paramref name="recurrenceRule"/>
-    /// except that any existing UNTIL/COUNT clause is replaced by an UNTIL set to one second
-    /// before <paramref name="cutoff"/>. The cutoff occurrence itself therefore belongs to the
-    /// new master, not to the old one.
-    /// </summary>
-    public static string TruncateRuleUntil(string recurrenceRule, DateTimeOffset cutoff) {
-        var untilStr = cutoff.ToUniversalTime().ToString("yyyyMMddTHHmmssZ");
-
-        var parts = recurrenceRule
-            .Split(';')
-            .Where(p => !p.StartsWith("UNTIL=", StringComparison.OrdinalIgnoreCase)
-                     && !p.StartsWith("COUNT=", StringComparison.OrdinalIgnoreCase))
-            .ToList();
-
-        parts.Add($"UNTIL={untilStr}");
-
-        return string.Join(";", parts);
-    }
+    #endregion
 
 }
