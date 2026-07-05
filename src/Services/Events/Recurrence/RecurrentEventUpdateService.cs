@@ -159,8 +159,17 @@ public class RecurrentEventUpdateService(
 
         var (upatedEvent, details) = await dbService.ExecuteInTransactionAsync(async (session) => {
             RecurrentEvent? master;
-            EventDetails? eventDetails = null;
+        EventDetails? eventDetails = null;
 
+            /* check dates
+            var originalLocalTime = TimeZoneInfo.ConvertTimeFromUtc(originalInstanceUtc.UtcDateTime, master.TimeZone);
+            var newLocalStartTime = TimeZoneInfo.ConvertTimeFromUtc(request.StartTime.Value.UtcDateTime, master.TimeZone);
+
+            if (originalLocalTime.Date != newLocalStartTime.Date) 
+            {
+                throw new ArgumentException("New StartTime must fall on the same day as the original event, relative to the event's TimeZone.");
+            }
+            */
             // eventually fail BEFORE applying to the whole sequence
             if (!updateDto.IsGeneratedInstance())
                 await UpdateDetachedInstance(updateDto, profile);
