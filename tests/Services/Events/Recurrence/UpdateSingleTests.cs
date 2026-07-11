@@ -495,7 +495,7 @@ public class UpdateSingleTests {
         var detachedEvent = await _dbService.RetrieveByIdAsync<Event>(CollectionName.Events, result.Id);
 
         detachedEvent.Should().NotBeNull();
-        detachedEvent.Title.Should().Be("Modified Yoga Session");
+        detachedEvent.Title.Should().Be("Weekly Yoga");
 
         detachedEvent.StartTime.Should().Be(startTime.AddHours(-1));
         detachedEvent.EndTime.Should().Be(master.EndTime);
@@ -599,7 +599,7 @@ public class UpdateSingleTests {
         var detachedEvent = await _dbService.RetrieveByIdAsync<Event>(CollectionName.Events, result.Id);
 
         detachedEvent.Should().NotBeNull();
-        detachedEvent.Title.Should().Be("Modified Yoga Session");
+        detachedEvent.Title.Should().Be("Weekly Yoga");
 
         detachedEvent.StartTime.Should().Be(master.StartTime);
         detachedEvent.EndTime.Should().Be(master.EndTime.AddHours(2));
@@ -704,7 +704,7 @@ public class UpdateSingleTests {
         var detachedEvent = await _dbService.RetrieveByIdAsync<Event>(CollectionName.Events, result.Id);
 
         detachedEvent.Should().NotBeNull();
-        detachedEvent.Title.Should().Be("Modified Yoga Session");
+        detachedEvent.Title.Should().Be("Weekly Yoga");
 
         detachedEvent.StartTime.Should().Be(startTime.AddHours(4));
         detachedEvent.EndTime.Should().Be(startTime.AddHours(5));
@@ -1332,7 +1332,7 @@ public class UpdateSingleTests {
     }
 
     #endregion
-        
+     
     #endregion
 
     #region Current detacheds
