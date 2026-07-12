@@ -18,7 +18,6 @@ namespace Core.Tests.Services.Events.Recurrence;
 [Collection("DatabaseTests")]
 public class UpdateSingleTests {
     private readonly ProfileService _profileService;
-    private readonly EventService _eventService;
     private readonly RecurrentEventService _recurrentEventService;
     private readonly RecurrentEventUpdateService _recurrentUpdateService;
     private readonly MongoDbService _dbService;
@@ -34,7 +33,6 @@ public class UpdateSingleTests {
         var scope = fixture.ServiceProvider!.CreateScope();
 
         _profileService = scope.ServiceProvider.GetRequiredService<ProfileService>();
-        _eventService = scope.ServiceProvider.GetRequiredService<EventService>();
         _recurrentEventService = scope.ServiceProvider.GetRequiredService<RecurrentEventService>();
         _recurrentUpdateService = scope.ServiceProvider.GetRequiredService<RecurrentEventUpdateService>();
 
