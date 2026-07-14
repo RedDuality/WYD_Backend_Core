@@ -87,7 +87,7 @@ public class UpdateAllSequenceTests {
     }
 
     [SkippableFact]
-    public async Task UpdateRecurrentEvent_ShouldThrow_WhenRecurrenceRuleIsProvided() {
+    public async Task UpdateRecurrentEvent_ShouldThrow_WhenNonFirstInstanceAndRecurrenceRuleIsProvided() {
         // ARRANGE
         var startTime = DateTimeOffset.UtcNow.AddHours(1);
 
@@ -114,6 +114,8 @@ public class UpdateAllSequenceTests {
         // ACT & ASSERT
         await Assert.ThrowsAsync<ArgumentException>(() =>
             _recurrentUpdateService.UpdateRecurrentEvent(request, _creatorProfile));
+
+        // TODO before today
     }
 
     [SkippableFact]
@@ -205,11 +207,248 @@ public class UpdateAllSequenceTests {
             _recurrentUpdateService.UpdateRecurrentEvent(updateDto, _creatorProfile));
     }
 
+    [SkippableFact]
+    public async Task UpdateRecurrentEvent_ShouldThrow_WithWrongTime() {
+        // ARRANGE
+        var startTime = DateTimeOffset.UtcNow.AddHours(1);
+
+        var master = await BuildMasterAsync(
+            "Weekly Yoga",
+            "FREQ=WEEKLY;INTERVAL=1",
+            "UTC",
+            startTime,
+            startTime.AddHours(1)
+        );
+
+        // Generate a valid InstanceId for the first occurrence
+        var datePart = startTime.ToString("yyyyMMddTHHmmssZ");
+        var instanceId = $"{master.Id}_{datePart}";
+
+        // only start
+        var updateDto = new UpdateRecurrentEventRequestDto {
+            UpdateType = RecurrentUpdateType.AllTheSequence,
+            MasterEventId = master.Id.ToString(),
+            InstanceId = instanceId,
+            StartTime = startTime.AddHours(4)
+        };
+
+        // ACT & ASSERT
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            _recurrentUpdateService.UpdateRecurrentEvent(updateDto, _creatorProfile));
+
+        //only end
+        var updateDto1 = new UpdateRecurrentEventRequestDto {
+            UpdateType = RecurrentUpdateType.AllTheSequence,
+            MasterEventId = master.Id.ToString(),
+            InstanceId = instanceId,
+            EndTime = startTime.AddHours(3)
+        };
+
+        // ACT & ASSERT
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            _recurrentUpdateService.UpdateRecurrentEvent(updateDto1, _creatorProfile));
+
+        //end is before start
+        var updateDto2 = new UpdateRecurrentEventRequestDto {
+            UpdateType = RecurrentUpdateType.AllTheSequence,
+            MasterEventId = master.Id.ToString(),
+            InstanceId = instanceId,
+            StartTime = startTime,
+            EndTime = startTime.AddHours(-2)
+        };
+
+        // ACT & ASSERT
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            _recurrentUpdateService.UpdateRecurrentEvent(updateDto2, _creatorProfile));
+
+        //(only end) end is equal start
+        var updateDto3 = new UpdateRecurrentEventRequestDto {
+            UpdateType = RecurrentUpdateType.AllTheSequence,
+            MasterEventId = master.Id.ToString(),
+            InstanceId = instanceId,
+            StartTime = startTime,
+            EndTime = startTime
+        };
+
+        // ACT & ASSERT
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            _recurrentUpdateService.UpdateRecurrentEvent(updateDto3, _creatorProfile));
+
+        // start is after end
+        var updateDto4 = new UpdateRecurrentEventRequestDto {
+            UpdateType = RecurrentUpdateType.AllTheSequence,
+            MasterEventId = master.Id.ToString(),
+            InstanceId = instanceId,
+            StartTime = startTime.AddHours(6),
+            EndTime = startTime.AddHours(5)
+        };
+
+        // ACT & ASSERT
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            _recurrentUpdateService.UpdateRecurrentEvent(updateDto4, _creatorProfile));
+
+        //start is equal end
+        var updateDto5 = new UpdateRecurrentEventRequestDto {
+            UpdateType = RecurrentUpdateType.AllTheSequence,
+            MasterEventId = master.Id.ToString(),
+            InstanceId = instanceId,
+            StartTime = startTime.AddHours(5),
+            EndTime = startTime.AddHours(5)
+        };
+
+        // ACT & ASSERT
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            _recurrentUpdateService.UpdateRecurrentEvent(updateDto5, _creatorProfile));
+
+
+        //start is within less than 5 mins to end
+        var updateDto6 = new UpdateRecurrentEventRequestDto {
+            UpdateType = RecurrentUpdateType.AllTheSequence,
+            MasterEventId = master.Id.ToString(),
+            InstanceId = instanceId,
+            StartTime = startTime.AddHours(5),
+            EndTime = startTime.AddHours(5).AddMinutes(4)
+        };
+
+        // ACT & ASSERT
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            _recurrentUpdateService.UpdateRecurrentEvent(updateDto6, _creatorProfile));
+
+        // StartTime is not UTC (e.g., UTC+2)
+        var updateDtoNonUtcStart = new UpdateRecurrentEventRequestDto {
+            UpdateType = RecurrentUpdateType.AllTheSequence,
+            MasterEventId = master.Id.ToString(),
+            InstanceId = instanceId,
+            StartTime = new DateTimeOffset(startTime.Year, startTime.Month, startTime.Day, startTime.Hour - 1, 0, 0, TimeSpan.FromHours(2)),
+            EndTime = startTime.AddHours(8)
+        };
+
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            _recurrentUpdateService.UpdateRecurrentEvent(updateDtoNonUtcStart, _creatorProfile));
+
+        // EndTime is not UTC (e.g., UTC-5)
+        var updateDtoNonUtcEnd = new UpdateRecurrentEventRequestDto {
+            UpdateType = RecurrentUpdateType.AllTheSequence,
+            MasterEventId = master.Id.ToString(),
+            InstanceId = instanceId,
+            StartTime = startTime,
+            EndTime = new DateTimeOffset(startTime.Year, startTime.Month, startTime.Day, startTime.Hour + 2, 0, 0, TimeSpan.FromHours(-5))
+        };
+
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            _recurrentUpdateService.UpdateRecurrentEvent(updateDtoNonUtcEnd, _creatorProfile));
+    }
+
+    [SkippableFact]
+    public async Task UpdateRecurrentEventInstance_ShouldThrow_WhenDatesShiftToDifferentDayInLocalTimeZone() {
+        // ARRANGE
+        // Using UTC+9 (Tokyo) to create a clear offset from UTC midnight.
+        var timeZoneId = "Tokyo Standard Time";
+
+        // Base Start Time: 2026-07-05 12:00:00 UTC
+        // Local Tokyo Time: 2026-07-05 21:00:00 (9:00 PM)
+        // Local Midnight boundary for July 5th in UTC: 2026-07-04 15:00:00 UTC to 2026-07-05 14:59:59 UTC
+        var startTimeUtc = new DateTimeOffset(2026, 7, 5, 12, 0, 0, TimeSpan.Zero);
+        var endTimeUtc = startTimeUtc.AddHours(1); // 2026-07-05 13:00:00 UTC (22:00 Local)
+
+        var master = await BuildMasterAsync(
+            "Timezone Boundary Check",
+            "FREQ=WEEKLY;INTERVAL=1",
+            timeZoneId,
+            startTimeUtc,
+            endTimeUtc
+        );
+
+        // Generate instanceId
+        var datePart = startTimeUtc.ToString("yyyyMMddTHHmmssZ");
+        var instanceId = $"{master.Id}_{datePart}";
+
+        // ACT & ASSERT
+
+        // 1. Both shift to the PREVIOUS day in local time.
+        // Start: Local July 4th 22:00 | End: Local July 4th 23:00
+        var updateDto1 = new UpdateRecurrentEventRequestDto {
+            UpdateType = RecurrentUpdateType.AllTheSequence,
+            MasterEventId = master.Id.ToString(),
+            InstanceId = instanceId,
+            StartTime = new DateTimeOffset(2026, 7, 4, 13, 0, 0, TimeSpan.Zero),
+            EndTime = new DateTimeOffset(2026, 7, 4, 14, 0, 0, TimeSpan.Zero)
+        };
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            _recurrentUpdateService.UpdateRecurrentEvent(updateDto1, _creatorProfile));
+
+        // 2. Both shift to the NEXT day in local time.
+        // Start: Local July 6th 01:00 | End: Local July 6th 02:00
+        var updateDto2 = new UpdateRecurrentEventRequestDto {
+            UpdateType = RecurrentUpdateType.AllTheSequence,
+            MasterEventId = master.Id.ToString(),
+            InstanceId = instanceId,
+            StartTime = new DateTimeOffset(2026, 7, 5, 16, 0, 0, TimeSpan.Zero),
+            EndTime = new DateTimeOffset(2026, 7, 5, 17, 0, 0, TimeSpan.Zero)
+        };
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            _recurrentUpdateService.UpdateRecurrentEvent(updateDto2, _creatorProfile));
+
+        // 3. Start is valid (July 5), but End spills to the NEXT day in local time.
+        // Start: Local July 5th 23:00 | End: Local July 6th 00:30
+        var updateDto3 = new UpdateRecurrentEventRequestDto {
+            UpdateType = RecurrentUpdateType.AllTheSequence,
+            MasterEventId = master.Id.ToString(),
+            InstanceId = instanceId,
+            StartTime = new DateTimeOffset(2026, 7, 5, 14, 0, 0, TimeSpan.Zero),
+            EndTime = new DateTimeOffset(2026, 7, 5, 15, 30, 0, TimeSpan.Zero)
+        };
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            _recurrentUpdateService.UpdateRecurrentEvent(updateDto3, _creatorProfile));
+
+        // 4. Start begins PREVIOUS day, but End is valid (July 5) in local time.
+        // Start: Local July 4th 23:00 | End: Local July 5th 01:00
+        var updateDto4 = new UpdateRecurrentEventRequestDto {
+            UpdateType = RecurrentUpdateType.AllTheSequence,
+            MasterEventId = master.Id.ToString(),
+            InstanceId = instanceId,
+            StartTime = new DateTimeOffset(2026, 7, 4, 14, 0, 0, TimeSpan.Zero),
+            EndTime = new DateTimeOffset(2026, 7, 4, 16, 0, 0, TimeSpan.Zero)
+        };
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            _recurrentUpdateService.UpdateRecurrentEvent(updateDto4, _creatorProfile));
+
+        // 5. Spanning completely out of bounds: Starts previous day, ends next day.
+        // Start: Local July 4th 23:00 | End: Local July 6th 01:00
+        var updateDto5 = new UpdateRecurrentEventRequestDto {
+            UpdateType = RecurrentUpdateType.AllTheSequence,
+            MasterEventId = master.Id.ToString(),
+            InstanceId = instanceId,
+            StartTime = new DateTimeOffset(2026, 7, 4, 14, 0, 0, TimeSpan.Zero),
+            EndTime = new DateTimeOffset(2026, 7, 5, 16, 0, 0, TimeSpan.Zero)
+        };
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            _recurrentUpdateService.UpdateRecurrentEvent(updateDto5, _creatorProfile));
+    }
+
+    [SkippableFact]
+    public async Task UpdateRecurrentEvent_ShouldThrow_WhenTimesUpdatedFromNonFirstInstance() {
+        //TODO 
+
+        // Generated
+
+        // Detached
+    }
+
+    [SkippableFact]
+    public async Task UpdateRecurrentEvent_ShouldThrow_WhenTimesUpdatedFromPastEvent() {
+        //TODO 
+
+        // Generated
+
+        // Detached
+    }
+    
     #endregion
 
     #region Current generated
 
-    [SkippableFact]
+    [SkippableFact] //TODO remove
     public async Task UpdateRecurrentEvent_ShouldThrow_WhenTimesUpdatedFromPastGeneratedFirstInstance() {
         // ARRANGE
         // Start 5 days ago so it is strictly in the past day-wise
@@ -275,19 +514,6 @@ public class UpdateAllSequenceTests {
             )
         );
 
-        var oldDetachedList = await _dbService.RetrieveAsync(
-            CollectionName.DetachedInstances,
-            Builders<DetachedInstances>.Filter.Eq(di => di.MasterId, new ObjectId(master.Id))
-        );
-        oldDetachedList.Should().NotBeNull();
-        oldDetachedList.MasterId.Should().Be(new ObjectId(master.Id));
-
-        var oldEventIds = oldDetachedList.Instances.Select(i => i.EventId).ToHashSet();
-        var oldDetachedEvents = await _dbService.RetrieveMultipleByIdAsync<Event>(
-            CollectionName.Events,
-            oldEventIds
-        );
-
         // Generate other detached events
         var startTime1 = startTime.AddDays(14);
         var datePart1 = startTime.ToString("yyyyMMddTHHmmssZ");
@@ -316,6 +542,18 @@ public class UpdateAllSequenceTests {
         
         var detached2 = await _recurrentUpdateService.UpdateSingleInstance(updateDto2, _creatorProfile);
 
+        var oldDetachedList = await _dbService.RetrieveAsync(
+            CollectionName.DetachedInstances,
+            Builders<DetachedInstances>.Filter.Eq(di => di.MasterId, new ObjectId(master.Id))
+        );
+        oldDetachedList.Should().NotBeNull();
+        oldDetachedList.MasterId.Should().Be(new ObjectId(master.Id));
+
+        var oldEventIds = oldDetachedList.Instances.Select(i => i.EventId).ToHashSet();
+        var oldDetachedEvents = await _dbService.RetrieveMultipleByIdAsync<Event>(
+            CollectionName.Events,
+            oldEventIds
+        );
 
         // Generate a valid InstanceId for the first occurrence
         var datePart = startTime.ToString("yyyyMMddTHHmmssZ");
@@ -426,19 +664,6 @@ public class UpdateAllSequenceTests {
 
         var oldMasterEvent = await _dbService.RetrieveByIdAsync<RecurrentEvent>(CollectionName.RecurrentEvents, master.Id);
 
-        var oldDetachedList = await _dbService.RetrieveAsync(
-            CollectionName.DetachedInstances,
-            Builders<DetachedInstances>.Filter.Eq(di => di.MasterId, new ObjectId(master.Id))
-        );
-        oldDetachedList.Should().NotBeNull();
-        oldDetachedList.MasterId.Should().Be(new ObjectId(master.Id));
-
-        var oldEventIds = oldDetachedList.Instances.Select(i => i.EventId).ToHashSet();
-        var oldDetachedEvents = await _dbService.RetrieveMultipleByIdAsync<Event>(
-            CollectionName.Events,
-            oldEventIds
-        );
-
         // Generate other detached events
         var startTime1 = startTime.AddDays(14);
         var datePart1 = startTime.ToString("yyyyMMddTHHmmssZ");
@@ -466,6 +691,19 @@ public class UpdateAllSequenceTests {
         };
         
         var detached2 = await _recurrentUpdateService.UpdateSingleInstance(updateDto2, _creatorProfile);
+
+        var oldDetachedList = await _dbService.RetrieveAsync(
+            CollectionName.DetachedInstances,
+            Builders<DetachedInstances>.Filter.Eq(di => di.MasterId, new ObjectId(master.Id))
+        );
+        oldDetachedList.Should().NotBeNull();
+        oldDetachedList.MasterId.Should().Be(new ObjectId(master.Id));
+
+        var oldEventIds = oldDetachedList.Instances.Select(i => i.EventId).ToHashSet();
+        var oldDetachedEvents = await _dbService.RetrieveMultipleByIdAsync<Event>(
+            CollectionName.Events,
+            oldEventIds
+        );
 
         // Generate a valid InstanceId for the first occurrence
         var datePart = startTime.ToString("yyyyMMddTHHmmssZ");
@@ -531,338 +769,6 @@ public class UpdateAllSequenceTests {
     }
 
     [SkippableFact]
-    public async Task CreateDetachedFirstInstance_ShouldThrow_WithWrongTime() {
-        // ARRANGE
-        var startTime = DateTimeOffset.UtcNow.AddHours(1);
-
-        var master = await BuildMasterAsync(
-            "Weekly Yoga",
-            "FREQ=WEEKLY;INTERVAL=1",
-            "UTC",
-            startTime,
-            startTime.AddHours(1)
-        );
-
-        // Generate a valid InstanceId for the first occurrence
-        var datePart = startTime.ToString("yyyyMMddTHHmmssZ");
-        var instanceId = $"{master.Id}_{datePart}";
-
-        //(only start) start is after end
-        var updateDto = new UpdateRecurrentEventRequestDto {
-            UpdateType = RecurrentUpdateType.AllTheSequence,
-            MasterEventId = master.Id.ToString(),
-            InstanceId = instanceId,
-            StartTime = startTime.AddHours(4)
-        };
-
-        // ACT & ASSERT
-        await Assert.ThrowsAsync<ArgumentException>(() =>
-            _recurrentUpdateService.UpdateRecurrentEvent(updateDto, _creatorProfile));
-
-        //(only start) start is equal end
-        var updateDto1 = new UpdateRecurrentEventRequestDto {
-            UpdateType = RecurrentUpdateType.AllTheSequence,
-            MasterEventId = master.Id.ToString(),
-            InstanceId = instanceId,
-            StartTime = startTime.AddHours(1)
-        };
-
-        // ACT & ASSERT
-        await Assert.ThrowsAsync<ArgumentException>(() =>
-            _recurrentUpdateService.UpdateRecurrentEvent(updateDto1, _creatorProfile));
-
-        //(only end) end is before start
-        var updateDto2 = new UpdateRecurrentEventRequestDto {
-            UpdateType = RecurrentUpdateType.AllTheSequence,
-            MasterEventId = master.Id.ToString(),
-            InstanceId = instanceId,
-            EndTime = startTime.AddHours(-2)
-        };
-
-        // ACT & ASSERT
-        await Assert.ThrowsAsync<ArgumentException>(() =>
-            _recurrentUpdateService.UpdateRecurrentEvent(updateDto2, _creatorProfile));
-
-        //(only end) end is equal start
-        var updateDto3 = new UpdateRecurrentEventRequestDto {
-            UpdateType = RecurrentUpdateType.AllTheSequence,
-            MasterEventId = master.Id.ToString(),
-            InstanceId = instanceId,
-            EndTime = startTime
-        };
-
-        // ACT & ASSERT
-        await Assert.ThrowsAsync<ArgumentException>(() =>
-            _recurrentUpdateService.UpdateRecurrentEvent(updateDto3, _creatorProfile));
-
-        //(both set) start is after end
-        var updateDto4 = new UpdateRecurrentEventRequestDto {
-            UpdateType = RecurrentUpdateType.AllTheSequence,
-            MasterEventId = master.Id.ToString(),
-            InstanceId = instanceId,
-            StartTime = startTime.AddHours(6),
-            EndTime = startTime.AddHours(5)
-        };
-
-        // ACT & ASSERT
-        await Assert.ThrowsAsync<ArgumentException>(() =>
-            _recurrentUpdateService.UpdateRecurrentEvent(updateDto4, _creatorProfile));
-
-        //(both set) start is equal end
-        var updateDto5 = new UpdateRecurrentEventRequestDto {
-            UpdateType = RecurrentUpdateType.AllTheSequence,
-            MasterEventId = master.Id.ToString(),
-            InstanceId = instanceId,
-            StartTime = startTime.AddHours(5),
-            EndTime = startTime.AddHours(5)
-        };
-
-        // ACT & ASSERT
-        await Assert.ThrowsAsync<ArgumentException>(() =>
-            _recurrentUpdateService.UpdateRecurrentEvent(updateDto5, _creatorProfile));
-
-        var updateDtoNonUtcStart = new UpdateRecurrentEventRequestDto {
-            UpdateType = RecurrentUpdateType.AllTheSequence,
-            MasterEventId = master.Id.ToString(),
-            InstanceId = instanceId,
-            StartTime = new DateTimeOffset(2026, 7, 5, 14, 0, 0, TimeSpan.FromHours(2))
-        };
-
-        await Assert.ThrowsAsync<ArgumentException>(() =>
-            _recurrentUpdateService.UpdateRecurrentEvent(updateDtoNonUtcStart, _creatorProfile));
-
-        // (only end) EndTime has a non-zero offset (e.g., UTC-5)
-        var updateDtoNonUtcEnd = new UpdateRecurrentEventRequestDto {
-            UpdateType = RecurrentUpdateType.AllTheSequence,
-            MasterEventId = master.Id.ToString(),
-            InstanceId = instanceId,
-            EndTime = new DateTimeOffset(2026, 7, 5, 15, 0, 0, TimeSpan.FromHours(-5))
-        };
-
-        await Assert.ThrowsAsync<ArgumentException>(() =>
-            _recurrentUpdateService.UpdateRecurrentEvent(updateDtoNonUtcEnd, _creatorProfile));
-    }
-
-    [SkippableFact]
-    public async Task UpdateRecurrentEventInstance_ShouldThrow_WhenDatesShiftToDifferentDayInLocalTimeZone() {
-        // ARRANGE
-        // Using UTC+9 (Tokyo) to create a clear offset from UTC midnight.
-        // NOTE: Depending on your OS/Setup, you may need to use the IANA ID "Asia/Tokyo" instead.
-        var timeZoneId = "Tokyo Standard Time";
-
-        // Base Start Time: 2026-07-05 12:00:00 UTC
-        // Local Tokyo Time: 2026-07-05 21:00:00 (9:00 PM)
-        var startTimeUtc = new DateTimeOffset(2026, 7, 5, 12, 0, 0, TimeSpan.Zero);
-        var endTimeUtc = startTimeUtc.AddHours(1); // 2026-07-05 22:00:00 Local
-
-        var master = await BuildMasterAsync(
-            "Timezone Boundary Check",
-            "FREQ=WEEKLY;INTERVAL=1",
-            timeZoneId,
-            startTimeUtc,
-            endTimeUtc
-        );
-
-        // Generate instanceId
-        var datePart = startTimeUtc.ToString("yyyyMMddTHHmmssZ");
-        var instanceId = $"{master.Id}_{datePart}";
-
-        // ACT & ASSERT
-
-        // 1. (only start) Start time shifts to the PREVIOUS day in local time.
-        // Local midnight start of July 5th is July 4th 15:00:00 UTC.
-        // So July 4th 14:00:00 UTC = Local July 4th 23:00:00 (Previous Day)
-        var updateDto1 = new UpdateRecurrentEventRequestDto {
-            UpdateType = RecurrentUpdateType.AllTheSequence,
-            MasterEventId = master.Id.ToString(),
-            InstanceId = instanceId,
-            StartTime = new DateTimeOffset(2026, 7, 4, 14, 0, 0, TimeSpan.Zero)
-        };
-        await Assert.ThrowsAsync<ArgumentException>(() =>
-            _recurrentUpdateService.UpdateRecurrentEvent(updateDto1, _creatorProfile));
-
-        // 2. (only start) Start time shifts to the NEXT day in local time.
-        // Local midnight start of July 6th is July 5th 15:00:00 UTC.
-        // So July 5th 16:00:00 UTC = Local July 6th 01:00:00 (Next Day)
-        var updateDto2 = new UpdateRecurrentEventRequestDto {
-            UpdateType = RecurrentUpdateType.AllTheSequence,
-            MasterEventId = master.Id.ToString(),
-            InstanceId = instanceId,
-            StartTime = new DateTimeOffset(2026, 7, 5, 16, 0, 0, TimeSpan.Zero)
-        };
-        await Assert.ThrowsAsync<ArgumentException>(() =>
-            _recurrentUpdateService.UpdateRecurrentEvent(updateDto2, _creatorProfile));
-
-        // 3. (only end) End time shifts to the PREVIOUS day in local time.
-        // July 4th 14:59:00 UTC = Local July 4th 23:59:00 (Previous Day)
-        var updateDto3 = new UpdateRecurrentEventRequestDto {
-            UpdateType = RecurrentUpdateType.AllTheSequence,
-            MasterEventId = master.Id.ToString(),
-            InstanceId = instanceId,
-            EndTime = new DateTimeOffset(2026, 7, 4, 14, 59, 0, TimeSpan.Zero)
-        };
-        await Assert.ThrowsAsync<ArgumentException>(() =>
-            _recurrentUpdateService.UpdateRecurrentEvent(updateDto3, _creatorProfile));
-
-        // 4. (only end) End time shifts to the NEXT day in local time.
-        // July 5th 15:30:00 UTC = Local July 6th 00:30:00 (Next Day)
-        var updateDto4 = new UpdateRecurrentEventRequestDto {
-            UpdateType = RecurrentUpdateType.AllTheSequence,
-            MasterEventId = master.Id.ToString(),
-            InstanceId = instanceId,
-            EndTime = new DateTimeOffset(2026, 7, 5, 15, 30, 0, TimeSpan.Zero)
-        };
-        await Assert.ThrowsAsync<ArgumentException>(() =>
-            _recurrentUpdateService.UpdateRecurrentEvent(updateDto4, _creatorProfile));
-
-        // 5. (both set) Both Start and End shift to the NEXT day in local time.
-        // Start: Local July 6th 01:00:00 | End: Local July 6th 02:00:00
-        var updateDto5 = new UpdateRecurrentEventRequestDto {
-            UpdateType = RecurrentUpdateType.AllTheSequence,
-            MasterEventId = master.Id.ToString(),
-            InstanceId = instanceId,
-            StartTime = new DateTimeOffset(2026, 7, 5, 16, 0, 0, TimeSpan.Zero),
-            EndTime = new DateTimeOffset(2026, 7, 5, 17, 0, 0, TimeSpan.Zero)
-        };
-        await Assert.ThrowsAsync<ArgumentException>(() =>
-            _recurrentUpdateService.UpdateRecurrentEvent(updateDto5, _creatorProfile));
-
-        // 6. (both set) Spanning out of bounds: Starts previous day, ends next day.
-        var updateDto6 = new UpdateRecurrentEventRequestDto {
-            UpdateType = RecurrentUpdateType.AllTheSequence,
-            MasterEventId = master.Id.ToString(),
-            InstanceId = instanceId,
-            StartTime = new DateTimeOffset(2026, 7, 4, 14, 0, 0, TimeSpan.Zero), // Previous Day
-            EndTime = new DateTimeOffset(2026, 7, 5, 16, 0, 0, TimeSpan.Zero)    // Next Day
-        };
-        await Assert.ThrowsAsync<ArgumentException>(() =>
-            _recurrentUpdateService.UpdateRecurrentEvent(updateDto6, _creatorProfile));
-    }
-
-    [SkippableFact]
-    public async Task CreateDetachedFirstInstance_ShouldSucceed_WithStartTimeUpdate() {
-
-        var startTime = DateTimeOffset.UtcNow.AddHours(1);
-
-        var master = await BuildMasterAsync(
-            "Weekly Yoga",
-            "FREQ=WEEKLY;INTERVAL=1",
-            "UTC",
-            startTime,
-            startTime.AddHours(1),
-            description: "Don't forget the mat!"
-        );
-
-        var oldMasterEvent = await _dbService.RetrieveByIdAsync<RecurrentEvent>(CollectionName.RecurrentEvents, master.Id);
-        var oldMasterProfileEvent = await _dbService.RetrieveAsync(
-            CollectionName.ProfileEvents,
-            Builders<ProfileRecurrentEvent>.Filter.And(
-                Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.EventId, new ObjectId(master.Id)),
-                Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.ProfileId, _creatorProfile.Id)
-            )
-        );
-
-        // Generate a valid InstanceId for the first occurrence
-        var datePart = startTime.ToString("yyyyMMddTHHmmssZ");
-        var instanceId = $"{master.Id}_{datePart}";
-
-        var updateDto = new UpdateRecurrentEventRequestDto {
-            UpdateType = RecurrentUpdateType.AllTheSequence,
-            MasterEventId = master.Id.ToString(),
-            InstanceId = instanceId,
-            StartTime = startTime.AddHours(-1)
-        };
-
-        // 2. ACT
-        var result = await _recurrentUpdateService.UpdateRecurrentEvent(updateDto, _creatorProfile);
-
-        // ASSERT: The Event document
-        var newMasterEvent = await _dbService.RetrieveByIdAsync<RecurrentEvent>(CollectionName.RecurrentEvents, result.Id);
-
-        newMasterEvent.Should().NotBeNull();
-        newMasterEvent.Title.Should().Be("Weekly Yoga");
-        newMasterEvent.StartTime.Should().Be(oldMasterEvent.StartTime.AddHours(-1));
-        newMasterEvent.EndTime.Should().Be(oldMasterEvent.EndTime);
-        newMasterEvent.Id.ToString().Should().Be(oldMasterEvent.Id.ToString());
-        newMasterEvent.TimeZone.Should().Be(oldMasterEvent.TimeZone);
-
-        // ASSERT: ProfileRecurrentEvent
-        var masterProfileEvent = await _dbService.RetrieveAsync(
-            CollectionName.ProfileEvents,
-            Builders<ProfileRecurrentEvent>.Filter.And(
-                Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.EventId, new ObjectId(master.Id)),
-                Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.ProfileId, _creatorProfile.Id)
-            )
-        );
-        masterProfileEvent.Should().NotBeNull();
-        masterProfileEvent.Confirmed.Should().Be(oldMasterProfileEvent.Confirmed);
-        masterProfileEvent.RecurrenceStart.Should().Be(newMasterEvent.StartTime);
-        masterProfileEvent.RecurrenceEnd.Should().Be(newMasterEvent.RecurrenceEnd);
-        masterProfileEvent.Role.Should().Be(oldMasterProfileEvent.Role);
-    }
-
-    [SkippableFact]
-    public async Task CreateDetachedFirstInstance_ShouldSucceed_WithEndTimeUpdate() {
-        var startTime = DateTimeOffset.UtcNow.AddHours(1);
-
-        var master = await BuildMasterAsync(
-            "Weekly Yoga",
-            "FREQ=WEEKLY;INTERVAL=1",
-            "UTC",
-            startTime,
-            startTime.AddHours(1),
-            description: "Don't forget the mat!"
-        );
-
-        var oldMasterEvent = await _dbService.RetrieveByIdAsync<RecurrentEvent>(CollectionName.RecurrentEvents, master.Id);
-        var oldMasterProfileEvent = await _dbService.RetrieveAsync(
-            CollectionName.ProfileEvents,
-            Builders<ProfileRecurrentEvent>.Filter.And(
-                Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.EventId, new ObjectId(master.Id)),
-                Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.ProfileId, _creatorProfile.Id)
-            )
-        );
-
-        // Generate a valid InstanceId for the first occurrence
-        var datePart = startTime.ToString("yyyyMMddTHHmmssZ");
-        var instanceId = $"{master.Id}_{datePart}";
-
-        var updateDto = new UpdateRecurrentEventRequestDto {
-            UpdateType = RecurrentUpdateType.AllTheSequence,
-            MasterEventId = master.Id.ToString(),
-            InstanceId = instanceId,
-            EndTime = startTime.AddHours(2)
-        };
-
-        // 2. ACT
-        var result = await _recurrentUpdateService.UpdateRecurrentEvent(updateDto, _creatorProfile);
-
-        // ASSERT: The Event document
-        var newMasterEvent = await _dbService.RetrieveByIdAsync<RecurrentEvent>(CollectionName.RecurrentEvents, result.Id);
-
-        newMasterEvent.Should().NotBeNull();
-        newMasterEvent.Title.Should().Be("Weekly Yoga");
-        newMasterEvent.StartTime.Should().Be(oldMasterEvent.StartTime);
-        newMasterEvent.EndTime.Should().Be(oldMasterEvent.EndTime.AddHours(2));
-        newMasterEvent.Id.ToString().Should().Be(oldMasterEvent.Id.ToString());
-        newMasterEvent.TimeZone.Should().Be(oldMasterEvent.TimeZone);
-
-        // ASSERT: ProfileRecurrentEvent
-        var masterProfileEvent = await _dbService.RetrieveAsync(
-            CollectionName.ProfileEvents,
-            Builders<ProfileRecurrentEvent>.Filter.And(
-                Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.EventId, new ObjectId(master.Id)),
-                Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.ProfileId, _creatorProfile.Id)
-            )
-        );
-        masterProfileEvent.Should().NotBeNull();
-        masterProfileEvent.Confirmed.Should().Be(oldMasterProfileEvent.Confirmed);
-        masterProfileEvent.RecurrenceStart.Should().Be(newMasterEvent.StartTime);
-        masterProfileEvent.RecurrenceEnd.Should().Be(newMasterEvent.RecurrenceEnd);
-        masterProfileEvent.Role.Should().Be(oldMasterProfileEvent.Role);
-    }
-
-    [SkippableFact]
     public async Task CreateDetachedFirstInstance_ShouldSucceed_WithBothTimeUpdate() {
         var startTime = DateTimeOffset.UtcNow.AddHours(1);
 
@@ -882,6 +788,48 @@ public class UpdateAllSequenceTests {
                 Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.EventId, new ObjectId(master.Id)),
                 Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.ProfileId, _creatorProfile.Id)
             )
+        );
+
+        // Generate other detached events
+        var startTime1 = startTime.AddDays(14);
+        var datePart1 = startTime.ToString("yyyyMMddTHHmmssZ");
+        var instanceId1 = $"{master.Id}_{datePart1}";
+
+        var updateDto1 = new UpdateRecurrentEventRequestDto {
+            UpdateType = RecurrentUpdateType.ThisInstance,
+            MasterEventId = master.Id.ToString(),
+            InstanceId = instanceId1,
+            StartTime = startTime1.AddHours(1),
+            EndTime = startTime1.AddHours(2)
+        };
+        
+        var detached1 = await _recurrentUpdateService.UpdateSingleInstance(updateDto1, _creatorProfile);
+
+        var startTime2 = startTime.AddDays(28);
+        var datePart2 = startTime.ToString("yyyyMMddTHHmmssZ");
+        var instanceId2 = $"{master.Id}_{datePart2}";
+
+        var updateDto2 = new UpdateRecurrentEventRequestDto {
+            UpdateType = RecurrentUpdateType.ThisInstance,
+            MasterEventId = master.Id.ToString(),
+            InstanceId = instanceId1,
+            StartTime = startTime1.AddHours(-2),
+            EndTime = startTime1.AddHours(-1),
+        };
+        
+        var detached2 = await _recurrentUpdateService.UpdateSingleInstance(updateDto2, _creatorProfile);
+
+        var oldDetachedList = await _dbService.RetrieveAsync(
+            CollectionName.DetachedInstances,
+            Builders<DetachedInstances>.Filter.Eq(di => di.MasterId, new ObjectId(master.Id))
+        );
+        oldDetachedList.Should().NotBeNull();
+        oldDetachedList.MasterId.Should().Be(new ObjectId(master.Id));
+
+        var oldEventIds = oldDetachedList.Instances.Select(i => i.EventId).ToHashSet();
+        var oldDetachedEvents = await _dbService.RetrieveMultipleByIdAsync<Event>(
+            CollectionName.Events,
+            oldEventIds
         );
 
         // Generate a valid InstanceId for the first occurrence
@@ -922,6 +870,37 @@ public class UpdateAllSequenceTests {
         masterProfileEvent.RecurrenceStart.Should().Be(newMasterEvent.StartTime);
         masterProfileEvent.RecurrenceEnd.Should().Be(newMasterEvent.RecurrenceEnd);
         masterProfileEvent.Role.Should().Be(oldMasterProfileEvent.Role);
+
+        // ASSERT: DetachedInstances Collection
+        var detachedList = await _dbService.RetrieveAsync(
+            CollectionName.DetachedInstances,
+            Builders<DetachedInstances>.Filter.Eq(di => di.MasterId, new ObjectId(master.Id))
+        );
+        detachedList.Should().NotBeNull();
+        detachedList.MasterId.Should().Be(new ObjectId(master.Id));
+
+        var eventIds = detachedList.Instances.Select(i => i.EventId).ToHashSet();
+        var detachedEvents = await _dbService.RetrieveMultipleByIdAsync<Event>(
+            CollectionName.Events,
+            eventIds
+        );
+
+        detachedEvents.Count.Should().Be(oldDetachedEvents.Count);
+
+        foreach (var de in detachedEvents) {
+            if(de.Id.ToString() == detached1.Id) {
+                de.StartTime.Should().Be(newMasterEvent.StartTime.AddDays(14));
+                de.EndTime.Should().Be(newMasterEvent.EndTime.AddDays(14));
+            }
+
+            if (de.Id.ToString() == detached2.Id) {
+                de.StartTime.Should().Be(newMasterEvent.StartTime.AddDays(28));
+                de.EndTime.Should().Be(newMasterEvent.EndTime.AddDays(28));
+            }
+
+            detachedList.Instances.Count(i => i.EventId == de.Id).Should().Be(1);
+            detachedList.Instances.First(i => i.EventId == de.Id).StartTime.Should().Be(de.StartTime);
+        }
     }
 
     #endregion
@@ -929,7 +908,7 @@ public class UpdateAllSequenceTests {
     #region n-th instance
 
     [SkippableFact]
-    public async Task UpdateRecurrentEvent_ShouldThrow_WhenDatesUpdatedFromNonFirstGeneratedInstance() {
+    public async Task UpdateRecurrentEvent_ShouldThrow_WhenTimesUpdatedFromPastGeneratedNonFirstInstance() {
         // ARRANGE
         var startTime = DateTimeOffset.UtcNow.AddHours(1);
 
@@ -974,6 +953,9 @@ public class UpdateAllSequenceTests {
     #endregion
 
     #region Current detached
+
+
+    #region first instance
 
     [SkippableFact]
     public async Task UpdateRecurrentEvent_ShouldThrow_WhenTimesUpdatedFromPastDetachedFirstInstance() {
@@ -1026,14 +1008,12 @@ public class UpdateAllSequenceTests {
             _recurrentUpdateService.UpdateRecurrentEvent(updateDto1, _creatorProfile));
     }
 
-    #region first instance
-
     #endregion
 
     #region n-th instance
 
     [SkippableFact]
-    public async Task UpdateRecurrentEvent_ShouldThrow_WhenDatesUpdatedFromNonFirstDetachedInstance() {
+    public async Task UpdateRecurrentEvent_ShouldThrow_WhenTimesUpdatedFromPastDetachedNonFirstInstance() {
         // ARRANGE
         var startTime = DateTimeOffset.UtcNow.AddHours(1);
 
