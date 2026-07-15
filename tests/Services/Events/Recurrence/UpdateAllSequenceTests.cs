@@ -428,28 +428,9 @@ public class UpdateAllSequenceTests {
 
     [SkippableFact]
     public async Task UpdateRecurrentEvent_ShouldThrow_WhenTimesUpdatedFromNonFirstInstance() {
-        //TODO 
 
         // Generated
 
-        // Detached
-    }
-
-    [SkippableFact]
-    public async Task UpdateRecurrentEvent_ShouldThrow_WhenTimesUpdatedFromPastEvent() {
-        //TODO 
-
-        // Generated
-
-        // Detached
-    }
-    
-    #endregion
-
-    #region Current generated
-
-    [SkippableFact] //TODO remove
-    public async Task UpdateRecurrentEvent_ShouldThrow_WhenTimesUpdatedFromPastGeneratedFirstInstance() {
         // ARRANGE
         // Start 5 days ago so it is strictly in the past day-wise
         var startTime = DateTimeOffset.UtcNow.AddDays(-5);
@@ -466,29 +447,109 @@ public class UpdateAllSequenceTests {
         var recurrencyId = startTime.ToString("yyyyMMddTHHmmssZ");
         var instanceId = $"{master.Id}_{recurrencyId}";
 
-        // Attempting to update the StartTime from a past instance
+        // Attempting to update the Time from a past instance
         var updateDtoStartTime = new UpdateRecurrentEventRequestDto {
             UpdateType = RecurrentUpdateType.AllTheSequence,
             MasterEventId = master.Id.ToString(),
             InstanceId = instanceId,
-            StartTime = startTime.AddHours(2)
+            StartTime = startTime.AddHours(2),
+            EndTime = startTime.AddHours(3)
         };
 
         // ACT & ASSERT
         await Assert.ThrowsAsync<ArgumentException>(() =>
             _recurrentUpdateService.UpdateRecurrentEvent(updateDtoStartTime, _creatorProfile));
 
-        // Attempting to update the EndTime from a past instance
-        var updateDtoEndTime = new UpdateRecurrentEventRequestDto {
-            UpdateType = RecurrentUpdateType.AllTheSequence,
+        // Detached
+
+        // Detach the first instance from 5 days ago (allowed since we aren't shifting AllTheSequence times yet)
+        var detachDto = new UpdateRecurrentEventRequestDto {
+            UpdateType = RecurrentUpdateType.ThisInstance,
             MasterEventId = master.Id.ToString(),
             InstanceId = instanceId,
+            Title = "Past Standup (Detached)"
+        };
+        var detachedResult = await _recurrentUpdateService.UpdateRecurrentEvent(detachDto, _creatorProfile);
+
+        // Attempt to update Time for AllTheSequence via the past detached instance
+        var updateDto = new UpdateRecurrentEventRequestDto {
+            UpdateType = RecurrentUpdateType.AllTheSequence,
+            MasterEventId = master.Id.ToString(),
+            InstanceId = detachedResult.Id.ToString(),
+            StartTime = startTime.AddHours(2),
             EndTime = startTime.AddHours(3)
         };
 
+        // ACT & ASSERT
         await Assert.ThrowsAsync<ArgumentException>(() =>
-            _recurrentUpdateService.UpdateRecurrentEvent(updateDtoEndTime, _creatorProfile));
+            _recurrentUpdateService.UpdateRecurrentEvent(updateDto, _creatorProfile));
     }
+
+    [SkippableFact]
+    public async Task UpdateRecurrentEvent_ShouldThrow_WhenTimesUpdatedFromPastEvent() {
+
+        // Generated
+
+        // ARRANGE
+        var startTime = DateTimeOffset.UtcNow.AddHours(1);
+
+        var master = await BuildMasterAsync(
+            "Weekly Yoga",
+            "FREQ=WEEKLY;INTERVAL=1",
+            "UTC",
+            startTime,
+            startTime.AddHours(1)
+        );
+
+        // Generate a valid InstanceId for a NON-FIRST occurrence (e.g., 2 weeks later)
+        var datePart = startTime.AddDays(14).ToString("yyyyMMddTHHmmssZ");
+        var instanceId = $"{master.Id}_{datePart}";
+
+        // Attempting to update the StartTime from a non-first instance
+        var updateDtoStartTime = new UpdateRecurrentEventRequestDto {
+            UpdateType = RecurrentUpdateType.AllTheSequence,
+            MasterEventId = master.Id.ToString(),
+            InstanceId = instanceId,
+            StartTime = startTime.AddHours(2),
+            EndTime = startTime.AddHours(3)
+        };
+
+        // ACT & ASSERT
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            _recurrentUpdateService.UpdateRecurrentEvent(updateDtoStartTime, _creatorProfile));
+
+        // Detached
+
+        // ARRANGE
+        // Mock a detached instance by detaching it via the service
+        var detachDto = new UpdateRecurrentEventRequestDto {
+            UpdateType = RecurrentUpdateType.ThisInstance,
+            MasterEventId = master.Id.ToString(),
+            InstanceId = instanceId,
+            Title = "Weekly Yoga (Detached)"
+        };
+
+        var detachedResult = await _recurrentUpdateService.UpdateRecurrentEvent(detachDto, _creatorProfile);
+
+        // The DTO receives the ObjectId of the detached event, NOT the generated string format
+        var updateDto = new UpdateRecurrentEventRequestDto {
+            UpdateType = RecurrentUpdateType.AllTheSequence,
+            MasterEventId = master.Id.ToString(),
+            InstanceId = detachedResult.Id.ToString(),
+            StartTime = startTime.AddHours(2),
+            EndTime = startTime.AddHours(3)
+        };
+
+        // ACT & ASSERT
+        // This ensures your service looks up the detached event, extracts its internal RecurrencyInstanceId, 
+        // realizes it is not the first occurrence, and blocks the date update.
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            _recurrentUpdateService.UpdateRecurrentEvent(updateDto, _creatorProfile));
+    }
+    
+    #endregion
+
+    #region Current generated
 
     #region first instance
 
@@ -907,47 +968,6 @@ public class UpdateAllSequenceTests {
 
     #region n-th instance
 
-    [SkippableFact]
-    public async Task UpdateRecurrentEvent_ShouldThrow_WhenTimesUpdatedFromPastGeneratedNonFirstInstance() {
-        // ARRANGE
-        var startTime = DateTimeOffset.UtcNow.AddHours(1);
-
-        var master = await BuildMasterAsync(
-            "Weekly Yoga",
-            "FREQ=WEEKLY;INTERVAL=1",
-            "UTC",
-            startTime,
-            startTime.AddHours(1)
-        );
-
-        // Generate a valid InstanceId for a NON-FIRST occurrence (e.g., 2 weeks later)
-        var datePart = startTime.AddDays(14).ToString("yyyyMMddTHHmmssZ");
-        var instanceId = $"{master.Id}_{datePart}";
-
-        // Attempting to update the StartTime from a non-first instance
-        var updateDtoStartTime = new UpdateRecurrentEventRequestDto {
-            UpdateType = RecurrentUpdateType.AllTheSequence,
-            MasterEventId = master.Id.ToString(),
-            InstanceId = instanceId,
-            StartTime = startTime.AddHours(2)
-        };
-
-        // ACT & ASSERT
-        await Assert.ThrowsAsync<ArgumentException>(() =>
-            _recurrentUpdateService.UpdateRecurrentEvent(updateDtoStartTime, _creatorProfile));
-
-        // Attempting to update the EndTime from a non-first instance
-        var updateDtoEndTime = new UpdateRecurrentEventRequestDto {
-            UpdateType = RecurrentUpdateType.AllTheSequence,
-            MasterEventId = master.Id.ToString(),
-            InstanceId = instanceId,
-            EndTime = startTime.AddHours(3)
-        };
-
-        await Assert.ThrowsAsync<ArgumentException>(() =>
-            _recurrentUpdateService.UpdateRecurrentEvent(updateDtoEndTime, _creatorProfile));
-    }
-
     #endregion
 
     #endregion
@@ -957,103 +977,9 @@ public class UpdateAllSequenceTests {
 
     #region first instance
 
-    [SkippableFact]
-    public async Task UpdateRecurrentEvent_ShouldThrow_WhenTimesUpdatedFromPastDetachedFirstInstance() {
-        // ARRANGE
-        var startTime = DateTimeOffset.UtcNow.AddDays(-5);
-
-        var master = await BuildMasterAsync(
-            "Past Standup",
-            "FREQ=DAILY;COUNT=10",
-            "UTC",
-            startTime,
-            startTime.AddHours(1)
-        );
-
-        // Generate ID for the FIRST instance (from 5 days ago)
-        var recurrencyId = startTime.ToString("yyyyMMddTHHmmssZ");
-        var generatedInstanceId = $"{master.Id}_{recurrencyId}";
-
-        // Detach the first instance from 5 days ago (allowed since we aren't shifting AllTheSequence times yet)
-        var detachDto = new UpdateRecurrentEventRequestDto {
-            UpdateType = RecurrentUpdateType.ThisInstance,
-            MasterEventId = master.Id.ToString(),
-            InstanceId = generatedInstanceId,
-            Title = "Past Standup (Detached)"
-        };
-        var detachedResult = await _recurrentUpdateService.UpdateRecurrentEvent(detachDto, _creatorProfile);
-
-        // Attempt to update StartTime for AllTheSequence via the past detached instance
-        var updateDto = new UpdateRecurrentEventRequestDto {
-            UpdateType = RecurrentUpdateType.AllTheSequence,
-            MasterEventId = master.Id.ToString(),
-            InstanceId = detachedResult.Id.ToString(),
-            StartTime = startTime.AddHours(2)
-        };
-
-        // ACT & ASSERT
-        await Assert.ThrowsAsync<ArgumentException>(() =>
-            _recurrentUpdateService.UpdateRecurrentEvent(updateDto, _creatorProfile));
-
-        // Attempt to update EndTime for AllTheSequence via the past detached instance
-        var updateDto1 = new UpdateRecurrentEventRequestDto {
-            UpdateType = RecurrentUpdateType.AllTheSequence,
-            MasterEventId = master.Id.ToString(),
-            InstanceId = detachedResult.Id.ToString(),
-            EndTime = startTime.AddHours(3)
-        };
-
-        // ACT & ASSERT
-        await Assert.ThrowsAsync<ArgumentException>(() =>
-            _recurrentUpdateService.UpdateRecurrentEvent(updateDto1, _creatorProfile));
-    }
-
     #endregion
 
     #region n-th instance
-
-    [SkippableFact]
-    public async Task UpdateRecurrentEvent_ShouldThrow_WhenTimesUpdatedFromPastDetachedNonFirstInstance() {
-        // ARRANGE
-        var startTime = DateTimeOffset.UtcNow.AddHours(1);
-
-        var master = await BuildMasterAsync(
-            "Weekly Yoga",
-            "FREQ=WEEKLY;INTERVAL=1",
-            "UTC",
-            startTime,
-            startTime.AddHours(1)
-        );
-
-        // Calculate a non-first occurrence date (e.g., 1 week later)
-        var nonFirstInstanceTime = startTime.AddDays(7);
-        var recurrencyId = nonFirstInstanceTime.ToString("yyyyMMddTHHmmssZ");
-        var generatedInstanceId = $"{master.Id}_{recurrencyId}";
-
-        // Mock a detached instance by detaching it via the service
-        var detachDto = new UpdateRecurrentEventRequestDto {
-            UpdateType = RecurrentUpdateType.ThisInstance,
-            MasterEventId = master.Id.ToString(),
-            InstanceId = generatedInstanceId,
-            Title = "Weekly Yoga (Detached)"
-        };
-
-        var detachedResult = await _recurrentUpdateService.UpdateRecurrentEvent(detachDto, _creatorProfile);
-
-        // The DTO receives the ObjectId of the detached event, NOT the generated string format
-        var updateDto = new UpdateRecurrentEventRequestDto {
-            UpdateType = RecurrentUpdateType.AllTheSequence,
-            MasterEventId = master.Id.ToString(),
-            InstanceId = detachedResult.Id.ToString(),
-            StartTime = nonFirstInstanceTime.AddHours(2)
-        };
-
-        // ACT & ASSERT
-        // This ensures your service looks up the detached event, extracts its internal RecurrencyInstanceId, 
-        // realizes it is not the first occurrence, and blocks the date update.
-        await Assert.ThrowsAsync<ArgumentException>(() =>
-            _recurrentUpdateService.UpdateRecurrentEvent(updateDto, _creatorProfile));
-    }
 
     #endregion
 
