@@ -24,7 +24,7 @@ public class Event(
 
     [BsonElement("recurrencyId")]
     [BsonIgnoreIfNull]
-    public string? RecurrencyInstanceId { get; set; }
+    public string? RecurrencyInstanceId { get; set; } //yyyyMMddTHHmmssZ;
 
     [BsonElement("detached")]
     [BsonIgnoreIfDefault]
