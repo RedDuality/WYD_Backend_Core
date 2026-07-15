@@ -954,12 +954,13 @@ public class UpdateAllSequenceTests {
 
     #region Current detached
 
-
     #region first instance
 
     #endregion
 
     #region n-th instance
+
+    #endregion
 
     #endregion
 
@@ -1021,7 +1022,6 @@ public class UpdateAllSequenceTests {
         await Assert.ThrowsAsync<ArgumentException>(() =>
             _recurrentUpdateService.UpdateRecurrentEvent(updateDto, _creatorProfile));
     }
-
 
     [SkippableFact]
     public async Task UpdateAllTheSequence_ShouldThrow_WhenRecurrenceRuleFromNonFirstInstance() {
@@ -1203,8 +1203,6 @@ public class UpdateAllSequenceTests {
         // TODO
     }
 
-
-    #endregion
 
     #endregion
 }
