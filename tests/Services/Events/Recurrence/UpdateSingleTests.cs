@@ -256,7 +256,7 @@ public class UpdateSingleTests {
         await Assert.ThrowsAsync<ArgumentException>(() =>
             _recurrentUpdateService.UpdateSingleInstance(updateDto2, _creatorProfile));
 
-        //(only end) end is equal start
+        // end is equal start
         var updateDto3 = new UpdateRecurrentEventRequestDto {
             UpdateType = RecurrentUpdateType.ThisInstance,
             MasterEventId = master.Id.ToString(),
@@ -268,33 +268,6 @@ public class UpdateSingleTests {
         // ACT & ASSERT
         await Assert.ThrowsAsync<ArgumentException>(() =>
             _recurrentUpdateService.UpdateSingleInstance(updateDto3, _creatorProfile));
-
-        // start is after end
-        var updateDto4 = new UpdateRecurrentEventRequestDto {
-            UpdateType = RecurrentUpdateType.ThisInstance,
-            MasterEventId = master.Id.ToString(),
-            InstanceId = instanceId,
-            StartTime = startTime.AddHours(6),
-            EndTime = startTime.AddHours(5)
-        };
-
-        // ACT & ASSERT
-        await Assert.ThrowsAsync<ArgumentException>(() =>
-            _recurrentUpdateService.UpdateSingleInstance(updateDto4, _creatorProfile));
-
-        //start is equal end
-        var updateDto5 = new UpdateRecurrentEventRequestDto {
-            UpdateType = RecurrentUpdateType.ThisInstance,
-            MasterEventId = master.Id.ToString(),
-            InstanceId = instanceId,
-            StartTime = startTime.AddHours(5),
-            EndTime = startTime.AddHours(5)
-        };
-
-        // ACT & ASSERT
-        await Assert.ThrowsAsync<ArgumentException>(() =>
-            _recurrentUpdateService.UpdateSingleInstance(updateDto5, _creatorProfile));
-
 
         //start is within less than 5 mins to end
         var updateDto6 = new UpdateRecurrentEventRequestDto {

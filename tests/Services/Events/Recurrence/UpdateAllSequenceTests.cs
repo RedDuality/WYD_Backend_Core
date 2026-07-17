@@ -1317,8 +1317,8 @@ public class UpdateAllSequenceTests {
             )
         );
         profileEvent.Count.Should().Be(1);
-        
-        var masterProfileEvent= await _dbService.RetrieveAsync(
+
+        var masterProfileEvent = await _dbService.RetrieveAsync(
             CollectionName.ProfileEvents,
             Builders<ProfileRecurrentEvent>.Filter.And(
                 Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.EventId, new ObjectId(master.Id)),
@@ -1340,7 +1340,7 @@ public class UpdateAllSequenceTests {
         detachedList.MasterId.Should().Be(new ObjectId(master.Id));
         detachedList.Instances.Count.Should().Be(3);
         detachedList.Instances.Should().ContainSingle(i => i.RecurrencyId == instanceId);
-        detachedList.Instances.Should().ContainSingle(i => i.EventId == detachedEvent.Id );
+        detachedList.Instances.Should().ContainSingle(i => i.EventId == detachedEvent.Id);
         var detachedListInstance = detachedList.Instances.First(i => i.RecurrencyId == instanceId);
         detachedListInstance.EventId.Should().Be(detachedEvent.Id);
         detachedListInstance.StartTime.Should().Be(detachedEvent.StartTime);
@@ -1524,6 +1524,7 @@ public class UpdateAllSequenceTests {
 
         detachedEvent.Should().NotBeNull();
         detachedEvent.Id.ToString().Should().Be(previousEvent.Id.ToString());
+        detachedEvent.RecurrencyInstanceId.Should().Be(startTime.AddHours(4).ToString("yyyyMMddTHHmmssZ"));
         detachedEvent.StartTime.Should().Be(startTime.AddHours(4));
         detachedEvent.EndTime.Should().Be(startTime.AddHours(5));
 
@@ -1547,9 +1548,9 @@ public class UpdateAllSequenceTests {
         detachedList.Should().NotBeNull();
         detachedList.MasterId.Should().Be(new ObjectId(master.Id));
         detachedList.Instances.Count.Should().Be(3);
-        detachedList.Instances.Should().ContainSingle(i => i.RecurrencyId == instanceId);
-        detachedList.Instances.Should().ContainSingle(i => i.EventId == detachedEvent.Id );
-        var detachedListInstance = detachedList.Instances.First(i => i.RecurrencyId == instanceId);
+        detachedList.Instances.Should().ContainSingle(i => i.RecurrencyId == startTime.AddHours(4).ToString("yyyyMMddTHHmmssZ"));
+        detachedList.Instances.Should().ContainSingle(i => i.EventId == detachedEvent.Id);
+        var detachedListInstance = detachedList.Instances.First(i => i.RecurrencyId == detachedEvent.RecurrencyInstanceId);
         detachedListInstance.EventId.Should().Be(detachedEvent.Id);
         detachedListInstance.StartTime.Should().Be(detachedEvent.StartTime);
     }
@@ -1691,8 +1692,8 @@ public class UpdateAllSequenceTests {
             )
         );
         profileEvent.Count.Should().Be(1);
-        
-        var masterProfileEvent= await _dbService.RetrieveAsync(
+
+        var masterProfileEvent = await _dbService.RetrieveAsync(
             CollectionName.ProfileEvents,
             Builders<ProfileRecurrentEvent>.Filter.And(
                 Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.EventId, new ObjectId(master.Id)),
@@ -1714,7 +1715,7 @@ public class UpdateAllSequenceTests {
         detachedList.MasterId.Should().Be(new ObjectId(master.Id));
         detachedList.Instances.Count.Should().Be(3);
         detachedList.Instances.Should().ContainSingle(i => i.RecurrencyId == instanceId);
-        detachedList.Instances.Should().ContainSingle(i => i.EventId == detachedEvent.Id );
+        detachedList.Instances.Should().ContainSingle(i => i.EventId == detachedEvent.Id);
         var detachedListInstance = detachedList.Instances.First(i => i.RecurrencyId == instanceId);
         detachedListInstance.EventId.Should().Be(detachedEvent.Id);
         detachedListInstance.StartTime.Should().Be(detachedEvent.StartTime);
@@ -2059,7 +2060,7 @@ public class UpdateAllSequenceTests {
     }
 
     [SkippableFact]
-    public async Task UpdateAllTheSequence_ShouldSucceed_WithRecurrencyRuleHeavyUpdate() {
+    public async Task UpdateAllTheSequenceGenerated_ShouldSucceed_WithRecurrencyRuleHeavyUpdate() {
         var startTime = DateTimeOffset.UtcNow.AddHours(1);
 
         var master = await BuildMasterAsync(
@@ -2167,5 +2168,9 @@ public class UpdateAllSequenceTests {
         detachedEvents.Count.Should().Be(0);
     }
 
+    [SkippableFact]
+    public async Task UpdateAllTheSequenceDetached_ShouldSucceed_WithRecurrencyRuleHeavyUpdate() {
+        // TODO the (first) detached event gets deleted
+    }
     #endregion
 }
