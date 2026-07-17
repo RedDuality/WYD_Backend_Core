@@ -888,7 +888,7 @@ public class UpdateSingleTests {
         var result = await _recurrentUpdateService.UpdateSingleInstance(updateDto, _creatorProfile);
 
         // ASSERT: The Event document
-        var detachedEvent = await _dbService.RetrieveByIdAsync<Event>(CollectionName.Events, result.Id);
+        var detachedEvent = await _dbService.RetrieveByIdAsync<Event>(CollectionName.Events, previousEvent.Id);
 
         detachedEvent.Should().NotBeNull();
         detachedEvent.Id.ToString().Should().Be(previousEvent.Id.ToString());
@@ -990,10 +990,10 @@ public class UpdateSingleTests {
         };
 
         // 2. ACT
-        var result = await _recurrentUpdateService.UpdateSingleInstance(updateDto, _creatorProfile);
+        await _recurrentUpdateService.UpdateSingleInstance(updateDto, _creatorProfile);
 
         // ASSERT: The Event document
-        var detachedEvent = await _dbService.RetrieveByIdAsync<Event>(CollectionName.Events, result.Id);
+        var detachedEvent = await _dbService.RetrieveByIdAsync<Event>(CollectionName.Events, previousEvent.Id);
 
         detachedEvent.Should().NotBeNull();
         detachedEvent.Id.ToString().Should().Be(previousEvent.Id.ToString());
@@ -1050,7 +1050,7 @@ public class UpdateSingleTests {
         var result = await _recurrentUpdateService.UpdateSingleInstance(updateDto, _creatorProfile);
 
         // ASSERT: The Event document
-        var detachedEvent = await _dbService.RetrieveByIdAsync<Event>(CollectionName.Events, result.Id);
+        var detachedEvent = await _dbService.RetrieveByIdAsync<Event>(CollectionName.Events, previousEvent.Id);
 
         detachedEvent.Should().NotBeNull();
         detachedEvent.Title.Should().Be("BothTime update");
@@ -1175,7 +1175,7 @@ public class UpdateSingleTests {
         var result = await _recurrentUpdateService.UpdateSingleInstance(updateDto, _creatorProfile);
 
         // ASSERT: The Event document
-        var detachedEvent = await _dbService.RetrieveByIdAsync<Event>(CollectionName.Events, result.Id);
+        var detachedEvent = await _dbService.RetrieveByIdAsync<Event>(CollectionName.Events, previousEvent.Id);
 
         detachedEvent.Should().NotBeNull();
         detachedEvent.Id.ToString().Should().Be(previousEvent.Id.ToString());
@@ -1280,7 +1280,7 @@ public class UpdateSingleTests {
         var result = await _recurrentUpdateService.UpdateSingleInstance(updateDto, _creatorProfile);
 
         // ASSERT: The Event document
-        var detachedEvent = await _dbService.RetrieveByIdAsync<Event>(CollectionName.Events, result.Id);
+        var detachedEvent = await _dbService.RetrieveByIdAsync<Event>(CollectionName.Events, previousEvent.Id);
 
         detachedEvent.Should().NotBeNull();
         detachedEvent.Id.ToString().Should().Be(previousEvent.Id.ToString());
@@ -1338,7 +1338,7 @@ public class UpdateSingleTests {
         var result = await _recurrentUpdateService.UpdateSingleInstance(updateDto, _creatorProfile);
 
         // ASSERT: The Event document
-        var detachedEvent = await _dbService.RetrieveByIdAsync<Event>(CollectionName.Events, result.Id);
+        var detachedEvent = await _dbService.RetrieveByIdAsync<Event>(CollectionName.Events, previousEvent.Id);
 
         detachedEvent.Should().NotBeNull();
         detachedEvent.Title.Should().Be("BothTime update");

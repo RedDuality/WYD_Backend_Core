@@ -1278,7 +1278,7 @@ public class UpdateAllSequenceTests {
 
 
         // ASSERT: The Event document
-        var detachedEvent = await _dbService.RetrieveByIdAsync<Event>(CollectionName.Events, result.Id);
+        var detachedEvent = await _dbService.RetrieveByIdAsync<Event>(CollectionName.Events, previousEvent.Id);
 
         detachedEvent.Should().NotBeNull();
         detachedEvent.Id.ToString().Should().Be(previousEvent.Id.ToString());
@@ -1440,7 +1440,7 @@ public class UpdateAllSequenceTests {
         // ASSERT: Detached's EventDetails
         var details = await _dbService.RetrieveAsync(
             CollectionName.EventDetails,
-            Builders<EventDetails>.Filter.Eq("eventId", result.Id)
+            Builders<EventDetails>.Filter.Eq("eventId", previousEvent.Id)
         );
         details.Should().NotBeNull();
         details.Description.Should().Be("Bring your own mat today!");
@@ -1520,7 +1520,7 @@ public class UpdateAllSequenceTests {
         var result = await _recurrentUpdateService.UpdateRecurrentEvent(updateDto, _creatorProfile);
 
         // ASSERT: The Event document
-        var detachedEvent = await _dbService.RetrieveByIdAsync<Event>(CollectionName.Events, result.Id);
+        var detachedEvent = await _dbService.RetrieveByIdAsync<Event>(CollectionName.Events, previousEvent.Id);
 
         detachedEvent.Should().NotBeNull();
         detachedEvent.Id.ToString().Should().Be(previousEvent.Id.ToString());
@@ -1652,7 +1652,7 @@ public class UpdateAllSequenceTests {
 
 
         // ASSERT: The Event document
-        var detachedEvent = await _dbService.RetrieveByIdAsync<Event>(CollectionName.Events, result.Id);
+        var detachedEvent = await _dbService.RetrieveByIdAsync<Event>(CollectionName.Events, previousEvent.Id);
 
         detachedEvent.Should().NotBeNull();
         detachedEvent.Id.ToString().Should().Be(previousEvent.Id.ToString());
@@ -1814,7 +1814,7 @@ public class UpdateAllSequenceTests {
         // ASSERT: Detached's EventDetails
         var details = await _dbService.RetrieveAsync(
             CollectionName.EventDetails,
-            Builders<EventDetails>.Filter.Eq("eventId", result.Id)
+            Builders<EventDetails>.Filter.Eq("eventId", previousEvent.Id)
         );
         details.Should().NotBeNull();
         details.Description.Should().Be("Bring your own mat today!");
