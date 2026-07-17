@@ -87,37 +87,6 @@ public class UpdateAllSequenceTests {
     }
 
     [SkippableFact]
-    public async Task UpdateAllTheSequence_ShouldThrow_WhenNonFirstInstanceAndRecurrenceRuleIsProvided() {
-        // ARRANGE
-        var startTime = DateTimeOffset.UtcNow.AddHours(1);
-
-        var master = await BuildMasterAsync(
-            "Weekly Yoga",
-            "FREQ=WEEKLY;INTERVAL=1",
-            "UTC",
-            startTime,
-            startTime.AddHours(1),
-            description: "Don't forget the mat!"
-        );
-
-        // Generate a valid InstanceId for the non-first occurrence
-        var datePart = startTime.AddDays(14).ToString("yyyyMMddTHHmmssZ");
-        var instanceId = $"{master.Id}_{datePart}";
-
-        var request = new UpdateRecurrentEventRequestDto {
-            UpdateType = RecurrentUpdateType.AllTheSequence,
-            InstanceId = instanceId, // valid only if the first instance
-            MasterEventId = master.Id.ToString(),
-            RecurrenceRule = "FREQ=DAILY"
-        };
-
-        // ACT & ASSERT
-        await Assert.ThrowsAsync<ArgumentException>(() =>
-            _recurrentUpdateService.UpdateRecurrentEvent(request, _creatorProfile));
-
-    }
-
-    [SkippableFact]
     public async Task UpdateAllTheSequence_ShouldThrow_NoUpdatesWereMade() {
         // ARRANGE
         var startTime = DateTimeOffset.UtcNow.AddHours(1);
@@ -553,7 +522,7 @@ public class UpdateAllSequenceTests {
     #region first instance
 
     [SkippableFact]
-    public async Task UpdateAllTheSequence_ShouldSucceed_WithNewTitle() {
+    public async Task UpdateAllTheSequenceGeneratedFirstInstance_ShouldSucceed_WithNewTitle() {
         var startTime = DateTimeOffset.UtcNow.AddHours(1);
 
         var master = await BuildMasterAsync(
@@ -576,7 +545,7 @@ public class UpdateAllSequenceTests {
 
         // Generate other detached events
         var startTime1 = startTime.AddDays(14);
-        var datePart1 = startTime.ToString("yyyyMMddTHHmmssZ");
+        var datePart1 = startTime1.ToString("yyyyMMddTHHmmssZ");
         var instanceId1 = $"{master.Id}_{datePart1}";
 
         var updateDto1 = new UpdateRecurrentEventRequestDto {
@@ -589,7 +558,7 @@ public class UpdateAllSequenceTests {
         var detached1 = await _recurrentUpdateService.UpdateSingleInstance(updateDto1, _creatorProfile);
 
         var startTime2 = startTime.AddDays(28);
-        var datePart2 = startTime.ToString("yyyyMMddTHHmmssZ");
+        var datePart2 = startTime2.ToString("yyyyMMddTHHmmssZ");
         var instanceId2 = $"{master.Id}_{datePart2}";
 
         var updateDto2 = new UpdateRecurrentEventRequestDto {
@@ -708,7 +677,7 @@ public class UpdateAllSequenceTests {
     }
 
     [SkippableFact]
-    public async Task UpdateAllTheSequence_ShouldSucceed_WithNewDescription() {
+    public async Task UpdateAllTheSequenceGeneratedFirstInstance_ShouldSucceed_WithNewDescription() {
         var startTime = DateTimeOffset.UtcNow.AddHours(1);
 
         var master = await BuildMasterAsync(
@@ -724,7 +693,7 @@ public class UpdateAllSequenceTests {
 
         // Generate other detached events
         var startTime1 = startTime.AddDays(14);
-        var datePart1 = startTime.ToString("yyyyMMddTHHmmssZ");
+        var datePart1 = startTime1.ToString("yyyyMMddTHHmmssZ");
         var instanceId1 = $"{master.Id}_{datePart1}";
 
         var updateDto1 = new UpdateRecurrentEventRequestDto {
@@ -737,7 +706,7 @@ public class UpdateAllSequenceTests {
         var detached1 = await _recurrentUpdateService.UpdateSingleInstance(updateDto1, _creatorProfile);
 
         var startTime2 = startTime.AddDays(28);
-        var datePart2 = startTime.ToString("yyyyMMddTHHmmssZ");
+        var datePart2 = startTime2.ToString("yyyyMMddTHHmmssZ");
         var instanceId2 = $"{master.Id}_{datePart2}";
 
         var updateDto2 = new UpdateRecurrentEventRequestDto {
@@ -814,7 +783,7 @@ public class UpdateAllSequenceTests {
     }
 
     [SkippableFact]
-    public async Task UpdateAllTheSequence_ShouldSucceed_WithBothTimeUpdate() {
+    public async Task UpdateAllTheSequenceGeneratedFirstInstance_ShouldSucceed_WithBothTimeUpdate() {
         var startTime = DateTimeOffset.UtcNow.AddHours(1);
 
         var master = await BuildMasterAsync(
@@ -837,7 +806,7 @@ public class UpdateAllSequenceTests {
 
         // Generate other detached events
         var startTime1 = startTime.AddDays(14);
-        var datePart1 = startTime.ToString("yyyyMMddTHHmmssZ");
+        var datePart1 = startTime1.ToString("yyyyMMddTHHmmssZ");
         var instanceId1 = $"{master.Id}_{datePart1}";
 
         var updateDto1 = new UpdateRecurrentEventRequestDto {
@@ -851,7 +820,7 @@ public class UpdateAllSequenceTests {
         var detached1 = await _recurrentUpdateService.UpdateSingleInstance(updateDto1, _creatorProfile);
 
         var startTime2 = startTime.AddDays(28);
-        var datePart2 = startTime.ToString("yyyyMMddTHHmmssZ");
+        var datePart2 = startTime2.ToString("yyyyMMddTHHmmssZ");
         var instanceId2 = $"{master.Id}_{datePart2}";
 
         var updateDto2 = new UpdateRecurrentEventRequestDto {
@@ -946,6 +915,266 @@ public class UpdateAllSequenceTests {
     #endregion
 
     #region n-th instance
+    [SkippableFact]
+    public async Task UpdateAllTheSequenceGeneratedNthInstance_ShouldSucceed_WithNewTitle() {
+        var startTime = DateTimeOffset.UtcNow.AddHours(1);
+
+        var master = await BuildMasterAsync(
+            "Weekly Yoga",
+            "FREQ=WEEKLY;INTERVAL=1",
+            "UTC",
+            startTime,
+            startTime.AddHours(1),
+            description: "Don't forget the mat!"
+        );
+
+        var oldMasterEvent = await _dbService.RetrieveByIdAsync<RecurrentEvent>(CollectionName.RecurrentEvents, master.Id);
+        var oldMasterProfileEvent = await _dbService.RetrieveAsync(
+            CollectionName.ProfileEvents,
+            Builders<ProfileRecurrentEvent>.Filter.And(
+                Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.EventId, new ObjectId(master.Id)),
+                Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.ProfileId, _creatorProfile.Id)
+            )
+        );
+
+        // Generate other detached events
+        var startTime1 = startTime.AddDays(14);
+        var datePart1 = startTime1.ToString("yyyyMMddTHHmmssZ");
+        var instanceId1 = $"{master.Id}_{datePart1}";
+
+        var updateDto1 = new UpdateRecurrentEventRequestDto {
+            UpdateType = RecurrentUpdateType.ThisInstance,
+            MasterEventId = master.Id.ToString(),
+            InstanceId = instanceId1,
+            Title = "Modified Yoga Session 1"
+        };
+
+        var detached1 = await _recurrentUpdateService.UpdateSingleInstance(updateDto1, _creatorProfile);
+
+        var startTime2 = startTime.AddDays(28);
+        var datePart2 = startTime2.ToString("yyyyMMddTHHmmssZ");
+        var instanceId2 = $"{master.Id}_{datePart2}";
+
+        var updateDto2 = new UpdateRecurrentEventRequestDto {
+            UpdateType = RecurrentUpdateType.ThisInstance,
+            MasterEventId = master.Id.ToString(),
+            InstanceId = instanceId1,
+            Title = "Modified Yoga Session 2",
+            Description = "Description 2"
+        };
+
+        var detached2 = await _recurrentUpdateService.UpdateSingleInstance(updateDto2, _creatorProfile);
+
+        var oldDetachedList = await _dbService.RetrieveAsync(
+            CollectionName.DetachedInstances,
+            Builders<DetachedInstances>.Filter.Eq(di => di.MasterId, new ObjectId(master.Id))
+        );
+
+        var oldEventIds = oldDetachedList.Instances.Select(i => i.EventId).ToHashSet();
+        var oldDetachedEvents = await _dbService.RetrieveMultipleByIdAsync<Event>(
+            CollectionName.Events,
+            oldEventIds
+        );
+
+        // Generate a valid InstanceId for the first occurrence
+        var datePart = startTime.AddDays(7).ToString("yyyyMMddTHHmmssZ");
+        var instanceId = $"{master.Id}_{datePart}";
+
+        var updateDto = new UpdateRecurrentEventRequestDto {
+            UpdateType = RecurrentUpdateType.AllTheSequence,
+            MasterEventId = master.Id.ToString(),
+            InstanceId = instanceId,
+            Title = "Modified Yoga Session"
+        };
+
+        // 2. ACT
+        var result = await _recurrentUpdateService.UpdateRecurrentEvent(updateDto, _creatorProfile);
+
+        // ASSERT: The Event document
+        var newMasterEvent = await _dbService.RetrieveByIdAsync<RecurrentEvent>(CollectionName.RecurrentEvents, result.Id);
+
+        newMasterEvent.Should().NotBeNull();
+        newMasterEvent.Title.Should().Be("Modified Yoga Session");
+        newMasterEvent.StartTime.Should().Be(oldMasterEvent.StartTime);
+        newMasterEvent.EndTime.Should().Be(oldMasterEvent.EndTime);
+        newMasterEvent.Id.ToString().Should().Be(oldMasterEvent.Id.ToString());
+        newMasterEvent.TimeZone.Should().Be(oldMasterEvent.TimeZone);
+
+        // ASSERT: EventDetails
+        var details = await _dbService.RetrieveAsync(
+            CollectionName.EventDetails,
+            Builders<EventDetails>.Filter.Eq("eventId", newMasterEvent.Id)
+        );
+        details.Should().NotBeNull();
+        details.Description.Should().Be("Don't forget the mat!");
+
+        // ASSERT: RecurrentEventProfiles
+        var eventProfile = await _dbService.RetrieveMultipleAsync(
+            CollectionName.RecurrentEventProfiles,
+            Builders<RecurrentEventProfile>.Filter.And(
+                Builders<RecurrentEventProfile>.Filter.Eq(ep => ep.EventId, newMasterEvent.Id),
+                Builders<RecurrentEventProfile>.Filter.Eq(ep => ep.ProfileId, _creatorProfile.Id)
+            )
+        );
+        eventProfile.Should().NotBeNull();
+        eventProfile.Count.Should().Be(1);
+
+        // ASSERT: ProfileRecurrentEvent
+        var masterProfileEvent = await _dbService.RetrieveAsync(
+            CollectionName.ProfileEvents,
+            Builders<ProfileRecurrentEvent>.Filter.And(
+                Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.EventId, new ObjectId(master.Id)),
+                Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.ProfileId, _creatorProfile.Id)
+            )
+        );
+        masterProfileEvent.Should().NotBeNull();
+        masterProfileEvent.Confirmed.Should().Be(oldMasterProfileEvent.Confirmed);
+        masterProfileEvent.RecurrenceStart.Should().Be(oldMasterProfileEvent.RecurrenceStart);
+        masterProfileEvent.RecurrenceEnd.Should().Be(oldMasterProfileEvent.RecurrenceEnd);
+        masterProfileEvent.Role.Should().Be(oldMasterProfileEvent.Role);
+
+        // ASSERT: DetachedInstances Collection
+        var detachedList = await _dbService.RetrieveAsync(
+            CollectionName.DetachedInstances,
+            Builders<DetachedInstances>.Filter.Eq(di => di.MasterId, new ObjectId(master.Id))
+        );
+        detachedList.Should().NotBeNull();
+        detachedList.MasterId.Should().Be(new ObjectId(master.Id));
+
+        var eventIds = detachedList.Instances.Select(i => i.EventId).ToHashSet();
+        var detachedEvents = await _dbService.RetrieveMultipleByIdAsync<Event>(
+            CollectionName.Events,
+            eventIds
+        );
+
+        detachedEvents.Count.Should().Be(oldDetachedEvents.Count);
+
+        foreach (var de in detachedEvents) {
+            var oldEvent = oldDetachedEvents.First(ode => ode.Id == de.Id);
+
+            de.Title.Should().Be(newMasterEvent.Title);
+            de.MasterEventId.Should().Be(newMasterEvent.Id);
+            de.DetachedInstance.Should().Be(true);
+            de.RecurrencyInstanceId.Should().Be(oldEvent.RecurrencyInstanceId);
+
+            var detachedDetails = await _dbService.RetrieveAsync(
+                CollectionName.EventDetails,
+                Builders<EventDetails>.Filter.Eq("eventId", de.Id)
+            );
+
+            if (detachedDetails.EventId.ToString() == detached1.Id)
+                detachedDetails.Description.Should().BeEmpty();
+
+            if (detachedDetails.EventId.ToString() == detached2.Id)
+                detachedDetails.Description.Should().Be("Description 2");
+        }
+    }
+
+    [SkippableFact]
+    public async Task UpdateAllTheSequenceGeneratedNthInstance_ShouldSucceed_WithNewDescription() {
+        var startTime = DateTimeOffset.UtcNow.AddHours(1);
+
+        var master = await BuildMasterAsync(
+            "Weekly Yoga",
+            "FREQ=WEEKLY;INTERVAL=1",
+            "UTC",
+            startTime,
+            startTime.AddHours(1),
+            description: "Don't forget the mat!"
+        );
+
+        var oldMasterEvent = await _dbService.RetrieveByIdAsync<RecurrentEvent>(CollectionName.RecurrentEvents, master.Id);
+
+        // Generate other detached events
+        var startTime1 = startTime.AddDays(14);
+        var datePart1 = startTime1.ToString("yyyyMMddTHHmmssZ");
+        var instanceId1 = $"{master.Id}_{datePart1}";
+
+        var updateDto1 = new UpdateRecurrentEventRequestDto {
+            UpdateType = RecurrentUpdateType.ThisInstance,
+            MasterEventId = master.Id.ToString(),
+            InstanceId = instanceId1,
+            Title = "Modified Yoga Session 1"
+        };
+
+        var detached1 = await _recurrentUpdateService.UpdateSingleInstance(updateDto1, _creatorProfile);
+
+        var startTime2 = startTime.AddDays(28);
+        var datePart2 = startTime2.ToString("yyyyMMddTHHmmssZ");
+        var instanceId2 = $"{master.Id}_{datePart2}";
+
+        var updateDto2 = new UpdateRecurrentEventRequestDto {
+            UpdateType = RecurrentUpdateType.ThisInstance,
+            MasterEventId = master.Id.ToString(),
+            InstanceId = instanceId1,
+            Title = "Modified Yoga Session 2",
+            Description = "Description 2"
+        };
+
+        var detached2 = await _recurrentUpdateService.UpdateSingleInstance(updateDto2, _creatorProfile);
+
+        // Generate a valid InstanceId for the first occurrence
+        var datePart = startTime.AddDays(7).ToString("yyyyMMddTHHmmssZ");
+        var instanceId = $"{master.Id}_{datePart}";
+
+        var updateDto = new UpdateRecurrentEventRequestDto {
+            UpdateType = RecurrentUpdateType.AllTheSequence,
+            MasterEventId = master.Id.ToString(),
+            InstanceId = instanceId,
+            Description = "Bring your own mat today!"
+        };
+
+        // 2. ACT
+        var result = await _recurrentUpdateService.UpdateRecurrentEvent(updateDto, _creatorProfile);
+
+        // ASSERT: The Event document
+        var newMasterEvent = await _dbService.RetrieveByIdAsync<RecurrentEvent>(CollectionName.RecurrentEvents, result.Id);
+
+        newMasterEvent.Should().NotBeNull();
+        newMasterEvent.Title.Should().Be("Weekly Yoga");
+        newMasterEvent.StartTime.Should().Be(oldMasterEvent.StartTime);
+        newMasterEvent.EndTime.Should().Be(oldMasterEvent.EndTime);
+        newMasterEvent.Id.ToString().Should().Be(oldMasterEvent.Id.ToString());
+        newMasterEvent.TimeZone.Should().Be(oldMasterEvent.TimeZone);
+
+        // ASSERT: EventDetails
+        var details = await _dbService.RetrieveAsync(
+            CollectionName.EventDetails,
+            Builders<EventDetails>.Filter.Eq("eventId", newMasterEvent.Id)
+        );
+        details.Should().NotBeNull();
+        details.Description.Should().Be("Bring your own mat today!");
+
+        // ASSERT: DetachedInstances Collection
+        var detachedList = await _dbService.RetrieveAsync(
+            CollectionName.DetachedInstances,
+            Builders<DetachedInstances>.Filter.Eq(di => di.MasterId, new ObjectId(master.Id))
+        );
+        detachedList.Should().NotBeNull();
+        detachedList.MasterId.Should().Be(new ObjectId(master.Id));
+
+        var eventIds = detachedList.Instances.Select(i => i.EventId).ToHashSet();
+        var detachedEvents = await _dbService.RetrieveMultipleByIdAsync<Event>(
+            CollectionName.Events,
+            eventIds
+        );
+
+        foreach (var de in detachedEvents) {
+            if (de.Id.ToString() == detached1.Id)
+                de.Title.Should().Be(detached1.Title);
+
+            if (de.Id.ToString() == detached2.Id)
+                de.Title.Should().Be(detached2.Title);
+
+
+            var detachedDetails = await _dbService.RetrieveAsync(
+                CollectionName.EventDetails,
+                Builders<EventDetails>.Filter.Eq("eventId", de.Id)
+            );
+
+            detachedDetails.Description.Should().Be(details.Description);
+        }
+    }
 
     #endregion
 
@@ -955,9 +1184,641 @@ public class UpdateAllSequenceTests {
 
     #region first instance
 
+    [SkippableFact]
+    public async Task UpdateAllTheSequenceDetachedFirstInstance_ShouldSucceed_WithNewTitle() {
+        var startTime = DateTimeOffset.UtcNow.AddHours(1);
+
+        var master = await BuildMasterAsync(
+            "Weekly Yoga",
+            "FREQ=WEEKLY;INTERVAL=1",
+            "UTC",
+            startTime,
+            startTime.AddHours(1),
+            description: "Don't forget the mat!"
+        );
+
+        var oldMasterEvent = await _dbService.RetrieveByIdAsync<RecurrentEvent>(CollectionName.RecurrentEvents, master.Id);
+        var oldMasterProfileEvent = await _dbService.RetrieveAsync(
+            CollectionName.ProfileEvents,
+            Builders<ProfileRecurrentEvent>.Filter.And(
+                Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.EventId, new ObjectId(master.Id)),
+                Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.ProfileId, _creatorProfile.Id)
+            )
+        );
+
+        var datePart = startTime.ToString("yyyyMMddTHHmmssZ");
+        var instanceId = $"{master.Id}_{datePart}";
+
+        var createDto = new UpdateRecurrentEventRequestDto {
+            UpdateType = RecurrentUpdateType.ThisInstance,
+            MasterEventId = master.Id.ToString(),
+            InstanceId = instanceId,
+            Title = "Created Yoga Session"
+        };
+
+        var previousEvent = await _recurrentUpdateService.UpdateSingleInstance(createDto, _creatorProfile);
+        var previousProfileEvent = await _dbService.RetrieveAsync(
+            CollectionName.ProfileEvents,
+            Builders<ProfileEvent>.Filter.And(
+                Builders<ProfileEvent>.Filter.Eq(pe => pe.EventId, new ObjectId(previousEvent.Id)),
+                Builders<ProfileEvent>.Filter.Eq(pe => pe.ProfileId, _creatorProfile.Id)
+            )
+        );
+
+
+        // Generate detached events
+        var startTime1 = startTime.AddDays(14);
+        var datePart1 = startTime1.ToString("yyyyMMddTHHmmssZ");
+        var instanceId1 = $"{master.Id}_{datePart1}";
+
+        var updateDto1 = new UpdateRecurrentEventRequestDto {
+            UpdateType = RecurrentUpdateType.ThisInstance,
+            MasterEventId = master.Id.ToString(),
+            InstanceId = instanceId1,
+            Title = "Modified Yoga Session 1"
+        };
+
+        var detached1 = await _recurrentUpdateService.UpdateSingleInstance(updateDto1, _creatorProfile);
+
+        var startTime2 = startTime.AddDays(28);
+        var datePart2 = startTime2.ToString("yyyyMMddTHHmmssZ");
+        var instanceId2 = $"{master.Id}_{datePart2}";
+
+        var updateDto2 = new UpdateRecurrentEventRequestDto {
+            UpdateType = RecurrentUpdateType.ThisInstance,
+            MasterEventId = master.Id.ToString(),
+            InstanceId = instanceId1,
+            Title = "Modified Yoga Session 2",
+            Description = "Description 2"
+        };
+
+        var detached2 = await _recurrentUpdateService.UpdateSingleInstance(updateDto2, _creatorProfile);
+
+        var oldDetachedList = await _dbService.RetrieveAsync(
+            CollectionName.DetachedInstances,
+            Builders<DetachedInstances>.Filter.Eq(di => di.MasterId, new ObjectId(master.Id))
+        );
+
+        var oldEventIds = oldDetachedList.Instances.Select(i => i.EventId).ToHashSet();
+        var oldDetachedEvents = await _dbService.RetrieveMultipleByIdAsync<Event>(
+            CollectionName.Events,
+            oldEventIds
+        );
+
+
+        var updateDto = new UpdateRecurrentEventRequestDto {
+            UpdateType = RecurrentUpdateType.AllTheSequence,
+            MasterEventId = master.Id.ToString(),
+            InstanceId = instanceId,
+            Title = "Modified Yoga Session"
+        };
+
+        // 2. ACT
+        var result = await _recurrentUpdateService.UpdateRecurrentEvent(updateDto, _creatorProfile);
+
+
+        // ASSERT: The Event document
+        var detachedEvent = await _dbService.RetrieveByIdAsync<Event>(CollectionName.Events, result.Id);
+
+        detachedEvent.Should().NotBeNull();
+        detachedEvent.Id.ToString().Should().Be(previousEvent.Id.ToString());
+        detachedEvent.Title.Should().Be("Modified Yoga Session");
+        detachedEvent.StartTime.Should().Be(previousEvent.StartTime);
+        detachedEvent.EndTime.Should().Be(previousEvent.EndTime);
+        detachedEvent.MasterEventId.Should().Be(previousEvent.MasterEventId);
+        detachedEvent.RecurrencyInstanceId.Should().Be(previousEvent.RecurrencyInstanceId);
+        detachedEvent.DetachedInstance.Should().BeTrue();
+
+        // ASSERT: EventDetails
+        var details = await _dbService.RetrieveAsync(
+            CollectionName.EventDetails,
+            Builders<EventDetails>.Filter.Eq("eventId", detachedEvent.Id)
+        );
+        details.Should().NotBeNull();
+        details.Description.Should().Be("Don't forget the mat!");
+
+        // ASSERT: EventProfiles
+        var eventProfile = await _dbService.RetrieveMultipleAsync(
+            CollectionName.EventProfiles,
+            Builders<EventProfile>.Filter.And(
+                Builders<EventProfile>.Filter.Eq(ep => ep.EventId, detachedEvent.Id),
+                Builders<EventProfile>.Filter.Eq(ep => ep.ProfileId, _creatorProfile.Id)
+            )
+        );
+        eventProfile.Should().NotBeNull();
+        eventProfile.Count.Should().Be(1);
+
+        // ASSERT: ProfileEvents
+        var profileEvent = await _dbService.RetrieveMultipleAsync(
+            CollectionName.ProfileEvents,
+            Builders<ProfileEvent>.Filter.And(
+                Builders<ProfileEvent>.Filter.Eq(pe => pe.EventId, detachedEvent.Id),
+                Builders<ProfileEvent>.Filter.Eq(pe => pe.ProfileId, _creatorProfile.Id)
+            )
+        );
+        profileEvent.Count.Should().Be(1);
+        
+        var masterProfileEvent= await _dbService.RetrieveAsync(
+            CollectionName.ProfileEvents,
+            Builders<ProfileRecurrentEvent>.Filter.And(
+                Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.EventId, new ObjectId(master.Id)),
+                Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.ProfileId, _creatorProfile.Id)
+            )
+        );
+        profileEvent.Should().NotBeNull();
+        profileEvent.First().Confirmed.Should().Be(previousProfileEvent.Confirmed);
+        profileEvent.First().EventStartTime.Should().Be(detachedEvent.StartTime);
+        profileEvent.First().EventEndTime.Should().Be(detachedEvent.EndTime);
+        profileEvent.First().Role.Should().Be(previousProfileEvent.Role);
+
+        // ASSERT: DetachedInstances Collection
+        var detachedList = await _dbService.RetrieveAsync(
+            CollectionName.DetachedInstances,
+            Builders<DetachedInstances>.Filter.Eq(di => di.MasterId, new ObjectId(master.Id))
+        );
+        detachedList.Should().NotBeNull();
+        detachedList.MasterId.Should().Be(new ObjectId(master.Id));
+        detachedList.Instances.Count.Should().Be(3);
+        detachedList.Instances.Should().ContainSingle(i => i.RecurrencyId == instanceId);
+        detachedList.Instances.Should().ContainSingle(i => i.EventId == detachedEvent.Id );
+        var detachedListInstance = detachedList.Instances.First(i => i.RecurrencyId == instanceId);
+        detachedListInstance.EventId.Should().Be(detachedEvent.Id);
+        detachedListInstance.StartTime.Should().Be(detachedEvent.StartTime);
+    }
+
+    [SkippableFact]
+    public async Task UpdateAllTheSequenceDetachedFirstInstance_ShouldSucceed_WithNewDescription() {
+        var startTime = DateTimeOffset.UtcNow.AddHours(1);
+
+        var master = await BuildMasterAsync(
+            "Weekly Yoga",
+            "FREQ=WEEKLY;INTERVAL=1",
+            "UTC",
+            startTime,
+            startTime.AddHours(1),
+            description: "Don't forget the mat!"
+        );
+
+        var oldMasterEvent = await _dbService.RetrieveByIdAsync<RecurrentEvent>(CollectionName.RecurrentEvents, master.Id);
+        var oldMasterProfileEvent = await _dbService.RetrieveAsync(
+            CollectionName.ProfileEvents,
+            Builders<ProfileRecurrentEvent>.Filter.And(
+                Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.EventId, new ObjectId(master.Id)),
+                Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.ProfileId, _creatorProfile.Id)
+            )
+        );
+
+        var datePart = startTime.ToString("yyyyMMddTHHmmssZ");
+        var instanceId = $"{master.Id}_{datePart}";
+
+        var createDto = new UpdateRecurrentEventRequestDto {
+            UpdateType = RecurrentUpdateType.ThisInstance,
+            MasterEventId = master.Id.ToString(),
+            InstanceId = instanceId,
+            Description = "description"
+        };
+
+        var previousEvent = await _recurrentUpdateService.UpdateSingleInstance(createDto, _creatorProfile);
+        var previousProfileEvent = await _dbService.RetrieveAsync(
+            CollectionName.ProfileEvents,
+            Builders<ProfileEvent>.Filter.And(
+                Builders<ProfileEvent>.Filter.Eq(pe => pe.EventId, new ObjectId(previousEvent.Id)),
+                Builders<ProfileEvent>.Filter.Eq(pe => pe.ProfileId, _creatorProfile.Id)
+            )
+        );
+
+
+        // Generate detached events
+        var startTime1 = startTime.AddDays(14);
+        var datePart1 = startTime1.ToString("yyyyMMddTHHmmssZ");
+        var instanceId1 = $"{master.Id}_{datePart1}";
+
+        var updateDto1 = new UpdateRecurrentEventRequestDto {
+            UpdateType = RecurrentUpdateType.ThisInstance,
+            MasterEventId = master.Id.ToString(),
+            InstanceId = instanceId1,
+            Title = "Modified Yoga Session 1"
+        };
+
+        var detached1 = await _recurrentUpdateService.UpdateSingleInstance(updateDto1, _creatorProfile);
+
+        var startTime2 = startTime.AddDays(28);
+        var datePart2 = startTime2.ToString("yyyyMMddTHHmmssZ");
+        var instanceId2 = $"{master.Id}_{datePart2}";
+
+        var updateDto2 = new UpdateRecurrentEventRequestDto {
+            UpdateType = RecurrentUpdateType.ThisInstance,
+            MasterEventId = master.Id.ToString(),
+            InstanceId = instanceId1,
+            Title = "Modified Yoga Session 2",
+            Description = "Description 2"
+        };
+
+        var detached2 = await _recurrentUpdateService.UpdateSingleInstance(updateDto2, _creatorProfile);
+
+        var oldDetachedList = await _dbService.RetrieveAsync(
+            CollectionName.DetachedInstances,
+            Builders<DetachedInstances>.Filter.Eq(di => di.MasterId, new ObjectId(master.Id))
+        );
+
+        var oldEventIds = oldDetachedList.Instances.Select(i => i.EventId).ToHashSet();
+        var oldDetachedEvents = await _dbService.RetrieveMultipleByIdAsync<Event>(
+            CollectionName.Events,
+            oldEventIds
+        );
+
+        var updateDto = new UpdateRecurrentEventRequestDto {
+            UpdateType = RecurrentUpdateType.AllTheSequence,
+            MasterEventId = master.Id.ToString(),
+            InstanceId = instanceId,
+            Description = "Bring your own mat today!"
+        };
+
+        // 2. ACT
+        var result = await _recurrentUpdateService.UpdateRecurrentEvent(updateDto, _creatorProfile);
+
+        // ASSERT: Detached's EventDetails
+        var details = await _dbService.RetrieveAsync(
+            CollectionName.EventDetails,
+            Builders<EventDetails>.Filter.Eq("eventId", result.Id)
+        );
+        details.Should().NotBeNull();
+        details.Description.Should().Be("Bring your own mat today!");
+    }
+
+    [SkippableFact]
+    public async Task UpdateAllTheSequenceDetachedFirstInstance_ShouldSucceed_WithBothTimeUpdate() {
+        var startTime = DateTimeOffset.UtcNow.AddHours(1);
+
+        var master = await BuildMasterAsync(
+            "Weekly Yoga",
+            "FREQ=WEEKLY;INTERVAL=1",
+            "UTC",
+            startTime,
+            startTime.AddHours(1),
+            description: "Don't forget the mat!"
+        );
+
+        var oldMasterEvent = await _dbService.RetrieveByIdAsync<RecurrentEvent>(CollectionName.RecurrentEvents, master.Id);
+
+        // Generate a valid InstanceId for the first occurrence
+        var datePart = startTime.ToString("yyyyMMddTHHmmssZ");
+        var instanceId = $"{master.Id}_{datePart}";
+
+        var createDto = new UpdateRecurrentEventRequestDto {
+            UpdateType = RecurrentUpdateType.ThisInstance,
+            MasterEventId = master.Id.ToString(),
+            InstanceId = instanceId,
+            Title = "Created Yoga Session"
+        };
+
+        var previousEvent = await _recurrentUpdateService.UpdateSingleInstance(createDto, _creatorProfile);
+
+        // Generate other detached events
+        var startTime1 = startTime.AddDays(14);
+        var datePart1 = startTime1.ToString("yyyyMMddTHHmmssZ");
+        var instanceId1 = $"{master.Id}_{datePart1}";
+
+        var updateDto1 = new UpdateRecurrentEventRequestDto {
+            UpdateType = RecurrentUpdateType.ThisInstance,
+            MasterEventId = master.Id.ToString(),
+            InstanceId = instanceId1,
+            StartTime = startTime1.AddHours(1),
+            EndTime = startTime1.AddHours(2)
+        };
+
+        var detached1 = await _recurrentUpdateService.UpdateSingleInstance(updateDto1, _creatorProfile);
+
+        var startTime2 = startTime.AddDays(28);
+        var datePart2 = startTime2.ToString("yyyyMMddTHHmmssZ");
+        var instanceId2 = $"{master.Id}_{datePart2}";
+
+        var updateDto2 = new UpdateRecurrentEventRequestDto {
+            UpdateType = RecurrentUpdateType.ThisInstance,
+            MasterEventId = master.Id.ToString(),
+            InstanceId = instanceId1,
+            StartTime = startTime1.AddHours(-2),
+            EndTime = startTime1.AddHours(-1),
+        };
+
+        var detached2 = await _recurrentUpdateService.UpdateSingleInstance(updateDto2, _creatorProfile);
+
+        var oldDetachedList = await _dbService.RetrieveAsync(
+            CollectionName.DetachedInstances,
+            Builders<DetachedInstances>.Filter.Eq(di => di.MasterId, new ObjectId(master.Id))
+        );
+
+        var updateDto = new UpdateRecurrentEventRequestDto {
+            UpdateType = RecurrentUpdateType.AllTheSequence,
+            MasterEventId = master.Id.ToString(),
+            InstanceId = instanceId,
+            StartTime = startTime.AddHours(4),
+            EndTime = startTime.AddHours(5)
+        };
+
+        // 2. ACT
+        var result = await _recurrentUpdateService.UpdateRecurrentEvent(updateDto, _creatorProfile);
+
+        // ASSERT: The Event document
+        var detachedEvent = await _dbService.RetrieveByIdAsync<Event>(CollectionName.Events, result.Id);
+
+        detachedEvent.Should().NotBeNull();
+        detachedEvent.Id.ToString().Should().Be(previousEvent.Id.ToString());
+        detachedEvent.StartTime.Should().Be(startTime.AddHours(4));
+        detachedEvent.EndTime.Should().Be(startTime.AddHours(5));
+
+        // ASSERT: ProfileEvents
+        var profileEvent = await _dbService.RetrieveMultipleAsync(
+            CollectionName.ProfileEvents,
+            Builders<ProfileEvent>.Filter.And(
+                Builders<ProfileEvent>.Filter.Eq(pe => pe.EventId, detachedEvent.Id),
+                Builders<ProfileEvent>.Filter.Eq(pe => pe.ProfileId, _creatorProfile.Id)
+            )
+        );
+        profileEvent.Count.Should().Be(1);
+        profileEvent.First().EventStartTime.Should().Be(detachedEvent.StartTime);
+        profileEvent.First().EventEndTime.Should().Be(detachedEvent.EndTime);
+
+        // ASSERT: DetachedInstances Collection
+        var detachedList = await _dbService.RetrieveAsync(
+            CollectionName.DetachedInstances,
+            Builders<DetachedInstances>.Filter.Eq(di => di.MasterId, new ObjectId(master.Id))
+        );
+        detachedList.Should().NotBeNull();
+        detachedList.MasterId.Should().Be(new ObjectId(master.Id));
+        detachedList.Instances.Count.Should().Be(3);
+        detachedList.Instances.Should().ContainSingle(i => i.RecurrencyId == instanceId);
+        detachedList.Instances.Should().ContainSingle(i => i.EventId == detachedEvent.Id );
+        var detachedListInstance = detachedList.Instances.First(i => i.RecurrencyId == instanceId);
+        detachedListInstance.EventId.Should().Be(detachedEvent.Id);
+        detachedListInstance.StartTime.Should().Be(detachedEvent.StartTime);
+    }
+
     #endregion
 
     #region n-th instance
+
+    [SkippableFact]
+    public async Task UpdateAllTheSequenceDetachedNthInstance_ShouldSucceed_WithNewTitle() {
+        var startTime = DateTimeOffset.UtcNow.AddHours(1);
+
+        var master = await BuildMasterAsync(
+            "Weekly Yoga",
+            "FREQ=WEEKLY;INTERVAL=1",
+            "UTC",
+            startTime,
+            startTime.AddHours(1),
+            description: "Don't forget the mat!"
+        );
+
+        var oldMasterEvent = await _dbService.RetrieveByIdAsync<RecurrentEvent>(CollectionName.RecurrentEvents, master.Id);
+        var oldMasterProfileEvent = await _dbService.RetrieveAsync(
+            CollectionName.ProfileEvents,
+            Builders<ProfileRecurrentEvent>.Filter.And(
+                Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.EventId, new ObjectId(master.Id)),
+                Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.ProfileId, _creatorProfile.Id)
+            )
+        );
+
+        var datePart = startTime.AddDays(7).ToString("yyyyMMddTHHmmssZ");
+        var instanceId = $"{master.Id}_{datePart}";
+
+        var createDto = new UpdateRecurrentEventRequestDto {
+            UpdateType = RecurrentUpdateType.ThisInstance,
+            MasterEventId = master.Id.ToString(),
+            InstanceId = instanceId,
+            Title = "Created Yoga Session"
+        };
+
+        var previousEvent = await _recurrentUpdateService.UpdateSingleInstance(createDto, _creatorProfile);
+        var previousProfileEvent = await _dbService.RetrieveAsync(
+            CollectionName.ProfileEvents,
+            Builders<ProfileEvent>.Filter.And(
+                Builders<ProfileEvent>.Filter.Eq(pe => pe.EventId, new ObjectId(previousEvent.Id)),
+                Builders<ProfileEvent>.Filter.Eq(pe => pe.ProfileId, _creatorProfile.Id)
+            )
+        );
+
+
+        // Generate detached events
+        var startTime1 = startTime.AddDays(14);
+        var datePart1 = startTime1.ToString("yyyyMMddTHHmmssZ");
+        var instanceId1 = $"{master.Id}_{datePart1}";
+
+        var updateDto1 = new UpdateRecurrentEventRequestDto {
+            UpdateType = RecurrentUpdateType.ThisInstance,
+            MasterEventId = master.Id.ToString(),
+            InstanceId = instanceId1,
+            Title = "Modified Yoga Session 1"
+        };
+
+        var detached1 = await _recurrentUpdateService.UpdateSingleInstance(updateDto1, _creatorProfile);
+
+        var startTime2 = startTime.AddDays(28);
+        var datePart2 = startTime2.ToString("yyyyMMddTHHmmssZ");
+        var instanceId2 = $"{master.Id}_{datePart2}";
+
+        var updateDto2 = new UpdateRecurrentEventRequestDto {
+            UpdateType = RecurrentUpdateType.ThisInstance,
+            MasterEventId = master.Id.ToString(),
+            InstanceId = instanceId1,
+            Title = "Modified Yoga Session 2",
+            Description = "Description 2"
+        };
+
+        var detached2 = await _recurrentUpdateService.UpdateSingleInstance(updateDto2, _creatorProfile);
+
+        var oldDetachedList = await _dbService.RetrieveAsync(
+            CollectionName.DetachedInstances,
+            Builders<DetachedInstances>.Filter.Eq(di => di.MasterId, new ObjectId(master.Id))
+        );
+
+        var oldEventIds = oldDetachedList.Instances.Select(i => i.EventId).ToHashSet();
+        var oldDetachedEvents = await _dbService.RetrieveMultipleByIdAsync<Event>(
+            CollectionName.Events,
+            oldEventIds
+        );
+
+
+        var updateDto = new UpdateRecurrentEventRequestDto {
+            UpdateType = RecurrentUpdateType.AllTheSequence,
+            MasterEventId = master.Id.ToString(),
+            InstanceId = instanceId,
+            Title = "Modified Yoga Session"
+        };
+
+        // 2. ACT
+        var result = await _recurrentUpdateService.UpdateRecurrentEvent(updateDto, _creatorProfile);
+
+
+        // ASSERT: The Event document
+        var detachedEvent = await _dbService.RetrieveByIdAsync<Event>(CollectionName.Events, result.Id);
+
+        detachedEvent.Should().NotBeNull();
+        detachedEvent.Id.ToString().Should().Be(previousEvent.Id.ToString());
+        detachedEvent.Title.Should().Be("Modified Yoga Session");
+        detachedEvent.StartTime.Should().Be(previousEvent.StartTime);
+        detachedEvent.EndTime.Should().Be(previousEvent.EndTime);
+        detachedEvent.MasterEventId.Should().Be(previousEvent.MasterEventId);
+        detachedEvent.RecurrencyInstanceId.Should().Be(previousEvent.RecurrencyInstanceId);
+        detachedEvent.DetachedInstance.Should().BeTrue();
+
+        // ASSERT: EventDetails
+        var details = await _dbService.RetrieveAsync(
+            CollectionName.EventDetails,
+            Builders<EventDetails>.Filter.Eq("eventId", detachedEvent.Id)
+        );
+        details.Should().NotBeNull();
+        details.Description.Should().Be("Don't forget the mat!");
+
+        // ASSERT: EventProfiles
+        var eventProfile = await _dbService.RetrieveMultipleAsync(
+            CollectionName.EventProfiles,
+            Builders<EventProfile>.Filter.And(
+                Builders<EventProfile>.Filter.Eq(ep => ep.EventId, detachedEvent.Id),
+                Builders<EventProfile>.Filter.Eq(ep => ep.ProfileId, _creatorProfile.Id)
+            )
+        );
+        eventProfile.Should().NotBeNull();
+        eventProfile.Count.Should().Be(1);
+
+        // ASSERT: ProfileEvents
+        var profileEvent = await _dbService.RetrieveMultipleAsync(
+            CollectionName.ProfileEvents,
+            Builders<ProfileEvent>.Filter.And(
+                Builders<ProfileEvent>.Filter.Eq(pe => pe.EventId, detachedEvent.Id),
+                Builders<ProfileEvent>.Filter.Eq(pe => pe.ProfileId, _creatorProfile.Id)
+            )
+        );
+        profileEvent.Count.Should().Be(1);
+        
+        var masterProfileEvent= await _dbService.RetrieveAsync(
+            CollectionName.ProfileEvents,
+            Builders<ProfileRecurrentEvent>.Filter.And(
+                Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.EventId, new ObjectId(master.Id)),
+                Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.ProfileId, _creatorProfile.Id)
+            )
+        );
+        profileEvent.Should().NotBeNull();
+        profileEvent.First().Confirmed.Should().Be(previousProfileEvent.Confirmed);
+        profileEvent.First().EventStartTime.Should().Be(detachedEvent.StartTime);
+        profileEvent.First().EventEndTime.Should().Be(detachedEvent.EndTime);
+        profileEvent.First().Role.Should().Be(previousProfileEvent.Role);
+
+        // ASSERT: DetachedInstances Collection
+        var detachedList = await _dbService.RetrieveAsync(
+            CollectionName.DetachedInstances,
+            Builders<DetachedInstances>.Filter.Eq(di => di.MasterId, new ObjectId(master.Id))
+        );
+        detachedList.Should().NotBeNull();
+        detachedList.MasterId.Should().Be(new ObjectId(master.Id));
+        detachedList.Instances.Count.Should().Be(3);
+        detachedList.Instances.Should().ContainSingle(i => i.RecurrencyId == instanceId);
+        detachedList.Instances.Should().ContainSingle(i => i.EventId == detachedEvent.Id );
+        var detachedListInstance = detachedList.Instances.First(i => i.RecurrencyId == instanceId);
+        detachedListInstance.EventId.Should().Be(detachedEvent.Id);
+        detachedListInstance.StartTime.Should().Be(detachedEvent.StartTime);
+    }
+
+    [SkippableFact]
+    public async Task UpdateAllTheSequenceDetachedNthInstance_ShouldSucceed_WithNewDescription() {
+        var startTime = DateTimeOffset.UtcNow.AddHours(1);
+
+        var master = await BuildMasterAsync(
+            "Weekly Yoga",
+            "FREQ=WEEKLY;INTERVAL=1",
+            "UTC",
+            startTime,
+            startTime.AddHours(1),
+            description: "Don't forget the mat!"
+        );
+
+        var oldMasterEvent = await _dbService.RetrieveByIdAsync<RecurrentEvent>(CollectionName.RecurrentEvents, master.Id);
+        var oldMasterProfileEvent = await _dbService.RetrieveAsync(
+            CollectionName.ProfileEvents,
+            Builders<ProfileRecurrentEvent>.Filter.And(
+                Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.EventId, new ObjectId(master.Id)),
+                Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.ProfileId, _creatorProfile.Id)
+            )
+        );
+
+        var datePart = startTime.AddDays(7).ToString("yyyyMMddTHHmmssZ");
+        var instanceId = $"{master.Id}_{datePart}";
+
+        var createDto = new UpdateRecurrentEventRequestDto {
+            UpdateType = RecurrentUpdateType.ThisInstance,
+            MasterEventId = master.Id.ToString(),
+            InstanceId = instanceId,
+            Description = "description"
+        };
+
+        var previousEvent = await _recurrentUpdateService.UpdateSingleInstance(createDto, _creatorProfile);
+        var previousProfileEvent = await _dbService.RetrieveAsync(
+            CollectionName.ProfileEvents,
+            Builders<ProfileEvent>.Filter.And(
+                Builders<ProfileEvent>.Filter.Eq(pe => pe.EventId, new ObjectId(previousEvent.Id)),
+                Builders<ProfileEvent>.Filter.Eq(pe => pe.ProfileId, _creatorProfile.Id)
+            )
+        );
+
+
+        // Generate detached events
+        var startTime1 = startTime.AddDays(14);
+        var datePart1 = startTime1.ToString("yyyyMMddTHHmmssZ");
+        var instanceId1 = $"{master.Id}_{datePart1}";
+
+        var updateDto1 = new UpdateRecurrentEventRequestDto {
+            UpdateType = RecurrentUpdateType.ThisInstance,
+            MasterEventId = master.Id.ToString(),
+            InstanceId = instanceId1,
+            Title = "Modified Yoga Session 1"
+        };
+
+        var detached1 = await _recurrentUpdateService.UpdateSingleInstance(updateDto1, _creatorProfile);
+
+        var startTime2 = startTime.AddDays(28);
+        var datePart2 = startTime2.ToString("yyyyMMddTHHmmssZ");
+        var instanceId2 = $"{master.Id}_{datePart2}";
+
+        var updateDto2 = new UpdateRecurrentEventRequestDto {
+            UpdateType = RecurrentUpdateType.ThisInstance,
+            MasterEventId = master.Id.ToString(),
+            InstanceId = instanceId1,
+            Title = "Modified Yoga Session 2",
+            Description = "Description 2"
+        };
+
+        var detached2 = await _recurrentUpdateService.UpdateSingleInstance(updateDto2, _creatorProfile);
+
+        var oldDetachedList = await _dbService.RetrieveAsync(
+            CollectionName.DetachedInstances,
+            Builders<DetachedInstances>.Filter.Eq(di => di.MasterId, new ObjectId(master.Id))
+        );
+
+        var oldEventIds = oldDetachedList.Instances.Select(i => i.EventId).ToHashSet();
+        var oldDetachedEvents = await _dbService.RetrieveMultipleByIdAsync<Event>(
+            CollectionName.Events,
+            oldEventIds
+        );
+
+        var updateDto = new UpdateRecurrentEventRequestDto {
+            UpdateType = RecurrentUpdateType.AllTheSequence,
+            MasterEventId = master.Id.ToString(),
+            InstanceId = instanceId,
+            Description = "Bring your own mat today!"
+        };
+
+        // 2. ACT
+        var result = await _recurrentUpdateService.UpdateRecurrentEvent(updateDto, _creatorProfile);
+
+        // ASSERT: Detached's EventDetails
+        var details = await _dbService.RetrieveAsync(
+            CollectionName.EventDetails,
+            Builders<EventDetails>.Filter.Eq("eventId", result.Id)
+        );
+        details.Should().NotBeNull();
+        details.Description.Should().Be("Bring your own mat today!");
+    }
 
     #endregion
 
@@ -1107,7 +1968,7 @@ public class UpdateAllSequenceTests {
 
         // Generate other detached events
         var startTime1 = startTime.AddDays(14);
-        var datePart1 = startTime.ToString("yyyyMMddTHHmmssZ");
+        var datePart1 = startTime1.ToString("yyyyMMddTHHmmssZ");
         var instanceId1 = $"{master.Id}_{datePart1}";
 
         var updateDto1 = new UpdateRecurrentEventRequestDto {
@@ -1122,7 +1983,7 @@ public class UpdateAllSequenceTests {
 
         // after recurrenceEnd
         var startTime2 = startTime.AddDays(28);
-        var datePart2 = startTime.ToString("yyyyMMddTHHmmssZ");
+        var datePart2 = startTime2.ToString("yyyyMMddTHHmmssZ");
         var instanceId2 = $"{master.Id}_{datePart2}";
 
         var updateDto2 = new UpdateRecurrentEventRequestDto {
@@ -1221,7 +2082,7 @@ public class UpdateAllSequenceTests {
 
         // Generate other detached events
         var startTime1 = startTime.AddDays(14);
-        var datePart1 = startTime.ToString("yyyyMMddTHHmmssZ");
+        var datePart1 = startTime1.ToString("yyyyMMddTHHmmssZ");
         var instanceId1 = $"{master.Id}_{datePart1}";
 
         var updateDto1 = new UpdateRecurrentEventRequestDto {
@@ -1236,7 +2097,7 @@ public class UpdateAllSequenceTests {
 
         // after recurrenceEnd
         var startTime2 = startTime.AddDays(28);
-        var datePart2 = startTime.ToString("yyyyMMddTHHmmssZ");
+        var datePart2 = startTime2.ToString("yyyyMMddTHHmmssZ");
         var instanceId2 = $"{master.Id}_{datePart2}";
 
         var updateDto2 = new UpdateRecurrentEventRequestDto {

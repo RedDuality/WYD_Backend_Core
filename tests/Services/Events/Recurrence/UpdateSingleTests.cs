@@ -918,7 +918,7 @@ public class UpdateSingleTests {
         eventProfile.Should().NotBeNull();
         eventProfile.Count.Should().Be(1);
 
-        // ASSERT: EventProfiles
+        // ASSERT: ProfileEvents
         var profileEvent = await _dbService.RetrieveMultipleAsync(
             CollectionName.ProfileEvents,
             Builders<ProfileEvent>.Filter.And(
