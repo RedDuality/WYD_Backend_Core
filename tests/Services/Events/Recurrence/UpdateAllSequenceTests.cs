@@ -2060,7 +2060,9 @@ public class UpdateAllSequenceTests {
     }
 
     [SkippableFact]
-    public async Task UpdateAllTheSequenceGenerated_ShouldSucceed_WithRecurrencyRuleHeavyUpdate() {
+    public async Task UpdateAllTheSequence_ShouldSucceed_WithRecurrencyRuleHeavyUpdate() {
+        // TODO the (first) detached event gets deleted
+
         var startTime = DateTimeOffset.UtcNow.AddHours(1);
 
         var master = await BuildMasterAsync(
@@ -2080,6 +2082,19 @@ public class UpdateAllSequenceTests {
                 Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.ProfileId, _creatorProfile.Id)
             )
         );
+
+        //Generate detached
+        var datePart = startTime.ToString("yyyyMMddTHHmmssZ");
+        var instanceId = $"{master.Id}_{datePart}";
+
+        var createDto = new UpdateRecurrentEventRequestDto {
+            UpdateType = RecurrentUpdateType.ThisInstance,
+            MasterEventId = master.Id.ToString(),
+            InstanceId = instanceId,
+            Title = "Detached Title"
+        };
+
+        var previousEvent = await _recurrentUpdateService.UpdateSingleInstance(createDto, _creatorProfile);
 
         // Generate other detached events
         var startTime1 = startTime.AddDays(14);
@@ -2115,10 +2130,6 @@ public class UpdateAllSequenceTests {
             CollectionName.DetachedInstances,
             Builders<DetachedInstances>.Filter.Eq(di => di.MasterId, new ObjectId(master.Id))
         );
-
-        // Generate a valid InstanceId for the first occurrence
-        var datePart = startTime.ToString("yyyyMMddTHHmmssZ");
-        var instanceId = $"{master.Id}_{datePart}";
 
         var updateDto = new UpdateRecurrentEventRequestDto {
             UpdateType = RecurrentUpdateType.AllTheSequence,
@@ -2159,18 +2170,13 @@ public class UpdateAllSequenceTests {
 
         detachedList.Instances.Count.Should().Be(0);
 
-        var eventIds = detachedList.Instances.Select(i => i.EventId).ToHashSet();
+        var eventIds = oldDetachedList.Instances.Select(i => i.EventId).ToHashSet();
         var detachedEvents = await _dbService.RetrieveMultipleByIdAsync<Event>(
             CollectionName.Events,
             eventIds
         );
 
         detachedEvents.Count.Should().Be(0);
-    }
-
-    [SkippableFact]
-    public async Task UpdateAllTheSequenceDetached_ShouldSucceed_WithRecurrencyRuleHeavyUpdate() {
-        // TODO the (first) detached event gets deleted
     }
     #endregion
 }
