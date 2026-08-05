@@ -514,7 +514,7 @@ public class UpdateAllSequenceTests {
 
     var oldMasterEvent = await _dbService.RetrieveByIdAsync<RecurrentEvent>(CollectionName.RecurrentEvents, master.Id);
     var oldMasterProfileEvent = await _dbService.RetrieveAsync(
-        CollectionName.ProfileEvents,
+        CollectionName.ProfileRecurrentEvents,
         Builders<ProfileRecurrentEvent>.Filter.And(
             Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.EventId, new ObjectId(master.Id)),
             Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.ProfileId, _creatorProfile.Id)
@@ -602,7 +602,7 @@ public class UpdateAllSequenceTests {
     eventProfile.Count.Should().Be(1);
 
     var masterProfileEvent = await _dbService.RetrieveAsync(
-        CollectionName.ProfileEvents,
+        CollectionName.ProfileRecurrentEvents,
         Builders<ProfileRecurrentEvent>.Filter.And(
             Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.EventId, new ObjectId(master.Id)),
             Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.ProfileId, _creatorProfile.Id)
@@ -771,7 +771,7 @@ public class UpdateAllSequenceTests {
 
     var oldMasterEvent = await _dbService.RetrieveByIdAsync<RecurrentEvent>(CollectionName.RecurrentEvents, master.Id);
     var oldMasterProfileEvent = await _dbService.RetrieveAsync(
-        CollectionName.ProfileEvents,
+        CollectionName.ProfileRecurrentEvents,
         Builders<ProfileRecurrentEvent>.Filter.And(
             Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.EventId, new ObjectId(master.Id)),
             Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.ProfileId, _creatorProfile.Id)
@@ -838,7 +838,7 @@ public class UpdateAllSequenceTests {
     newMasterEvent.TimeZone.Should().Be(oldMasterEvent.TimeZone);
 
     var masterProfileEvent = await _dbService.RetrieveAsync(
-        CollectionName.ProfileEvents,
+        CollectionName.ProfileRecurrentEvents,
         Builders<ProfileRecurrentEvent>.Filter.And(
             Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.EventId, new ObjectId(master.Id)),
             Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.ProfileId, _creatorProfile.Id)
@@ -904,7 +904,7 @@ public class UpdateAllSequenceTests {
 
     var oldMasterEvent = await _dbService.RetrieveByIdAsync<RecurrentEvent>(CollectionName.RecurrentEvents, master.Id);
     var oldMasterProfileEvent = await _dbService.RetrieveAsync(
-        CollectionName.ProfileEvents,
+        CollectionName.ProfileRecurrentEvents,
         Builders<ProfileRecurrentEvent>.Filter.And(
             Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.EventId, new ObjectId(master.Id)),
             Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.ProfileId, _creatorProfile.Id)
@@ -992,7 +992,7 @@ public class UpdateAllSequenceTests {
     eventProfile.Count.Should().Be(1);
 
     var masterProfileEvent = await _dbService.RetrieveAsync(
-        CollectionName.ProfileEvents,
+        CollectionName.ProfileRecurrentEvents,
         Builders<ProfileRecurrentEvent>.Filter.And(
             Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.EventId, new ObjectId(master.Id)),
             Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.ProfileId, _creatorProfile.Id)
@@ -1169,7 +1169,7 @@ public class UpdateAllSequenceTests {
 
     var oldMasterEvent = await _dbService.RetrieveByIdAsync<RecurrentEvent>(CollectionName.RecurrentEvents, master.Id);
     var oldMasterProfileEvent = await _dbService.RetrieveAsync(
-        CollectionName.ProfileEvents,
+        CollectionName.ProfileRecurrentEvents,
         Builders<ProfileRecurrentEvent>.Filter.And(
             Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.EventId, new ObjectId(master.Id)),
             Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.ProfileId, _creatorProfile.Id)
@@ -1189,7 +1189,7 @@ public class UpdateAllSequenceTests {
 
     var previousEvent = await _recurrentUpdateService.UpdateSingleInstance(createDto, _creatorProfile);
     var previousProfileEvent = await _dbService.RetrieveAsync(
-        CollectionName.ProfileEvents,
+        CollectionName.ProfileRecurrentEvents,
         Builders<ProfileEvent>.Filter.And(
             Builders<ProfileEvent>.Filter.Eq(pe => pe.EventId, new ObjectId(previousEvent.Id)),
             Builders<ProfileEvent>.Filter.Eq(pe => pe.ProfileId, _creatorProfile.Id)
@@ -1289,7 +1289,7 @@ public class UpdateAllSequenceTests {
     profileEvent.Count.Should().Be(1);
 
     var masterProfileEvent = await _dbService.RetrieveAsync(
-        CollectionName.ProfileEvents,
+        CollectionName.ProfileRecurrentEvents,
         Builders<ProfileRecurrentEvent>.Filter.And(
             Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.EventId, new ObjectId(master.Id)),
             Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.ProfileId, _creatorProfile.Id)
@@ -1331,7 +1331,7 @@ public class UpdateAllSequenceTests {
 
     var oldMasterEvent = await _dbService.RetrieveByIdAsync<RecurrentEvent>(CollectionName.RecurrentEvents, master.Id);
     var oldMasterProfileEvent = await _dbService.RetrieveAsync(
-        CollectionName.ProfileEvents,
+        CollectionName.ProfileRecurrentEvents,
         Builders<ProfileRecurrentEvent>.Filter.And(
             Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.EventId, new ObjectId(master.Id)),
             Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.ProfileId, _creatorProfile.Id)
@@ -1551,7 +1551,7 @@ public class UpdateAllSequenceTests {
 
     var oldMasterEvent = await _dbService.RetrieveByIdAsync<RecurrentEvent>(CollectionName.RecurrentEvents, master.Id);
     var oldMasterProfileEvent = await _dbService.RetrieveAsync(
-        CollectionName.ProfileEvents,
+        CollectionName.ProfileRecurrentEvents,
         Builders<ProfileRecurrentEvent>.Filter.And(
             Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.EventId, new ObjectId(master.Id)),
             Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.ProfileId, _creatorProfile.Id)
@@ -1673,7 +1673,7 @@ public class UpdateAllSequenceTests {
     profileEvent.Count.Should().Be(1);
 
     var masterProfileEvent = await _dbService.RetrieveAsync(
-        CollectionName.ProfileEvents,
+        CollectionName.ProfileRecurrentEvents,
         Builders<ProfileRecurrentEvent>.Filter.And(
             Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.EventId, new ObjectId(master.Id)),
             Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.ProfileId, _creatorProfile.Id)
@@ -1715,7 +1715,7 @@ public class UpdateAllSequenceTests {
 
     var oldMasterEvent = await _dbService.RetrieveByIdAsync<RecurrentEvent>(CollectionName.RecurrentEvents, master.Id);
     var oldMasterProfileEvent = await _dbService.RetrieveAsync(
-        CollectionName.ProfileEvents,
+        CollectionName.ProfileRecurrentEvents,
         Builders<ProfileRecurrentEvent>.Filter.And(
             Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.EventId, new ObjectId(master.Id)),
             Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.ProfileId, _creatorProfile.Id)
@@ -1804,6 +1804,8 @@ public class UpdateAllSequenceTests {
     details.Description.Should().Be("Bring your own mat today!");
   }
 
+
+  //When not first instance & Dates, throws error
   #endregion
 
   #endregion
@@ -1943,7 +1945,7 @@ public class UpdateAllSequenceTests {
 
     var oldMasterEvent = await _dbService.RetrieveByIdAsync<RecurrentEvent>(CollectionName.RecurrentEvents, master.Id);
     var oldMasterProfileEvent = await _dbService.RetrieveAsync(
-        CollectionName.ProfileEvents,
+        CollectionName.ProfileRecurrentEvents,
         Builders<ProfileRecurrentEvent>.Filter.And(
             Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.EventId, new ObjectId(master.Id)),
             Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.ProfileId, _creatorProfile.Id)
@@ -2009,7 +2011,7 @@ public class UpdateAllSequenceTests {
     newMasterEvent.TimeZone.Should().Be(oldMasterEvent.TimeZone);
 
     var masterProfileEvent = await _dbService.RetrieveAsync(
-        CollectionName.ProfileEvents,
+        CollectionName.ProfileRecurrentEvents,
         Builders<ProfileRecurrentEvent>.Filter.And(
             Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.EventId, new ObjectId(master.Id)),
             Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.ProfileId, _creatorProfile.Id)
@@ -2050,21 +2052,21 @@ public class UpdateAllSequenceTests {
     var startTime = DateTimeOffset.UtcNow.AddHours(1);
 
     var master = await BuildMasterAsync(
-        "Weekly Yoga",
-        "FREQ=WEEKLY;INTERVAL=1",
-        "UTC",
-        startTime,
-        startTime.AddHours(1),
-        description: "Don't forget the mat!"
+      "Weekly Yoga",
+      "FREQ=WEEKLY;INTERVAL=1",
+      "UTC",
+      startTime,
+      startTime.AddHours(1),
+      description: "Don't forget the mat!"
     );
 
     var oldMasterEvent = await _dbService.RetrieveByIdAsync<RecurrentEvent>(CollectionName.RecurrentEvents, master.Id);
     var oldMasterProfileEvent = await _dbService.RetrieveAsync(
-        CollectionName.ProfileEvents,
-        Builders<ProfileRecurrentEvent>.Filter.And(
-            Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.EventId, new ObjectId(master.Id)),
-            Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.ProfileId, _creatorProfile.Id)
-        )
+      CollectionName.ProfileRecurrentEvents,
+      Builders<ProfileRecurrentEvent>.Filter.And(
+        Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.EventId, new ObjectId(master.Id)),
+        Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.ProfileId, _creatorProfile.Id)
+      )
     );
 
     //Generate detached
@@ -2110,8 +2112,8 @@ public class UpdateAllSequenceTests {
     var detached2 = await _recurrentUpdateService.UpdateSingleInstance(updateDto2, _creatorProfile);
 
     var oldDetachedList = await _dbService.RetrieveAsync(
-        CollectionName.DetachedInstances,
-        Builders<DetachedInstances>.Filter.Eq(di => di.MasterId, new ObjectId(master.Id))
+      CollectionName.DetachedInstances,
+      Builders<DetachedInstances>.Filter.Eq(di => di.MasterId, new ObjectId(master.Id))
     );
 
     var updateDto = new UpdateRecurrentEventRequestDto {
@@ -2132,11 +2134,11 @@ public class UpdateAllSequenceTests {
     newMasterEvent.TimeZone.Should().Be(oldMasterEvent.TimeZone);
 
     var masterProfileEvent = await _dbService.RetrieveAsync(
-        CollectionName.ProfileEvents,
-        Builders<ProfileRecurrentEvent>.Filter.And(
-            Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.EventId, new ObjectId(master.Id)),
-            Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.ProfileId, _creatorProfile.Id)
-        )
+      CollectionName.ProfileRecurrentEvents,
+      Builders<ProfileRecurrentEvent>.Filter.And(
+        Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.EventId, new ObjectId(master.Id)),
+        Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.ProfileId, _creatorProfile.Id)
+      )
     );
     masterProfileEvent.Should().NotBeNull();
     masterProfileEvent.RecurrenceStart.Should().Be(newMasterEvent.StartTime);
@@ -2144,8 +2146,8 @@ public class UpdateAllSequenceTests {
 
     // ASSERT: DetachedInstances Collection
     var detachedList = await _dbService.RetrieveAsync(
-        CollectionName.DetachedInstances,
-        Builders<DetachedInstances>.Filter.Eq(di => di.MasterId, new ObjectId(master.Id))
+      CollectionName.DetachedInstances,
+      Builders<DetachedInstances>.Filter.Eq(di => di.MasterId, new ObjectId(master.Id))
     );
     detachedList.Should().NotBeNull();
     detachedList.MasterId.Should().Be(new ObjectId(master.Id));
@@ -2154,8 +2156,8 @@ public class UpdateAllSequenceTests {
 
     var eventIds = oldDetachedList.Instances.Select(i => i.EventId).ToHashSet();
     var detachedEvents = await _dbService.RetrieveMultipleByIdAsync<Event>(
-        CollectionName.Events,
-        eventIds
+      CollectionName.Events,
+      eventIds
     );
 
     detachedEvents.Count.Should().Be(0);
