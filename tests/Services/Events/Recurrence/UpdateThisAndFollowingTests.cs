@@ -1469,9 +1469,7 @@ public class UpdateThisAndAllFollowingTests {
       if (de.Id == detachedEvent.Id) {
         detachedInstance.First().RecurrencyId.Should().Be(detachedEvent.RecurrencyInstanceId);
         detachedInstance.First().StartTime.Should().Be(detachedEvent.StartTime);
-      }
-
-      if (de.Id == new ObjectId(detached2.Id)) {
+      } else if (de.Id == new ObjectId(detached2.Id)) {
         de.StartTime.Should().Be(detached2.StartTime);
         de.EndTime.Should().Be(detached2.EndTime);
 
@@ -1485,8 +1483,9 @@ public class UpdateThisAndAllFollowingTests {
 
         detachedInstance.First().RecurrencyId.Should().Be(detached2.RecurrencyInstanceId);
         detachedInstance.First().StartTime.Should().Be(detached2.StartTime);
+      } else {
+        Assert.Fail("should never enter here, wrong id");
       }
-
     }
     
   }
