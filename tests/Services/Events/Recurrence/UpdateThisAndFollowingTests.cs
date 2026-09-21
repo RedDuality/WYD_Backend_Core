@@ -68,6 +68,22 @@ public class UpdateThisAndAllFollowingTests {
     return responseDto;
   }
 
+  private async Task<RetrieveEventResponseDto> BuildDetachedEvent(DateTimeOffset time, string masterId, int startTimeHOffset = 1, int endTimeHOffset = 2) {
+    var datePart = time.ToString("yyyyMMddTHHmmssZ");
+    var instanceId = $"{masterId}_{datePart}";
+
+    var updateDto = new UpdateRecurrentEventRequestDto {
+      UpdateType = RecurrentUpdateType.ThisInstance,
+      MasterEventId = masterId,
+      InstanceId = instanceId,
+      StartTime = time.AddHours(startTimeHOffset),
+      EndTime = time.AddHours(endTimeHOffset)
+    };
+
+    var detached = await _recurrentUpdateService.UpdateSingleInstance(updateDto, _creatorProfile);
+    return detached;
+  }
+
   #endregion
 
   #region exceptions
@@ -484,6 +500,7 @@ public class UpdateThisAndAllFollowingTests {
   #region Current generated
 
   #region first instance
+  // call UpdateAllTheSequence Instead
   public async Task UpdateThisAndFollowingGeneratedFirstInstance_ShouldThrow() {
     var startTime = DateTimeOffset.UtcNow.AddHours(1);
 
@@ -1154,13 +1171,15 @@ public class UpdateThisAndAllFollowingTests {
   // TODO
   // Previous with different StartDate
 
+
+  // no need for recurrenceRule section because
   #endregion
 
 
   #region Current Detached
 
   #region first instance
-
+  // call UpdateAllTheSequence Instead
   public async Task UpdateThisAndFollowingDetachedFirstInstance_ShouldThrow() {
     var startTime = DateTimeOffset.UtcNow.AddHours(1);
 
@@ -1490,6 +1509,8 @@ public class UpdateThisAndAllFollowingTests {
     
   }
 
+
+  // TODO UpdateThisAndFollowingDetachedNthInstance_ShouldSucceed_WithNewDescription()
   #endregion
 
   #region RecurrenceRule
@@ -1614,17 +1635,17 @@ public class UpdateThisAndAllFollowingTests {
 
 
   [SkippableFact]
-  public async Task UpdateGeneratedThisAndFollowing_ShouldSucceed_WithRecurrencyRuleUntilUpdate() {
+  public async Task UpdateGeneratedThisAndFollowingDetached_ShouldSucceed_WithRecurrencyRuleUntilUpdate() {
     var startTime = DateTimeOffset.UtcNow.AddHours(1);
     var recurrenceEnd = startTime.AddDays(43);
 
     var master = await BuildMasterAsync(
-        "Weekly Yoga",
-        "FREQ=WEEKLY;INTERVAL=1",
-        "UTC",
-        startTime,
-        startTime.AddHours(1),
-        description: "Don't forget the mat!"
+      "Weekly Yoga",
+      "FREQ=WEEKLY;INTERVAL=1",
+      "UTC",
+      startTime,
+      startTime.AddHours(1),
+      description: "Don't forget the mat!"
     );
 
     //var oldMasterEvent = await _dbService.RetrieveByIdAsync<RecurrentEvent>(CollectionName.RecurrentEvents, master.Id);
@@ -1637,51 +1658,17 @@ public class UpdateThisAndAllFollowingTests {
     );
 
     // Generate other detached events
-    var startTime1 = startTime.AddDays(14);
-    var datePart1 = startTime1.ToString("yyyyMMddTHHmmssZ");
-    var instanceId1 = $"{master.Id}_{datePart1}";
-
-    var updateDto1 = new UpdateRecurrentEventRequestDto {
-      UpdateType = RecurrentUpdateType.ThisInstance,
-      MasterEventId = master.Id.ToString(),
-      InstanceId = instanceId1,
-      StartTime = startTime1.AddHours(1),
-      EndTime = startTime1.AddHours(2)
-    };
-
-    var detached1 = await _recurrentUpdateService.UpdateSingleInstance(updateDto1, _creatorProfile);
+    // Before cut
+    var detached1 = await BuildDetachedEvent(startTime.AddDays(14), master.Id.ToString(), 1, 2);
 
     // after cut
-    var startTime2 = startTime.AddDays(28);
-    var datePart2 = startTime2.ToString("yyyyMMddTHHmmssZ");
-    var instanceId2 = $"{master.Id}_{datePart2}";
-
-    var updateDto2 = new UpdateRecurrentEventRequestDto {
-      UpdateType = RecurrentUpdateType.ThisInstance,
-      MasterEventId = master.Id.ToString(),
-      InstanceId = instanceId2,
-      StartTime = startTime2.AddHours(-2),
-      EndTime = startTime2.AddHours(-1),
-    };
-
-    var detached2 = await _recurrentUpdateService.UpdateSingleInstance(updateDto2, _creatorProfile);
+    var detached2 = await BuildDetachedEvent(startTime.AddDays(21), master.Id.ToString(), -2, -1);
 
     // after recurrenceEnd
-    var startTime3 = startTime.AddDays(49);
-    var datePart3 = startTime3.ToString("yyyyMMddTHHmmssZ");
-    var instanceId3 = $"{master.Id}_{datePart3}";
+    var detached3 = await BuildDetachedEvent(startTime.AddDays(49), master.Id.ToString(), -2, -1);
 
-    var updateDto3 = new UpdateRecurrentEventRequestDto {
-      UpdateType = RecurrentUpdateType.ThisInstance,
-      MasterEventId = master.Id.ToString(),
-      InstanceId = instanceId3,
-      StartTime = startTime3.AddHours(-2),
-      EndTime = startTime3.AddHours(-1),
-    };
 
-    var detached3 = await _recurrentUpdateService.UpdateSingleInstance(updateDto3, _creatorProfile);
-
-    // Generate a valid InstanceId for the third occurrence
+    // ACT: Cut at third occurrence (day 21)
     var datePart = startTime.AddDays(21).ToString("yyyyMMddTHHmmssZ");
     var instanceId = $"{master.Id}_{datePart}";
 
@@ -1692,7 +1679,6 @@ public class UpdateThisAndAllFollowingTests {
       RecurrenceRule = $"FREQ=WEEKLY;INTERVAL=1;UNTIL={recurrenceEnd:yyyyMMdd'T'HHmmss'Z'}"
     };
 
-    // ACT
     var result = await _recurrentUpdateService.UpdateRecurrentEvent(updateDto, _creatorProfile);
 
     // TODO ASSERT: Old Master
@@ -1734,7 +1720,6 @@ public class UpdateThisAndAllFollowingTests {
     masterProfileEvent.RecurrenceStart.Should().Be(newMasterEvent.StartTime);
     masterProfileEvent.RecurrenceEnd.Should().Be(recurrenceEnd);
 
-
     // ASSERT: Old DetachedInstances
     var oldDetachedList = await _dbService.RetrieveAsync(
         CollectionName.DetachedInstances,
@@ -1749,7 +1734,7 @@ public class UpdateThisAndAllFollowingTests {
     );
     detachedEvents.Count.Should().Be(1);
 
-    var oldEvent = detachedEvents.First();
+    var oldEvent = detachedEvents.First(); //detached1
     oldEvent.Id.Should().Be(new ObjectId(detached1.Id));
     oldEvent.MasterEventId.Should().Be(oldMasterEvent.Id);
     oldEvent.RecurrencyInstanceId.Should().Be(detached1.RecurrencyInstanceId);
@@ -1773,7 +1758,7 @@ public class UpdateThisAndAllFollowingTests {
     );
     newDetachedEvents.Count.Should().Be(1);
 
-    var newDetached2 = detachedEvents.First();
+    var newDetached2 = detachedEvents.First(); //detached2
     oldEvent.Id.Should().Be(new ObjectId(detached2.Id));
     newDetached2.MasterEventId.Should().Be(oldMasterEvent.Id);
     newDetached2.RecurrencyInstanceId.Should().Be(detached2.RecurrencyInstanceId);
@@ -1784,34 +1769,36 @@ public class UpdateThisAndAllFollowingTests {
     detachedInstance2.StartTime.Should().Be(detached2.StartTime);
   }
 
+  // TODO UpdateGeneratedThisAndFollowingGenerated_ShouldSucceed_WithRecurrencyRuleUntilUpdate()
+
   // TODO
   // COUNT instead of UNTIL
 
   [SkippableFact]
-  public async Task UpdateThisAndFollowing_ShouldSucceed_WithRecurrencyRuleHeavyUpdate() {
+  public async Task UpdateThisAndFollowingDetached_ShouldSucceed_WithRecurrencyRuleHeavyUpdate() {
 
     var startTime = DateTimeOffset.UtcNow.AddHours(1);
 
     var master = await BuildMasterAsync(
-        "Weekly Yoga",
-        "FREQ=WEEKLY;INTERVAL=1",
-        "UTC",
-        startTime,
-        startTime.AddHours(1),
-        description: "Don't forget the mat!"
+      "Weekly Yoga",
+      "FREQ=WEEKLY;INTERVAL=1",
+      "UTC",
+      startTime,
+      startTime.AddHours(1),
+      description: "Don't forget the mat!"
     );
 
     var oldMasterEvent = await _dbService.RetrieveByIdAsync<RecurrentEvent>(CollectionName.RecurrentEvents, master.Id);
     var oldMasterProfileEvent = await _dbService.RetrieveAsync(
-        CollectionName.ProfileRecurrentEvents,
-        Builders<ProfileRecurrentEvent>.Filter.And(
-            Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.EventId, new ObjectId(master.Id)),
-            Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.ProfileId, _creatorProfile.Id)
-        )
+      CollectionName.ProfileRecurrentEvents,
+      Builders<ProfileRecurrentEvent>.Filter.And(
+        Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.EventId, new ObjectId(master.Id)),
+        Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.ProfileId, _creatorProfile.Id)
+      )
     );
 
-    //Generate detached
-    var datePart = startTime.ToString("yyyyMMddTHHmmssZ");
+    // Generate detached to cut from (day 21)
+    var datePart = startTime.AddDays(21).ToString("yyyyMMddTHHmmssZ");
     var instanceId = $"{master.Id}_{datePart}";
 
     var createDto = new UpdateRecurrentEventRequestDto {
@@ -1824,47 +1811,25 @@ public class UpdateThisAndAllFollowingTests {
     var previousEvent = await _recurrentUpdateService.UpdateSingleInstance(createDto, _creatorProfile);
 
     // Generate other detached events
-    var startTime1 = startTime.AddDays(14);
-    var datePart1 = startTime1.ToString("yyyyMMddTHHmmssZ");
-    var instanceId1 = $"{master.Id}_{datePart1}";
+    // before cut
+    var detached1 = await BuildDetachedEvent(startTime.AddDays(14), master.Id.ToString(), 1, 2);
 
-    var updateDto1 = new UpdateRecurrentEventRequestDto {
-      UpdateType = RecurrentUpdateType.ThisInstance,
-      MasterEventId = master.Id.ToString(),
-      InstanceId = instanceId1,
-      StartTime = startTime1.AddHours(1),
-      EndTime = startTime1.AddHours(2)
-    };
-
-    var detached1 = await _recurrentUpdateService.UpdateSingleInstance(updateDto1, _creatorProfile);
-
-    var startTime2 = startTime.AddDays(28);
-    var datePart2 = startTime2.ToString("yyyyMMddTHHmmssZ");
-    var instanceId2 = $"{master.Id}_{datePart2}";
-
-    var updateDto2 = new UpdateRecurrentEventRequestDto {
-      UpdateType = RecurrentUpdateType.ThisInstance,
-      MasterEventId = master.Id.ToString(),
-      InstanceId = instanceId2,
-      StartTime = startTime2.AddHours(-2),
-      EndTime = startTime2.AddHours(-1),
-    };
-
-    var detached2 = await _recurrentUpdateService.UpdateSingleInstance(updateDto2, _creatorProfile);
+    // after cut
+    var detached2 = await BuildDetachedEvent(startTime.AddDays(28), master.Id.ToString(), -2, -1);
 
     var oldDetachedList = await _dbService.RetrieveAsync(
         CollectionName.DetachedInstances,
         Builders<DetachedInstances>.Filter.Eq(di => di.MasterId, new ObjectId(master.Id))
     );
 
+    // ACT, update freq in rrule
     var updateDto = new UpdateRecurrentEventRequestDto {
-      UpdateType = RecurrentUpdateType.AllTheSequence,
+      UpdateType = RecurrentUpdateType.ThisAndAllFollowing,
       MasterEventId = master.Id.ToString(),
       InstanceId = instanceId,
       RecurrenceRule = "FREQ=WEEKLY;INTERVAL=2"
     };
 
-    // ACT
     var result = await _recurrentUpdateService.UpdateRecurrentEvent(updateDto, _creatorProfile);
 
     // ASSERT: Master
@@ -1901,7 +1866,7 @@ public class UpdateThisAndAllFollowingTests {
       eventIds
     );
 
-    detachedEvents.Count.Should().Be(0);
+    detachedEvents.Count.Should().Be(0); //vengono generati dal nuovo master, che ha gli stessi valori di previousEvent(now eliminated) 
   }
 
   #endregion
