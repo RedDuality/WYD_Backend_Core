@@ -4,126 +4,49 @@ using Core.Components.Database;
 using Xunit;
 using FluentAssertions;
 using Core.Tests.Setup;
-using Microsoft.Extensions.DependencyInjection;
 using Core.Model.Events;
-using Core.Services.Profiles;
 using MongoDB.Bson;
 using MongoDB.Driver;
-using Core.Services.Events.Recurrence;
 using Core.Model.Events.Recurrence;
 
 namespace Core.Tests.Services.Events.Recurrence;
 
 [Collection("DatabaseTests")]
-public class UpdateThisAndAllFollowingTests {
-  private readonly ProfileService _profileService;
-  private readonly RecurrentEventService _recurrentEventService;
-  private readonly RecurrentEventUpdateService _recurrentUpdateService;
-  private readonly MongoDbService _dbService;
-  private readonly Profile _creatorProfile;
-
-  private readonly IClientSessionHandle _session;
-
-  public UpdateThisAndAllFollowingTests(MongoDbFixture fixture) {
-    Skip.If(fixture.InitializationFailed, fixture.InitializationError);
-
-    _dbService = fixture.DbService!;
-
-    var scope = fixture.ServiceProvider!.CreateScope();
-
-    _profileService = scope.ServiceProvider.GetRequiredService<ProfileService>();
-    _recurrentEventService = scope.ServiceProvider.GetRequiredService<RecurrentEventService>();
-    _recurrentUpdateService = scope.ServiceProvider.GetRequiredService<RecurrentEventUpdateService>();
-
-    _session = fixture.StartSessionAsync().GetAwaiter().GetResult();
-
-    string uniqueTag = $"jdoe_{Guid.NewGuid().ToString()[..8]}";
-    _creatorProfile = _profileService.CreateAsync(uniqueTag, "John Doe", _session).GetAwaiter().GetResult();
-  }
-
-  #region util
-  private async Task<RetrieveRecurrentEventResponseDto> BuildMasterAsync(
-      string title = "Team Standup",
-      string rrule = "FREQ=DAILY;COUNT=5",
-      string timeZone = "UTC",
-      DateTimeOffset? start = null,
-      DateTimeOffset? end = null,
-      string? description = null) {
-
-    var s = start ?? new DateTimeOffset(2025, 6, 1, 9, 0, 0, TimeSpan.Zero);
-    var e = end ?? s.AddHours(1);
-
-    var requestDto = new CreateRecurrentEventRequestDto {
-      Title = title,
-      RecurrenceRule = rrule,
-      TimeZone = timeZone,
-      StartTime = s,
-      EndTime = e,
-      CacheIntervalStart = s,
-      CacheIntervalEnd = s.AddMonths(1),
-      Description = description
-    };
-
-    var responseDto = await _recurrentEventService.CreateRecurrentEventAsync(requestDto, _creatorProfile);
-    return responseDto;
-  }
-
-  private async Task<RetrieveEventResponseDto> BuildDetachedEvent(DateTimeOffset time, string masterId, int startTimeHOffset = 1, int endTimeHOffset = 2) {
-    var datePart = time.ToString("yyyyMMddTHHmmssZ");
-    var instanceId = $"{masterId}_{datePart}";
-
-    var updateDto = new UpdateRecurrentEventRequestDto {
-      UpdateType = RecurrentUpdateType.ThisInstance,
-      MasterEventId = masterId,
-      InstanceId = instanceId,
-      StartTime = time.AddHours(startTimeHOffset),
-      EndTime = time.AddHours(endTimeHOffset)
-    };
-
-    var detached = await _recurrentUpdateService.UpdateSingleInstance(updateDto, _creatorProfile);
-    return detached;
-  }
-
-  #endregion
+public class UpdateThisAndAllFollowingTests(MongoDbFixture fixture) : RecurrentEventTestBase(fixture){
 
   #region exceptions
 
-  [SkippableFact]
+    [SkippableFact]
   public async Task UpdateThisAndFollowing_ShouldThrow_NoUpdatesWereMade() {
     // ARRANGE
     var startTime = DateTimeOffset.UtcNow.AddHours(1);
 
     var master = await BuildMasterAsync(
-        "Weekly Yoga",
-        "FREQ=WEEKLY;INTERVAL=1",
-        "UTC",
-        startTime,
-        startTime.AddHours(1)
+      "Weekly Yoga",
+      "FREQ=WEEKLY;INTERVAL=1",
+      "UTC",
+      startTime,
+      startTime.AddHours(1)
     );
 
-    // Generate a valid InstanceId for the first occurrence
-    var datePart = startTime.ToString("yyyyMMddTHHmmssZ");
-    var instanceId = $"{master.Id}_{datePart}";
-
-    var updateDto = new UpdateRecurrentEventRequestDto {
-      UpdateType = RecurrentUpdateType.ThisAndAllFollowing,
-      MasterEventId = master.Id.ToString(),
-      InstanceId = instanceId
-    };
+    var updateDto = GetUpdateDto(
+      master.Id,
+      startTime,
+      RecurrentUpdateType.ThisAndAllFollowing
+    );
 
     await Assert.ThrowsAsync<ArgumentException>(() =>
-        _recurrentUpdateService.UpdateRecurrentEvent(updateDto, _creatorProfile));
+      _recurrentUpdateService.UpdateRecurrentEvent(updateDto, _creatorProfile));
 
-    var updateDto3 = new UpdateRecurrentEventRequestDto {
-      UpdateType = RecurrentUpdateType.ThisAndAllFollowing,
-      MasterEventId = master.Id.ToString(),
-      InstanceId = instanceId,
-      StartTime = startTime,
-      EndTime = startTime.AddHours(1)
-    };
+    var updateDto1 = GetUpdateDto(
+      master.Id,
+      startTime,
+      RecurrentUpdateType.ThisAndAllFollowing,
+      endTime: startTime.AddHours(1) 
+    );
 
     await Assert.ThrowsAsync<ArgumentException>(() =>
-        _recurrentUpdateService.UpdateRecurrentEvent(updateDto3, _creatorProfile));
+      _recurrentUpdateService.UpdateRecurrentEvent(updateDto1, _creatorProfile));
   }
 
   [SkippableFact]
@@ -139,16 +62,12 @@ public class UpdateThisAndAllFollowingTests {
         startTime.AddHours(1)
     );
 
-    // Generate a valid InstanceId for the first occurrence
-    var datePart = startTime.ToString("yyyyMMddTHHmmssZ");
-    var instanceId = $"{master.Id}_{datePart}";
-
-    var updateDto = new UpdateRecurrentEventRequestDto {
-      UpdateType = RecurrentUpdateType.ThisAndAllFollowing,
-      MasterEventId = master.Id.ToString(),
-      InstanceId = instanceId,
-      Title = ""
-    };
+    var updateDto = GetUpdateDto(
+      master.Id,
+      startTime,
+      RecurrentUpdateType.ThisAndAllFollowing,
+      title: ""
+    );
 
     // ACT & ASSERT
     await Assert.ThrowsAsync<ArgumentException>(() =>
@@ -173,16 +92,16 @@ public class UpdateThisAndAllFollowingTests {
     var instanceId = $"{master.Id}_{datePart}";
 
     // only start
-    var updateDto = new UpdateRecurrentEventRequestDto {
-      UpdateType = RecurrentUpdateType.ThisAndAllFollowing,
-      MasterEventId = master.Id.ToString(),
-      InstanceId = instanceId,
-      StartTime = startTime.AddHours(4)
-    };
-
+    var updateDto = GetUpdateDto(
+      master.Id,
+      startTime.AddDays(21),
+      RecurrentUpdateType.ThisAndAllFollowing,
+      updateStartTime: startTime.AddHours(4)
+    );
+    
     // ACT & ASSERT
     await Assert.ThrowsAsync<ArgumentException>(() =>
-        _recurrentUpdateService.UpdateRecurrentEvent(updateDto, _creatorProfile));
+      _recurrentUpdateService.UpdateRecurrentEvent(updateDto, _creatorProfile));
 
     //only end
     var updateDto1 = new UpdateRecurrentEventRequestDto {
@@ -194,7 +113,7 @@ public class UpdateThisAndAllFollowingTests {
 
     // ACT & ASSERT
     await Assert.ThrowsAsync<ArgumentException>(() =>
-        _recurrentUpdateService.UpdateRecurrentEvent(updateDto1, _creatorProfile));
+      _recurrentUpdateService.UpdateRecurrentEvent(updateDto1, _creatorProfile));
 
     //end is before start
     var updateDto2 = new UpdateRecurrentEventRequestDto {
@@ -207,7 +126,7 @@ public class UpdateThisAndAllFollowingTests {
 
     // ACT & ASSERT
     await Assert.ThrowsAsync<ArgumentException>(() =>
-        _recurrentUpdateService.UpdateRecurrentEvent(updateDto2, _creatorProfile));
+      _recurrentUpdateService.UpdateRecurrentEvent(updateDto2, _creatorProfile));
 
     //(only end) end is equal start
     var updateDto3 = new UpdateRecurrentEventRequestDto {
@@ -220,7 +139,7 @@ public class UpdateThisAndAllFollowingTests {
 
     // ACT & ASSERT
     await Assert.ThrowsAsync<ArgumentException>(() =>
-        _recurrentUpdateService.UpdateRecurrentEvent(updateDto3, _creatorProfile));
+      _recurrentUpdateService.UpdateRecurrentEvent(updateDto3, _creatorProfile));
 
     // start is after end
     var updateDto4 = new UpdateRecurrentEventRequestDto {
@@ -233,7 +152,7 @@ public class UpdateThisAndAllFollowingTests {
 
     // ACT & ASSERT
     await Assert.ThrowsAsync<ArgumentException>(() =>
-        _recurrentUpdateService.UpdateRecurrentEvent(updateDto4, _creatorProfile));
+      _recurrentUpdateService.UpdateRecurrentEvent(updateDto4, _creatorProfile));
 
     //start is equal end
     var updateDto5 = new UpdateRecurrentEventRequestDto {
@@ -246,7 +165,7 @@ public class UpdateThisAndAllFollowingTests {
 
     // ACT & ASSERT
     await Assert.ThrowsAsync<ArgumentException>(() =>
-        _recurrentUpdateService.UpdateRecurrentEvent(updateDto5, _creatorProfile));
+      _recurrentUpdateService.UpdateRecurrentEvent(updateDto5, _creatorProfile));
 
 
     //start is within less than 5 mins to end
@@ -260,7 +179,7 @@ public class UpdateThisAndAllFollowingTests {
 
     // ACT & ASSERT
     await Assert.ThrowsAsync<ArgumentException>(() =>
-        _recurrentUpdateService.UpdateRecurrentEvent(updateDto6, _creatorProfile));
+      _recurrentUpdateService.UpdateRecurrentEvent(updateDto6, _creatorProfile));
 
     // StartTime is not UTC (e.g., UTC+2)
     var updateDtoNonUtcStart = new UpdateRecurrentEventRequestDto {
@@ -272,7 +191,7 @@ public class UpdateThisAndAllFollowingTests {
     };
 
     await Assert.ThrowsAsync<ArgumentException>(() =>
-        _recurrentUpdateService.UpdateRecurrentEvent(updateDtoNonUtcStart, _creatorProfile));
+      _recurrentUpdateService.UpdateRecurrentEvent(updateDtoNonUtcStart, _creatorProfile));
 
     // EndTime is not UTC (e.g., UTC-5)
     var updateDtoNonUtcEnd = new UpdateRecurrentEventRequestDto {
@@ -284,7 +203,7 @@ public class UpdateThisAndAllFollowingTests {
     };
 
     await Assert.ThrowsAsync<ArgumentException>(() =>
-        _recurrentUpdateService.UpdateRecurrentEvent(updateDtoNonUtcEnd, _creatorProfile));
+      _recurrentUpdateService.UpdateRecurrentEvent(updateDtoNonUtcEnd, _creatorProfile));
   }
 
   [SkippableFact]
@@ -505,28 +424,24 @@ public class UpdateThisAndAllFollowingTests {
     var startTime = DateTimeOffset.UtcNow.AddHours(1);
 
     var master = await BuildMasterAsync(
-        "Weekly Yoga",
-        "FREQ=WEEKLY;INTERVAL=1",
-        "UTC",
-        startTime,
-        startTime.AddHours(1),
-        description: "Don't forget the mat!"
+      "Weekly Yoga",
+      "FREQ=WEEKLY;INTERVAL=1",
+      "UTC",
+      startTime,
+      startTime.AddHours(1),
+      description: "Don't forget the mat!"
     );
 
-    // Generate a valid InstanceId for the middle occurrence
-    var datePart = startTime.AddDays(21).ToString("yyyyMMddTHHmmssZ");
-    var instanceId = $"{master.Id}_{datePart}";
-
-    var updateDto = new UpdateRecurrentEventRequestDto {
-      UpdateType = RecurrentUpdateType.ThisAndAllFollowing,
-      MasterEventId = master.Id.ToString(),
-      InstanceId = instanceId,
-      Title = "Modified Yoga Session"
-    };
+    var updateDto = GetUpdateDto(
+      master.Id,
+      startTime,
+      RecurrentUpdateType.ThisAndAllFollowing,
+      title: "Modified Yoga Session"
+    );
 
     // ACT & ASSERT
     await Assert.ThrowsAsync<ArgumentException>(() =>
-        _recurrentUpdateService.UpdateRecurrentEvent(updateDto, _creatorProfile));
+      _recurrentUpdateService.UpdateRecurrentEvent(updateDto, _creatorProfile));
   }
 
   #endregion
@@ -537,631 +452,263 @@ public class UpdateThisAndAllFollowingTests {
   public async Task UpdateThisAndFollowingGeneratedNthInstance_ShouldSucceed_WithNewTitle() {
     var startTime = DateTimeOffset.UtcNow.AddHours(1);
 
-    var master = await BuildMasterAsync(
-        "Weekly Yoga",
-        "FREQ=WEEKLY;INTERVAL=1",
-        "UTC",
-        startTime,
-        startTime.AddHours(1),
-        description: "Don't forget the mat!"
+    var oldMaster = await BuildMasterAsync(
+      "Weekly Yoga",
+      "FREQ=WEEKLY;INTERVAL=1",
+      "UTC",
+      startTime,
+      startTime.AddHours(1),
+      description: "Don't forget the mat!"
     );
 
-
-    var oldOldProfileEvent = await _dbService.RetrieveAsync(
-        CollectionName.ProfileRecurrentEvents,
-        Builders<ProfileRecurrentEvent>.Filter.And(
-            Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.EventId, new ObjectId(master.Id)),
-            Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.ProfileId, _creatorProfile.Id)
-        )
+    var oldProfileEvent = await _dbService.RetrieveAsync(
+      CollectionName.ProfileRecurrentEvents,
+      Builders<ProfileRecurrentEvent>.Filter.And(
+        Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.EventId, oldMaster.Id),
+        Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.ProfileId, _creatorProfile.Id)
+      )
     );
 
     // Generate other detached events
-    var startTime1 = startTime.AddDays(14);
-    var datePart1 = startTime1.ToString("yyyyMMddTHHmmssZ");
-    var instanceId1 = $"{master.Id}_{datePart1}";
+    var detachedBefore = await BuildDetachedEvent(startTime.AddDays(14), oldMaster.Id.ToString(), title: "Modified Yoga Session 1");
 
-    var updateDto1 = new UpdateRecurrentEventRequestDto {
-      UpdateType = RecurrentUpdateType.ThisInstance,
-      MasterEventId = master.Id.ToString(),
-      InstanceId = instanceId1,
-      Title = "Modified Yoga Session 1"
-    };
-
-    var detached1 = await _recurrentUpdateService.UpdateSingleInstance(updateDto1, _creatorProfile);
-
-    var startTime2 = startTime.AddDays(28);
-    var datePart2 = startTime2.ToString("yyyyMMddTHHmmssZ");
-    var instanceId2 = $"{master.Id}_{datePart2}";
-
-    var updateDto2 = new UpdateRecurrentEventRequestDto {
-      UpdateType = RecurrentUpdateType.ThisInstance,
-      MasterEventId = master.Id.ToString(),
-      InstanceId = instanceId2,
-      Title = "Modified Yoga Session 2",
-      Description = "Description 2"
-    };
-
-    var detached2 = await _recurrentUpdateService.UpdateSingleInstance(updateDto2, _creatorProfile);
-
-    // Generate a valid InstanceId for the middle occurrence
-    var datePart = startTime.AddDays(21).ToString("yyyyMMddTHHmmssZ");
-    var instanceId = $"{master.Id}_{datePart}";
-
-    var updateDto = new UpdateRecurrentEventRequestDto {
-      UpdateType = RecurrentUpdateType.ThisAndAllFollowing,
-      MasterEventId = master.Id.ToString(),
-      InstanceId = instanceId,
-      Title = "Modified Yoga Session"
-    };
+    var detachedAfter = await BuildDetachedEvent(startTime.AddDays(28), oldMaster.Id.ToString(), title: "Modified Yoga Session 2", description: "Description 2");
 
     // 2. ACT
-    var result = await _recurrentUpdateService.UpdateRecurrentEvent(updateDto, _creatorProfile);
+    var updateDto = GetUpdateDto(
+      oldMaster.Id,
+      startTime.AddDays(21),
+      RecurrentUpdateType.ThisAndAllFollowing,
+      title: "Modified Yoga Session"
+    );
+    var newMaster = await _recurrentUpdateService.UpdateRecurrentEvent(updateDto, _creatorProfile);
 
     // ASSERT: Old Master
-    var oldMasterEvent = await _dbService.RetrieveByIdAsync<RecurrentEvent>(CollectionName.RecurrentEvents, master.Id);
-
-    oldMasterEvent.Should().NotBeNull();
-    oldMasterEvent.Title.Should().Be("Weekly Yoga");
-    oldMasterEvent.StartTime.Should().Be(startTime);
-    oldMasterEvent.EndTime.Should().Be(startTime.AddHours(1));
-
-    oldMasterEvent.RecurrenceEnd.Should().Be(startTime.AddDays(14));
-    oldMasterEvent.TimeZone.Should().Be("UTC");
-    oldMasterEvent.RecurrenceRule.Should().Be("FREQ=WEEKLY;INTERVAL=1;UNTIL=" + startTime.AddDays(14));
-
-
-    var oldDetails = await _dbService.RetrieveAsync(
-        CollectionName.EventDetails,
-        Builders<EventDetails>.Filter.Eq("eventId", oldMasterEvent.Id)
+    await AssertMaster(
+      oldMaster.Id.ToString(),
+      "Weekly Yoga",
+      startTime,
+      1,
+      startTime.AddDays(21),
+      "FREQ=WEEKLY;INTERVAL=1;UNTIL=" + startTime.AddDays(21),
+      "Don't forget the mat!",
+      oldProfileEvent,
+      oldMaster.TimeZone
     );
-    oldDetails.Should().NotBeNull();
-    oldDetails.Description.Should().Be("Don't forget the mat!");
-
-    var oldEventProfile = await _dbService.RetrieveMultipleAsync(
-        CollectionName.RecurrentEventProfiles,
-        Builders<RecurrentEventProfile>.Filter.And(
-            Builders<RecurrentEventProfile>.Filter.Eq(ep => ep.EventId, oldMasterEvent.Id),
-            Builders<RecurrentEventProfile>.Filter.Eq(ep => ep.ProfileId, _creatorProfile.Id)
-        )
-    );
-    oldEventProfile.Should().NotBeNull();
-    oldEventProfile.Count.Should().Be(1);
-
-    var oldProfileEvent = await _dbService.RetrieveAsync(
-        CollectionName.ProfileRecurrentEvents,
-        Builders<ProfileRecurrentEvent>.Filter.And(
-            Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.EventId, new ObjectId(master.Id)),
-            Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.ProfileId, _creatorProfile.Id)
-        )
-    );
-
-    oldProfileEvent.Should().NotBeNull();
-    oldProfileEvent.Confirmed.Should().Be(oldOldProfileEvent.Confirmed);
-    oldProfileEvent.RecurrenceStart.Should().Be(oldMasterEvent.StartTime);
-    oldProfileEvent.RecurrenceEnd.Should().Be(oldMasterEvent.RecurrenceEnd);
-    oldProfileEvent.Role.Should().Be(oldOldProfileEvent.Role);
 
     // ASSERT: New Master
-    var newMasterEvent = await _dbService.RetrieveByIdAsync<RecurrentEvent>(CollectionName.RecurrentEvents, result.Id);
-
-    newMasterEvent.Should().NotBeNull();
-    newMasterEvent.Title.Should().Be("Modified Yoga Session");
-    newMasterEvent.StartTime.Should().Be(startTime.AddDays(21));
-    newMasterEvent.EndTime.Should().Be(startTime.AddDays(21).AddHours(1));
-    newMasterEvent.Id.ToString().Should().NotBe(oldMasterEvent.Id.ToString());
-    newMasterEvent.TimeZone.Should().Be(oldMasterEvent.TimeZone);
-
-    var details = await _dbService.RetrieveAsync(
-        CollectionName.EventDetails,
-        Builders<EventDetails>.Filter.Eq("eventId", newMasterEvent.Id)
+    await AssertMaster(
+      newMaster.Id,
+      "Modified Yoga Session",
+      startTime.AddDays(21),
+      1,
+      oldMaster.RecurrenceEnd,
+      "FREQ=WEEKLY;INTERVAL=1;",
+      "Don't forget the mat!",
+      oldProfileEvent,
+      oldMaster.TimeZone,
+      oldMaster.Id
     );
-    details.Should().NotBeNull();
-    details.Description.Should().Be("Don't forget the mat!");
-
-    var eventProfile = await _dbService.RetrieveMultipleAsync(
-        CollectionName.RecurrentEventProfiles,
-        Builders<RecurrentEventProfile>.Filter.And(
-            Builders<RecurrentEventProfile>.Filter.Eq(ep => ep.EventId, newMasterEvent.Id),
-            Builders<RecurrentEventProfile>.Filter.Eq(ep => ep.ProfileId, _creatorProfile.Id)
-        )
-    );
-    eventProfile.Should().NotBeNull();
-    eventProfile.Count.Should().Be(1);
-
-    var masterProfileEvent = await _dbService.RetrieveAsync(
-        CollectionName.ProfileRecurrentEvents,
-        Builders<ProfileRecurrentEvent>.Filter.And(
-            Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.EventId, new ObjectId(master.Id)),
-            Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.ProfileId, _creatorProfile.Id)
-        )
-    );
-    masterProfileEvent.Should().NotBeNull();
-    masterProfileEvent.Confirmed.Should().Be(oldOldProfileEvent.Confirmed);
-    masterProfileEvent.RecurrenceStart.Should().Be(newMasterEvent.StartTime);
-    masterProfileEvent.RecurrenceEnd.Should().Be(newMasterEvent.RecurrenceEnd);
-    masterProfileEvent.Role.Should().Be(oldOldProfileEvent.Role);
 
     // ASSERT: Old DetachedInstances
-    var oldDetachedList = await _dbService.RetrieveAsync(
-        CollectionName.DetachedInstances,
-        Builders<DetachedInstances>.Filter.Eq(di => di.MasterId, oldMasterEvent.Id)
+    await AssertDetachedInstances(
+      oldMaster.Id.ToString(),
+      (
+        detachedBefore.Id,
+        detachedBefore.Title,
+        detachedBefore.StartTime,
+        detachedBefore.EndTime,
+        detachedBefore.RecurrencyInstanceId!,
+        "Don't forget the mat!"
+      )
     );
-    oldDetachedList.Should().NotBeNull();
-
-    var oldEventIds = oldDetachedList.Instances.Select(i => i.EventId).ToHashSet();
-    var detachedEvents = await _dbService.RetrieveMultipleByIdAsync<Event>(
-        CollectionName.Events,
-        oldEventIds
-    );
-
-    detachedEvents.Count.Should().Be(1);
-
-    var oldEvent = detachedEvents.First();
-
-    oldEvent.Title.Should().Be(detached1.Title);
-    oldEvent.StartTime.Should().Be(detached1.StartTime);
-    oldEvent.EndTime.Should().Be(detached1.EndTime);
-    oldEvent.MasterEventId.Should().Be(oldMasterEvent.Id);
-    oldEvent.RecurrencyInstanceId.Should().Be(detached1.RecurrencyInstanceId);
-    oldEvent.DetachedInstance.Should().Be(true);
-
-    var detachedDetails1 = await _dbService.RetrieveAsync(
-      CollectionName.EventDetails,
-      Builders<EventDetails>.Filter.Eq("eventId", detached1.Id)
-    );
-    detachedDetails1.Description.Should().Be("Don't forget the mat!");
-
-    var detachedInstance1 = oldDetachedList.Instances.First();
-    detachedInstance1.EventId.Should().Be(new ObjectId(detached1.Id));
-    detachedInstance1.RecurrencyId.Should().Be(detached1.RecurrencyInstanceId);
-    detachedInstance1.StartTime.Should().Be(detached1.StartTime);
 
     // ASSERT: New DetachedInstances
-    var newDetachedList = await _dbService.RetrieveAsync(
-        CollectionName.DetachedInstances,
-        Builders<DetachedInstances>.Filter.Eq(di => di.MasterId, oldMasterEvent.Id)
+    await AssertDetachedInstances(
+      newMaster.Id,
+      (
+        detachedAfter.Id,
+        detachedAfter.Title,
+        detachedAfter.StartTime,
+        detachedAfter.EndTime,
+        detachedAfter.RecurrencyInstanceId!,
+        "Don't forget the mat!"
+      )
     );
-    newDetachedList.Should().NotBeNull();
-
-    var newEventIds = newDetachedList.Instances.Select(i => i.EventId).ToHashSet();
-    var newDetachedEvents = await _dbService.RetrieveMultipleByIdAsync<Event>(
-        CollectionName.Events,
-        newEventIds
-    );
-    newDetachedEvents.Count.Should().Be(1);
-
-    var newEvent = newDetachedEvents.First();
-
-    newEvent.Title.Should().Be(newMasterEvent.Title);
-    newEvent.StartTime.Should().Be(detached2.StartTime);
-    newEvent.EndTime.Should().Be(detached2.EndTime);
-    newEvent.MasterEventId.Should().Be(newMasterEvent.Id);
-    newEvent.RecurrencyInstanceId.Should().Be(detached2.RecurrencyInstanceId);
-    newEvent.DetachedInstance.Should().Be(true);
-
-    var detachedDetails2 = await _dbService.RetrieveAsync(
-      CollectionName.EventDetails,
-      Builders<EventDetails>.Filter.Eq("eventId", detached2.Id)
-    );
-    detachedDetails2.Description.Should().Be("Don't forget the mat!");
-
-    var detachedInstance2 = newDetachedList.Instances.First();
-    detachedInstance2.EventId.Should().Be(new ObjectId(detached2.Id));
-    detachedInstance2.RecurrencyId.Should().Be(detached2.RecurrencyInstanceId);
-    detachedInstance2.StartTime.Should().Be(detached2.StartTime);
   }
 
   [SkippableFact]
   public async Task UpdateThisAndFollowingGeneratedNthInstance_ShouldSucceed_WithNewDescription() {
     var startTime = DateTimeOffset.UtcNow.AddHours(1);
 
-    var master = await BuildMasterAsync(
-        "Weekly Yoga",
-        "FREQ=WEEKLY;INTERVAL=1",
-        "UTC",
-        startTime,
-        startTime.AddHours(1),
-        description: "Don't forget the mat!"
+    var oldMaster = await BuildMasterAsync(
+      "Weekly Yoga",
+      "FREQ=WEEKLY;INTERVAL=1",
+      "UTC",
+      startTime,
+      startTime.AddHours(1),
+      description: "Don't forget the mat!"
     );
 
-    var oldOldProfileEvent = await _dbService.RetrieveAsync(
+    var oldProfileEvent = await _dbService.RetrieveAsync(
       CollectionName.ProfileRecurrentEvents,
       Builders<ProfileRecurrentEvent>.Filter.And(
-        Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.EventId, new ObjectId(master.Id)),
+        Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.EventId, oldMaster.Id),
         Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.ProfileId, _creatorProfile.Id)
       )
     );
 
     // Generate other detached events
-    var startTime1 = startTime.AddDays(14);
-    var datePart1 = startTime1.ToString("yyyyMMddTHHmmssZ");
-    var instanceId1 = $"{master.Id}_{datePart1}";
-
-    var updateDto1 = new UpdateRecurrentEventRequestDto {
-      UpdateType = RecurrentUpdateType.ThisInstance,
-      MasterEventId = master.Id.ToString(),
-      InstanceId = instanceId1,
-      Title = "Modified Yoga Session 1",
-      Description = "Description 1"
-    };
-
-    var detached1 = await _recurrentUpdateService.UpdateSingleInstance(updateDto1, _creatorProfile);
-
-    var startTime2 = startTime.AddDays(28);
-    var datePart2 = startTime2.ToString("yyyyMMddTHHmmssZ");
-    var instanceId2 = $"{master.Id}_{datePart2}";
-
-    var updateDto2 = new UpdateRecurrentEventRequestDto {
-      UpdateType = RecurrentUpdateType.ThisInstance,
-      MasterEventId = master.Id.ToString(),
-      InstanceId = instanceId2,
-      Title = "Modified Yoga Session 2",
-      Description = "Description 2"
-    };
-
-    var detached2 = await _recurrentUpdateService.UpdateSingleInstance(updateDto2, _creatorProfile);
+    var detachedBefore = await BuildDetachedEvent(startTime.AddDays(14), oldMaster.Id.ToString(), title: "Modified Yoga Session 1", description: "Description 1");
+    var detachedAfter = await BuildDetachedEvent(startTime.AddDays(28), oldMaster.Id.ToString(), title: "Modified Yoga Session 2", description: "Description 2");
 
     // Generate a valid InstanceId for the middle occurrence
-    var datePart = startTime.AddDays(21).ToString("yyyyMMddTHHmmssZ");
-    var instanceId = $"{master.Id}_{datePart}";
-
-    var updateDto = new UpdateRecurrentEventRequestDto {
-      UpdateType = RecurrentUpdateType.ThisAndAllFollowing,
-      MasterEventId = master.Id.ToString(),
-      InstanceId = instanceId,
-      Description = "Bring your own mat today!"
-    };
+    var updateDto = GetUpdateDto(
+      oldMaster.Id,
+      startTime.AddDays(21),
+      RecurrentUpdateType.ThisAndAllFollowing,
+      description: "Bring your own mat today!"
+    );
 
     // 2. ACT
-    var result = await _recurrentUpdateService.UpdateRecurrentEvent(updateDto, _creatorProfile);
+    var newMaster = await _recurrentUpdateService.UpdateRecurrentEvent(updateDto, _creatorProfile);
 
     // ASSERT: Old Master
-    var oldMasterEvent = await _dbService.RetrieveByIdAsync<RecurrentEvent>(CollectionName.RecurrentEvents, master.Id);
-
-    oldMasterEvent.Should().NotBeNull();
-    oldMasterEvent.Title.Should().Be("Weekly Yoga");
-    oldMasterEvent.StartTime.Should().Be(startTime);
-    oldMasterEvent.EndTime.Should().Be(startTime.AddHours(1));
-
-    oldMasterEvent.RecurrenceEnd.Should().Be(startTime.AddDays(14));
-    oldMasterEvent.TimeZone.Should().Be("UTC");
-    oldMasterEvent.RecurrenceRule.Should().Be("FREQ=WEEKLY;INTERVAL=1;UNTIL=" + startTime.AddDays(14));
-
-
-    var oldDetails = await _dbService.RetrieveAsync(
-        CollectionName.EventDetails,
-        Builders<EventDetails>.Filter.Eq("eventId", oldMasterEvent.Id)
+    await AssertMaster(
+      oldMaster.Id.ToString(),
+      "Weekly Yoga",
+      startTime,
+      1,
+      startTime.AddDays(14),
+      "FREQ=WEEKLY;INTERVAL=1;UNTIL=" + startTime.AddDays(14),
+      "Don't forget the mat!",
+      oldProfileEvent,
+      oldMaster.TimeZone
     );
-    oldDetails.Should().NotBeNull();
-    oldDetails.Description.Should().Be("Don't forget the mat!");
-
-    var oldEventProfile = await _dbService.RetrieveMultipleAsync(
-        CollectionName.RecurrentEventProfiles,
-        Builders<RecurrentEventProfile>.Filter.And(
-            Builders<RecurrentEventProfile>.Filter.Eq(ep => ep.EventId, oldMasterEvent.Id),
-            Builders<RecurrentEventProfile>.Filter.Eq(ep => ep.ProfileId, _creatorProfile.Id)
-        )
-    );
-    oldEventProfile.Should().NotBeNull();
-    oldEventProfile.Count.Should().Be(1);
-
-    var oldProfileEvent = await _dbService.RetrieveAsync(
-        CollectionName.ProfileRecurrentEvents,
-        Builders<ProfileRecurrentEvent>.Filter.And(
-            Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.EventId, new ObjectId(master.Id)),
-            Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.ProfileId, _creatorProfile.Id)
-        )
-    );
-
-    oldProfileEvent.Should().NotBeNull();
-    oldProfileEvent.Confirmed.Should().Be(oldOldProfileEvent.Confirmed);
-    oldProfileEvent.RecurrenceStart.Should().Be(oldMasterEvent.StartTime);
-    oldProfileEvent.RecurrenceEnd.Should().Be(oldMasterEvent.RecurrenceEnd);
-    oldProfileEvent.Role.Should().Be(oldOldProfileEvent.Role);
 
     // ASSERT: New Master
-    var newMasterEvent = await _dbService.RetrieveByIdAsync<RecurrentEvent>(CollectionName.RecurrentEvents, result.Id);
-
-    newMasterEvent.Should().NotBeNull();
-    newMasterEvent.Title.Should().Be("Weekly Yoga");
-    newMasterEvent.StartTime.Should().Be(startTime.AddDays(21));
-    newMasterEvent.EndTime.Should().Be(startTime.AddDays(21).AddHours(1));
-    newMasterEvent.Id.ToString().Should().NotBe(oldMasterEvent.Id.ToString());
-    newMasterEvent.TimeZone.Should().Be(oldMasterEvent.TimeZone);
-
-    var details = await _dbService.RetrieveAsync(
-        CollectionName.EventDetails,
-        Builders<EventDetails>.Filter.Eq("eventId", newMasterEvent.Id)
+    await AssertMaster(
+      newMaster.Id.ToString(),
+      "Weekly Yoga",
+      startTime.AddDays(21),
+      1,
+      oldMaster.RecurrenceEnd,
+      "FREQ=WEEKLY;INTERVAL=1",
+      "Bring your own mat today!",
+      oldProfileEvent,
+      oldMaster.TimeZone
     );
-    details.Should().NotBeNull();
-    details.Description.Should().Be("Bring your own mat today!");
-
-    var eventProfile = await _dbService.RetrieveMultipleAsync(
-        CollectionName.RecurrentEventProfiles,
-        Builders<RecurrentEventProfile>.Filter.And(
-            Builders<RecurrentEventProfile>.Filter.Eq(ep => ep.EventId, newMasterEvent.Id),
-            Builders<RecurrentEventProfile>.Filter.Eq(ep => ep.ProfileId, _creatorProfile.Id)
-        )
-    );
-    eventProfile.Should().NotBeNull();
-    eventProfile.Count.Should().Be(1);
-
-    var masterProfileEvent = await _dbService.RetrieveAsync(
-        CollectionName.ProfileRecurrentEvents,
-        Builders<ProfileRecurrentEvent>.Filter.And(
-            Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.EventId, new ObjectId(master.Id)),
-            Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.ProfileId, _creatorProfile.Id)
-        )
-    );
-    masterProfileEvent.Should().NotBeNull();
-    masterProfileEvent.Confirmed.Should().Be(oldOldProfileEvent.Confirmed);
-    masterProfileEvent.RecurrenceStart.Should().Be(newMasterEvent.StartTime);
-    masterProfileEvent.RecurrenceEnd.Should().Be(newMasterEvent.RecurrenceEnd);
-    masterProfileEvent.Role.Should().Be(oldOldProfileEvent.Role);
 
     // ASSERT: Old DetachedInstances
-    var oldDetachedList = await _dbService.RetrieveAsync(
-        CollectionName.DetachedInstances,
-        Builders<DetachedInstances>.Filter.Eq(di => di.MasterId, oldMasterEvent.Id)
+    await AssertDetachedInstances(
+      oldMaster.Id.ToString(),
+      (
+        detachedBefore.Id,
+        detachedBefore.Title,
+        detachedBefore.StartTime,
+        detachedBefore.EndTime,
+        detachedBefore.RecurrencyInstanceId!,
+        "Description 1"
+      )
     );
-    oldDetachedList.Should().NotBeNull();
-
-    var oldEventIds = oldDetachedList.Instances.Select(i => i.EventId).ToHashSet();
-    var detachedEvents = await _dbService.RetrieveMultipleByIdAsync<Event>(
-        CollectionName.Events,
-        oldEventIds
-    );
-
-    detachedEvents.Count.Should().Be(1);
-
-    var oldEvent = detachedEvents.First();
-
-    oldEvent.Title.Should().Be(detached1.Title);
-    oldEvent.StartTime.Should().Be(detached1.StartTime);
-    oldEvent.EndTime.Should().Be(detached1.EndTime);
-    oldEvent.MasterEventId.Should().Be(oldMasterEvent.Id);
-    oldEvent.RecurrencyInstanceId.Should().Be(detached1.RecurrencyInstanceId);
-    oldEvent.DetachedInstance.Should().Be(true);
-
-    var detachedDetails1 = await _dbService.RetrieveAsync(
-      CollectionName.EventDetails,
-      Builders<EventDetails>.Filter.Eq("eventId", detached1.Id)
-    );
-    detachedDetails1.Description.Should().Be("Description 1");
-
-    var detachedInstance1 = oldDetachedList.Instances.First();
-    detachedInstance1.EventId.Should().Be(new ObjectId(detached1.Id));
-    detachedInstance1.RecurrencyId.Should().Be(detached1.RecurrencyInstanceId);
-    detachedInstance1.StartTime.Should().Be(detached1.StartTime);
 
     // ASSERT: New DetachedInstances
-    var newDetachedList = await _dbService.RetrieveAsync(
-        CollectionName.DetachedInstances,
-        Builders<DetachedInstances>.Filter.Eq(di => di.MasterId, oldMasterEvent.Id)
+    await AssertDetachedInstances(
+      newMaster.Id.ToString(),
+      (
+        detachedBefore.Id,
+        detachedAfter.Title,
+        detachedAfter.StartTime,
+        detachedAfter.EndTime,
+        detachedAfter.RecurrencyInstanceId!,
+        "Bring your own mat today!"
+      )
     );
-    newDetachedList.Should().NotBeNull();
-
-    var newEventIds = newDetachedList.Instances.Select(i => i.EventId).ToHashSet();
-    var newDetachedEvents = await _dbService.RetrieveMultipleByIdAsync<Event>(
-        CollectionName.Events,
-        newEventIds
-    );
-    newDetachedEvents.Count.Should().Be(1);
-
-    var newEvent = newDetachedEvents.First();
-
-    newEvent.Title.Should().Be(newMasterEvent.Title);
-    newEvent.StartTime.Should().Be(detached2.StartTime);
-    newEvent.EndTime.Should().Be(detached2.EndTime);
-    newEvent.MasterEventId.Should().Be(newMasterEvent.Id);
-    newEvent.RecurrencyInstanceId.Should().Be(detached2.RecurrencyInstanceId);
-    newEvent.DetachedInstance.Should().Be(true);
-
-    var detachedDetails2 = await _dbService.RetrieveAsync(
-      CollectionName.EventDetails,
-      Builders<EventDetails>.Filter.Eq("eventId", detached2.Id)
-    );
-    detachedDetails2.Description.Should().Be("Bring your own mat today!");
-
-    var detachedInstance2 = newDetachedList.Instances.First();
-    detachedInstance2.EventId.Should().Be(new ObjectId(detached2.Id));
-    detachedInstance2.RecurrencyId.Should().Be(detached2.RecurrencyInstanceId);
-    detachedInstance2.StartTime.Should().Be(detached2.StartTime);
   }
 
   [SkippableFact]
   public async Task UpdateThisAndFollowingGeneratedFirstInstance_ShouldSucceed_WithBothTimeUpdate() {
     var startTime = DateTimeOffset.UtcNow.AddHours(1);
 
-    var master = await BuildMasterAsync(
-        "Weekly Yoga",
-        "FREQ=WEEKLY;INTERVAL=1",
-        "UTC",
-        startTime,
-        startTime.AddHours(1),
-        description: "Don't forget the mat!"
+    var oldMaster = await BuildMasterAsync(
+      "Weekly Yoga",
+      "FREQ=WEEKLY;INTERVAL=1",
+      "UTC",
+      startTime,
+      startTime.AddHours(1),
+      description: "Don't forget the mat!"
     );
 
     var oldOldProfileEvent = await _dbService.RetrieveAsync(
-        CollectionName.ProfileRecurrentEvents,
-        Builders<ProfileRecurrentEvent>.Filter.And(
-            Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.EventId, new ObjectId(master.Id)),
-            Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.ProfileId, _creatorProfile.Id)
-        )
+      CollectionName.ProfileRecurrentEvents,
+      Builders<ProfileRecurrentEvent>.Filter.And(
+        Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.EventId, oldMaster.Id),
+        Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.ProfileId, _creatorProfile.Id)
+      )
     );
 
     // Generate other detached events
-    var startTime1 = startTime.AddDays(14);
-    var datePart1 = startTime1.ToString("yyyyMMddTHHmmssZ");
-    var instanceId1 = $"{master.Id}_{datePart1}";
-
-    var updateDto1 = new UpdateRecurrentEventRequestDto {
-      UpdateType = RecurrentUpdateType.ThisInstance,
-      MasterEventId = master.Id.ToString(),
-      InstanceId = instanceId1,
-      StartTime = startTime1.AddHours(1),
-      EndTime = startTime1.AddHours(2)
-    };
-
-    var detached1 = await _recurrentUpdateService.UpdateSingleInstance(updateDto1, _creatorProfile);
-
-    var startTime2 = startTime.AddDays(28);
-    var datePart2 = startTime2.ToString("yyyyMMddTHHmmssZ");
-    var instanceId2 = $"{master.Id}_{datePart2}";
-
-    var updateDto2 = new UpdateRecurrentEventRequestDto {
-      UpdateType = RecurrentUpdateType.ThisInstance,
-      MasterEventId = master.Id.ToString(),
-      InstanceId = instanceId2,
-      StartTime = startTime1.AddHours(-2),
-      EndTime = startTime1.AddHours(-1),
-    };
-
-    var detached2 = await _recurrentUpdateService.UpdateSingleInstance(updateDto2, _creatorProfile);
-
-    var oldoldDetachedList = await _dbService.RetrieveAsync(
-        CollectionName.DetachedInstances,
-        Builders<DetachedInstances>.Filter.Eq(di => di.MasterId, new ObjectId(master.Id))
-    );
-
-    // Generate a valid InstanceId for the middle occurrence
-    var datePart = startTime.AddDays(21).ToString("yyyyMMddTHHmmssZ");
-    var instanceId = $"{master.Id}_{datePart}";
-
-    var updateDto = new UpdateRecurrentEventRequestDto {
-      UpdateType = RecurrentUpdateType.ThisAndAllFollowing,
-      MasterEventId = master.Id.ToString(),
-      InstanceId = instanceId,
-      StartTime = startTime.AddDays(21).AddHours(4),
-      EndTime = startTime.AddDays(21).AddHours(5)
-    };
-
+    var detachedBefore = await BuildDetachedEvent(startTime.AddDays(14), oldMaster.Id.ToString(), updateStartTime: startTime.AddDays(14).AddHours(1), endTime: startTime.AddDays(14).AddHours(2));
+    var detachedAfter = await BuildDetachedEvent(startTime.AddDays(28), oldMaster.Id.ToString(), updateStartTime: startTime.AddDays(28).AddHours(-2), endTime: startTime.AddDays(28).AddHours(-1));
+    
     // 2. ACT
-    var result = await _recurrentUpdateService.UpdateRecurrentEvent(updateDto, _creatorProfile);
+    var updateDto = GetUpdateDto(
+      oldMaster.Id,
+      startTime.AddDays(21),
+      RecurrentUpdateType.ThisAndAllFollowing,
+      updateStartTime: startTime.AddDays(21).AddHours(4),
+      endTime: startTime.AddDays(21).AddHours(5)
+    );
+    var newMaster = await _recurrentUpdateService.UpdateRecurrentEvent(updateDto, _creatorProfile);
 
     // ASSERT: Old Master
-    var oldMasterEvent = await _dbService.RetrieveByIdAsync<RecurrentEvent>(CollectionName.RecurrentEvents, master.Id);
-
-    oldMasterEvent.Should().NotBeNull();
-    oldMasterEvent.StartTime.Should().Be(startTime);
-    oldMasterEvent.EndTime.Should().Be(startTime.AddHours(1));
-
-    oldMasterEvent.RecurrenceEnd.Should().Be(startTime.AddDays(14));
-    oldMasterEvent.TimeZone.Should().Be("UTC");
-    oldMasterEvent.RecurrenceRule.Should().Be("FREQ=WEEKLY;INTERVAL=1;UNTIL=" + startTime.AddDays(14));
-
-    var oldDetails = await _dbService.RetrieveAsync(
-        CollectionName.EventDetails,
-        Builders<EventDetails>.Filter.Eq("eventId", oldMasterEvent.Id)
+    await AssertMaster(
+      oldMaster.Id.ToString(),
+      oldMaster.Title,
+      oldMaster.StartTime,
+      1,
+      startTime.AddDays(21),
+      "FREQ=WEEKLY;INTERVAL=1;UNTIL=" + startTime.AddDays(21),
+      "Don't forget the mat!",
+      oldOldProfileEvent,
+      oldMaster.TimeZone
     );
-    oldDetails.Should().NotBeNull();
-    oldDetails.Description.Should().Be("Don't forget the mat!");
-
-    var oldEventProfile = await _dbService.RetrieveMultipleAsync(
-        CollectionName.RecurrentEventProfiles,
-        Builders<RecurrentEventProfile>.Filter.And(
-            Builders<RecurrentEventProfile>.Filter.Eq(ep => ep.EventId, oldMasterEvent.Id),
-            Builders<RecurrentEventProfile>.Filter.Eq(ep => ep.ProfileId, _creatorProfile.Id)
-        )
-    );
-    oldEventProfile.Should().NotBeNull();
-    oldEventProfile.Count.Should().Be(1);
-
-    var oldProfileEvent = await _dbService.RetrieveAsync(
-        CollectionName.ProfileRecurrentEvents,
-        Builders<ProfileRecurrentEvent>.Filter.And(
-            Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.EventId, new ObjectId(master.Id)),
-            Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.ProfileId, _creatorProfile.Id)
-        )
-    );
-
-    oldProfileEvent.Should().NotBeNull();
-    oldProfileEvent.Confirmed.Should().Be(oldOldProfileEvent.Confirmed);
-    oldProfileEvent.RecurrenceStart.Should().Be(oldMasterEvent.StartTime);
-    oldProfileEvent.RecurrenceEnd.Should().Be(oldMasterEvent.RecurrenceEnd);
-    oldProfileEvent.Role.Should().Be(oldOldProfileEvent.Role);
 
     // ASSERT: New Master
-    var newMasterEvent = await _dbService.RetrieveByIdAsync<RecurrentEvent>(CollectionName.RecurrentEvents, result.Id);
-
-    newMasterEvent.Should().NotBeNull();
-    newMasterEvent.Title.Should().Be("Weekly Yoga");
-    newMasterEvent.StartTime.Should().Be(startTime.AddDays(21).AddHours(4));
-    newMasterEvent.EndTime.Should().Be(startTime.AddDays(21).AddHours(5));
-    newMasterEvent.Id.ToString().Should().NotBe(oldMasterEvent.Id.ToString());
-    newMasterEvent.TimeZone.Should().Be(oldMasterEvent.TimeZone);
-
-    var details = await _dbService.RetrieveAsync(
-        CollectionName.EventDetails,
-        Builders<EventDetails>.Filter.Eq("eventId", newMasterEvent.Id)
+    await AssertMaster(
+      newMaster.Id,
+      oldMaster.Title,
+      startTime.AddDays(21).AddHours(4),
+      1,
+      oldMaster.RecurrenceEnd,
+      oldMaster.RecurrenceRule,
+      "Don't forget the mat!",
+      oldOldProfileEvent,
+      oldMaster.TimeZone,
+      oldMaster.Id
     );
-    details.Should().NotBeNull();
-    details.Description.Should().Be("Don't forget the mat!");
-
-    var eventProfile = await _dbService.RetrieveMultipleAsync(
-        CollectionName.RecurrentEventProfiles,
-        Builders<RecurrentEventProfile>.Filter.And(
-            Builders<RecurrentEventProfile>.Filter.Eq(ep => ep.EventId, newMasterEvent.Id),
-            Builders<RecurrentEventProfile>.Filter.Eq(ep => ep.ProfileId, _creatorProfile.Id)
-        )
-    );
-    eventProfile.Should().NotBeNull();
-    eventProfile.Count.Should().Be(1);
-
-    var masterProfileEvent = await _dbService.RetrieveAsync(
-        CollectionName.ProfileRecurrentEvents,
-        Builders<ProfileRecurrentEvent>.Filter.And(
-            Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.EventId, new ObjectId(master.Id)),
-            Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.ProfileId, _creatorProfile.Id)
-        )
-    );
-    masterProfileEvent.Should().NotBeNull();
-    masterProfileEvent.Confirmed.Should().Be(oldOldProfileEvent.Confirmed);
-    masterProfileEvent.RecurrenceStart.Should().Be(newMasterEvent.StartTime);
-    masterProfileEvent.RecurrenceEnd.Should().Be(newMasterEvent.RecurrenceEnd);
-    masterProfileEvent.Role.Should().Be(oldOldProfileEvent.Role);
 
     // ASSERT: Old DetachedInstances
-    var oldDetachedList = await _dbService.RetrieveAsync(
-        CollectionName.DetachedInstances,
-        Builders<DetachedInstances>.Filter.Eq(di => di.MasterId, oldMasterEvent.Id)
+    await AssertDetachedInstances(
+      oldMaster.Id.ToString(),
+      (
+        detachedBefore.Id,
+        detachedBefore.Title,
+        detachedBefore.StartTime,
+        detachedBefore.EndTime,
+        detachedBefore.RecurrencyInstanceId!,
+        null
+      )
     );
-    oldDetachedList.Should().NotBeNull();
-
-    var oldEventIds = oldDetachedList.Instances.Select(i => i.EventId).ToHashSet();
-    var detachedEvents = await _dbService.RetrieveMultipleByIdAsync<Event>(
-        CollectionName.Events,
-        oldEventIds
-    );
-
-    detachedEvents.Count.Should().Be(1);
-
-    var oldEvent = detachedEvents.First();
-
-    oldEvent.Title.Should().Be(detached1.Title);
-    oldEvent.StartTime.Should().Be(detached1.StartTime);
-    oldEvent.EndTime.Should().Be(detached1.EndTime);
-    oldEvent.MasterEventId.Should().Be(oldMasterEvent.Id);
-    oldEvent.RecurrencyInstanceId.Should().Be(detached1.RecurrencyInstanceId);
-    oldEvent.DetachedInstance.Should().Be(true);
-
-    var detachedInstance1 = oldDetachedList.Instances.First();
-    detachedInstance1.EventId.Should().Be(new ObjectId(detached1.Id));
-    detachedInstance1.RecurrencyId.Should().Be(detached1.RecurrencyInstanceId);
-    detachedInstance1.StartTime.Should().Be(detached1.StartTime);
-
+    
     // ASSERT: New DetachedInstances
-    var newDetachedList = await _dbService.RetrieveAsync(
-        CollectionName.DetachedInstances,
-        Builders<DetachedInstances>.Filter.Eq(di => di.MasterId, oldMasterEvent.Id)
+    await AssertDetachedInstances(
+      newMaster.Id
     );
-    newDetachedList.Should().NotBeNull();
-
-    newDetachedList.Instances.Count.Should().Be(0);
 
     var detachedDetails2 = await _dbService.RetrieveOrNullAsync(
       CollectionName.EventDetails,
-      Builders<EventDetails>.Filter.Eq("eventId", detached2.Id)
+      Builders<EventDetails>.Filter.Eq("eventId", detachedAfter.Id)
     );
     detachedDetails2.Should().Be(null);
   }
@@ -1174,7 +721,6 @@ public class UpdateThisAndAllFollowingTests {
 
   // no need for recurrenceRule section because
   #endregion
-
 
   #region Current Detached
 
@@ -1192,7 +738,6 @@ public class UpdateThisAndAllFollowingTests {
       description: "Don't forget the mat!"
     );
 
-
     // Generate a valid InstanceId for the middle occurrence
     var datePart = startTime.AddDays(21).ToString("yyyyMMddTHHmmssZ");
     var instanceId = $"{master.Id}_{datePart}";
@@ -1215,7 +760,7 @@ public class UpdateThisAndAllFollowingTests {
 
     // ACT & ASSERT
     await Assert.ThrowsAsync<ArgumentException>(() =>
-        _recurrentUpdateService.UpdateRecurrentEvent(updateDto, _creatorProfile));
+      _recurrentUpdateService.UpdateRecurrentEvent(updateDto, _creatorProfile));
   }
 
   #endregion
@@ -1226,7 +771,7 @@ public class UpdateThisAndAllFollowingTests {
   public async Task UpdateThisAndFollowingDetachedNthInstance_ShouldSucceed_WithNewTitle() {
     var startTime = DateTimeOffset.UtcNow.AddHours(1);
 
-    var master = await BuildMasterAsync(
+    var oldMaster = await BuildMasterAsync(
       "Weekly Yoga",
       "FREQ=WEEKLY;INTERVAL=1",
       "UTC",
@@ -1235,282 +780,219 @@ public class UpdateThisAndAllFollowingTests {
       description: "Don't forget the mat!"
     );
 
-
     var oldOldProfileEvent = await _dbService.RetrieveAsync(
       CollectionName.ProfileRecurrentEvents,
       Builders<ProfileRecurrentEvent>.Filter.And(
-        Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.EventId, new ObjectId(master.Id)),
+        Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.EventId, oldMaster.Id),
         Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.ProfileId, _creatorProfile.Id)
       )
     );
 
     // Generate other detached events
-    // before cut
-    var startTime1 = startTime.AddDays(14);
-    var datePart1 = startTime1.ToString("yyyyMMddTHHmmssZ");
-    var instanceId1 = $"{master.Id}_{datePart1}";
+    var detachedBefore = await BuildDetachedEvent(startTime.AddDays(14), oldMaster.Id.ToString(), title: "Modified Yoga Session 1");
+    var detachedAfter = await BuildDetachedEvent(startTime.AddDays(28), oldMaster.Id.ToString(), title: "Modified Yoga Session 2", description: "Description 2");
 
-    var updateDto1 = new UpdateRecurrentEventRequestDto {
-      UpdateType = RecurrentUpdateType.ThisInstance,
-      MasterEventId = master.Id.ToString(),
-      InstanceId = instanceId1,
-      Title = "Modified Yoga Session 1"
-    };
+    // Generate cut event
+    var previousDetached = await BuildDetachedEvent(startTime.AddDays(21), oldMaster.Id.ToString(), title: "Created Yoga Session");
 
-    var detached1 = await _recurrentUpdateService.UpdateSingleInstance(updateDto1, _creatorProfile);
-
-    // After cut
-    var startTime2 = startTime.AddDays(28);
-    var datePart2 = startTime2.ToString("yyyyMMddTHHmmssZ");
-    var instanceId2 = $"{master.Id}_{datePart2}";
-
-    var updateDto2 = new UpdateRecurrentEventRequestDto {
-      UpdateType = RecurrentUpdateType.ThisInstance,
-      MasterEventId = master.Id.ToString(),
-      InstanceId = instanceId2,
-      Title = "Modified Yoga Session 2",
-      Description = "Description 2"
-    };
-
-    var detached2 = await _recurrentUpdateService.UpdateSingleInstance(updateDto2, _creatorProfile);
-
-    // Generate a valid InstanceId for the middle occurrence
-    var datePart = startTime.AddDays(21).ToString("yyyyMMddTHHmmssZ");
-    var instanceId = $"{master.Id}_{datePart}";
-
-    var createDto = new UpdateRecurrentEventRequestDto {
-      UpdateType = RecurrentUpdateType.ThisInstance,
-      MasterEventId = master.Id.ToString(),
-      InstanceId = instanceId,
-      Title = "Created Yoga Session"
-    };
-
-    var previousEvent = await _recurrentUpdateService.UpdateSingleInstance(createDto, _creatorProfile);
     var previousDetachedProfileEvent = await _dbService.RetrieveAsync(
       CollectionName.ProfileEvents,
-      Builders<ProfileEvent>.Filter.Eq(pe => pe.EventId, new ObjectId(previousEvent.Id))
+      Builders<ProfileEvent>.Filter.Eq(pe => pe.EventId, new ObjectId(previousDetached.Id))
+    );
+
+    // 2. ACT
+    var updateDto = GetUpdateDto(
+      oldMaster.Id,
+      startTime,
+      RecurrentUpdateType.ThisAndAllFollowing,
+      title: "Modified Yoga Session"
+    );
+    var newMaster = await _recurrentUpdateService.UpdateRecurrentEvent(updateDto, _creatorProfile);
+
+    // ASSERT: Old Master
+    await AssertMaster(
+      oldMaster.Id.ToString(),
+      oldMaster.Title,
+      startTime,
+      1,
+      startTime.AddDays(21),
+      "FREQ=WEEKLY;INTERVAL=1;UNTIL=" + startTime.AddDays(21),
+      "Don't forget the mat!",
+      oldOldProfileEvent,
+      oldMaster.TimeZone
+    );
+    
+    // ASSERT: New Master
+    await AssertMaster(
+      newMaster.Id,
+      "Modified Yoga Session",
+      startTime.AddDays(21),
+      1,
+      oldMaster.RecurrenceEnd,
+      oldMaster.RecurrenceRule,
+      "Don't forget the mat!",
+      oldOldProfileEvent,
+      oldMaster.TimeZone,
+      oldMaster.Id
+    );
+
+    // TODO ASSERT: Detached Event
+    await AssertDetached(
+      previousDetached.Id.ToString(),
+      newMaster.Title,
+      previousDetached.StartTime,
+      previousDetached.EndTime,
+      newMaster.Id.ToString(),
+      newMaster.StartTime.ToString("yyyyMMddTHHmmssZ"),
+      "Don't forget the mat!",
+      previousDetachedProfileEvent.Confirmed,
+      previousDetachedProfileEvent.Role
+    );
+
+    // ASSERT: Old DetachedInstances
+    await AssertDetachedInstances(
+      oldMaster.Id.ToString(),
+      (
+        detachedBefore.Id,
+        detachedBefore.Title,
+        detachedBefore.StartTime,
+        detachedBefore.EndTime,
+        detachedBefore.RecurrencyInstanceId!,
+        "Don't forget the mat!"
+      )
+    );
+
+    // ASSERT: New DetachedInstances
+    await AssertDetachedInstances(
+      newMaster.Id,
+      (
+        previousDetached.Id.ToString(),
+        newMaster.Title,
+        previousDetached.StartTime,
+        previousDetached.EndTime,
+        previousDetached.RecurrencyInstanceId!,
+        "Don't forget the mat!"
+      ),
+      (
+        detachedAfter.Id,
+        newMaster.Title,
+        detachedAfter.StartTime,
+        detachedAfter.EndTime,
+        detachedAfter.RecurrencyInstanceId!,
+        "Don't forget the mat!"
+      )
+    );   
+  }
+
+  [SkippableFact]
+  public async Task UpdateThisAndFollowingDetachedNthInstance_ShouldSucceed_WithNewDescription() {
+    var startTime = DateTimeOffset.UtcNow.AddHours(1);
+
+    var oldMaster = await BuildMasterAsync(
+      "Weekly Yoga",
+      "FREQ=WEEKLY;INTERVAL=1",
+      "UTC",
+      startTime,
+      startTime.AddHours(1),
+      description: "Don't forget the mat!"
+    );
+
+    // Generate other detached events
+    var detachedBefore = await BuildDetachedEvent(startTime.AddDays(14), oldMaster.Id.ToString(), title: "Modified Yoga Session 1");
+    var detachedAfter = await BuildDetachedEvent(startTime.AddDays(24), oldMaster.Id.ToString(), title: "Modified Yoga Session 2", description: "Description 2");
+
+    // Generate nth detached
+    var detached = await BuildDetachedEvent(startTime.AddDays(21), oldMaster.Id.ToString(), title: "Created Yoga Session");
+
+    // get other useful pre-acting objects
+    var oldMasterProfileEvent = await _dbService.RetrieveAsync(
+      CollectionName.ProfileRecurrentEvents,
+      Builders<ProfileRecurrentEvent>.Filter.And(
+        Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.EventId, oldMaster.Id),
+        Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.ProfileId, _creatorProfile.Id)
+      )
+    );
+
+    var detachedProfileEvent = await _dbService.RetrieveAsync(
+      CollectionName.ProfileEvents,
+      Builders<ProfileEvent>.Filter.Eq(pe => pe.EventId, new ObjectId(detached.Id))
     );
 
     // 2. ACT
     var updateDto = new UpdateRecurrentEventRequestDto {
       UpdateType = RecurrentUpdateType.ThisAndAllFollowing,
-      MasterEventId = master.Id.ToString(),
-      InstanceId = instanceId,
-      Title = "Modified Yoga Session"
+      MasterEventId = oldMaster.Id.ToString(),
+      InstanceId = detached.Id,
+      Description = "Bring your own mat today!"
     };
-    var result = await _recurrentUpdateService.UpdateRecurrentEvent(updateDto, _creatorProfile);
+    var newMaster = await _recurrentUpdateService.UpdateRecurrentEvent(updateDto, _creatorProfile);
 
     // ASSERT: Old Master
-    var oldMasterEvent = await _dbService.RetrieveByIdAsync<RecurrentEvent>(CollectionName.RecurrentEvents, master.Id);
-
-    oldMasterEvent.Should().NotBeNull();
-    oldMasterEvent.Title.Should().Be("Weekly Yoga");
-    oldMasterEvent.StartTime.Should().Be(startTime);
-    oldMasterEvent.EndTime.Should().Be(startTime.AddHours(1));
-
-    oldMasterEvent.RecurrenceEnd.Should().Be(startTime.AddDays(14));
-    oldMasterEvent.TimeZone.Should().Be("UTC");
-    oldMasterEvent.RecurrenceRule.Should().Be("FREQ=WEEKLY;INTERVAL=1;UNTIL=" + startTime.AddDays(14));
-
-
-    var oldDetails = await _dbService.RetrieveAsync(
-      CollectionName.EventDetails,
-      Builders<EventDetails>.Filter.Eq("eventId", oldMasterEvent.Id)
+    await AssertMaster(
+      oldMaster.Id.ToString(),
+      "Weekly Yoga",
+      startTime,
+      1,
+      startTime.AddDays(14),
+      "FREQ=WEEKLY;INTERVAL=1;UNTIL=" + startTime.AddDays(14),
+      "Don't forget the mat!",
+      oldMasterProfileEvent,
+      oldMaster.TimeZone
     );
-    oldDetails.Should().NotBeNull();
-    oldDetails.Description.Should().Be("Don't forget the mat!");
-
-    var oldEventProfile = await _dbService.RetrieveMultipleAsync(
-      CollectionName.RecurrentEventProfiles,
-      Builders<RecurrentEventProfile>.Filter.And(
-        Builders<RecurrentEventProfile>.Filter.Eq(ep => ep.EventId, oldMasterEvent.Id),
-        Builders<RecurrentEventProfile>.Filter.Eq(ep => ep.ProfileId, _creatorProfile.Id)
-      )
-    );
-    oldEventProfile.Should().NotBeNull();
-    oldEventProfile.Count.Should().Be(1);
-
-    var oldProfileEvent = await _dbService.RetrieveAsync(
-      CollectionName.ProfileRecurrentEvents,
-      Builders<ProfileRecurrentEvent>.Filter.And(
-        Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.EventId, new ObjectId(master.Id)),
-        Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.ProfileId, _creatorProfile.Id)
-      )
-    );
-
-    oldProfileEvent.Should().NotBeNull();
-    oldProfileEvent.Confirmed.Should().Be(oldOldProfileEvent.Confirmed);
-    oldProfileEvent.RecurrenceStart.Should().Be(oldMasterEvent.StartTime);
-    oldProfileEvent.RecurrenceEnd.Should().Be(oldMasterEvent.RecurrenceEnd);
-    oldProfileEvent.Role.Should().Be(oldOldProfileEvent.Role);
 
     // ASSERT: New Master
-    var newMasterEvent = await _dbService.RetrieveByIdAsync<RecurrentEvent>(CollectionName.RecurrentEvents, result.Id);
-
-    newMasterEvent.Should().NotBeNull();
-    newMasterEvent.Title.Should().Be("Modified Yoga Session");
-    newMasterEvent.StartTime.Should().Be(startTime.AddDays(21));
-    newMasterEvent.EndTime.Should().Be(startTime.AddDays(21).AddHours(1));
-    newMasterEvent.Id.ToString().Should().NotBe(oldMasterEvent.Id.ToString());
-    newMasterEvent.TimeZone.Should().Be(oldMasterEvent.TimeZone);
-
-    var details = await _dbService.RetrieveAsync(
-      CollectionName.EventDetails,
-      Builders<EventDetails>.Filter.Eq("eventId", newMasterEvent.Id)
-    );
-    details.Should().NotBeNull();
-    details.Description.Should().Be("Don't forget the mat!");
-
-    var eventProfile = await _dbService.RetrieveMultipleAsync(
-      CollectionName.RecurrentEventProfiles,
-      Builders<RecurrentEventProfile>.Filter.And(
-        Builders<RecurrentEventProfile>.Filter.Eq(ep => ep.EventId, newMasterEvent.Id),
-        Builders<RecurrentEventProfile>.Filter.Eq(ep => ep.ProfileId, _creatorProfile.Id)
-      )
-    );
-    eventProfile.Should().NotBeNull();
-    eventProfile.Count.Should().Be(1);
-
-    var masterProfileEvent = await _dbService.RetrieveAsync(
-      CollectionName.ProfileRecurrentEvents,
-      Builders<ProfileRecurrentEvent>.Filter.And(
-        Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.EventId, new ObjectId(master.Id)),
-        Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.ProfileId, _creatorProfile.Id)
-      )
-    );
-    masterProfileEvent.Should().NotBeNull();
-    masterProfileEvent.Confirmed.Should().Be(oldOldProfileEvent.Confirmed);
-    masterProfileEvent.RecurrenceStart.Should().Be(newMasterEvent.StartTime);
-    masterProfileEvent.RecurrenceEnd.Should().Be(newMasterEvent.RecurrenceEnd);
-    masterProfileEvent.Role.Should().Be(oldOldProfileEvent.Role);
-
-
-    // TODO ASSERT: Detached Event
-    var detachedEvent = await _dbService.RetrieveByIdAsync<Event>(
-      CollectionName.Events,
-      previousEvent.Id
+    await AssertMaster(
+      newMaster.Id,
+      "Created Yoga Session",
+      startTime.AddDays(21),
+      1,
+      oldMaster.RecurrenceEnd,
+      oldMaster.RecurrenceRule,
+      "Bring your own mat today!",
+      oldMasterProfileEvent,
+      oldMaster.TimeZone,
+      new ObjectId(newMaster.Id)
     );
 
-    detachedEvent.Title.Should().Be(newMasterEvent.Title);
-    detachedEvent.StartTime.Should().Be(previousEvent.StartTime);
-    detachedEvent.EndTime.Should().Be(previousEvent.EndTime);
-    detachedEvent.MasterEventId.Should().Be(newMasterEvent.Id);
-    detachedEvent.RecurrencyInstanceId.Should().Be(newMasterEvent.StartTime.ToString("yyyyMMddTHHmmssZ"));
-    detachedEvent.DetachedInstance.Should().Be(true);
-
-    var detachedDetails = await _dbService.RetrieveAsync(
-      CollectionName.EventDetails,
-      Builders<EventDetails>.Filter.Eq("eventId", detachedEvent.Id)
+    // ASSERT: Detached Event
+    await AssertDetached(detached.Id,
+      newMaster.Title,
+      detached.StartTime,
+      detached.EndTime,
+      newMaster.Id,
+      newMaster.StartTime.ToString("yyyyMMddTHHmmssZ"),
+      "Don't forget the mat!",
+      detachedProfileEvent.Confirmed,
+      detachedProfileEvent.Role
     );
-    detachedDetails.Description.Should().Be("Don't forget the mat!");
-
-    var detachedEventProfile = await _dbService.RetrieveMultipleAsync(
-        CollectionName.RecurrentEventProfiles,
-        Builders<RecurrentEventProfile>.Filter.And(
-            Builders<RecurrentEventProfile>.Filter.Eq(ep => ep.EventId, oldMasterEvent.Id),
-            Builders<RecurrentEventProfile>.Filter.Eq(ep => ep.ProfileId, _creatorProfile.Id)
-        )
-    );
-
-    detachedEventProfile.Should().NotBeNull();
-    detachedEventProfile.Count.Should().Be(1);
-    var detachedProfileEvent =await _dbService.RetrieveMultipleAsync(
-      CollectionName.ProfileEvents,
-        Builders<ProfileEvent>.Filter.And(
-            Builders<ProfileEvent>.Filter.Eq(pe => pe.EventId, detachedEvent.Id),
-            Builders<ProfileEvent>.Filter.Eq(pe => pe.ProfileId, _creatorProfile.Id)
-        )
-    );
-    detachedProfileEvent.Count.Should().Be(1);
-    detachedProfileEvent.First().Confirmed.Should().Be(previousDetachedProfileEvent.Confirmed);
-    detachedProfileEvent.First().EventStartTime.Should().Be(detachedEvent.StartTime);
-    detachedProfileEvent.First().EventEndTime.Should().Be(detachedEvent.EndTime);
-    detachedProfileEvent.First().Role.Should().Be(previousDetachedProfileEvent.Role);
 
     // ASSERT: Old DetachedInstances
-    var oldDetachedList = await _dbService.RetrieveAsync(
-      CollectionName.DetachedInstances,
-      Builders<DetachedInstances>.Filter.Eq(di => di.MasterId, oldMasterEvent.Id)
+    await AssertDetachedInstances(
+      oldMaster.Id.ToString(),
+      (
+        detachedBefore.Id.ToString(),
+        detachedBefore.Title,
+        detachedBefore.StartTime,
+        detachedBefore.EndTime,
+        detachedBefore.RecurrencyInstanceId!,
+        "Don't forget the mat!"
+      )
     );
-    oldDetachedList.Should().NotBeNull();
-
-    var oldEventIds = oldDetachedList.Instances.Select(i => i.EventId).ToHashSet();
-    var detachedEvents = await _dbService.RetrieveMultipleByIdAsync<Event>(
-      CollectionName.Events,
-      oldEventIds
-    );
-
-    detachedEvents.Count.Should().Be(1);
-
-    var oldEvent = detachedEvents.First();
-
-    oldEvent.Title.Should().Be(newMasterEvent.Title);
-    oldEvent.StartTime.Should().Be(detached1.StartTime);
-    oldEvent.EndTime.Should().Be(detached1.EndTime);
-    oldEvent.MasterEventId.Should().Be(oldMasterEvent.Id);
-    oldEvent.RecurrencyInstanceId.Should().Be(detached1.RecurrencyInstanceId);
-    oldEvent.DetachedInstance.Should().Be(true);
-
-    var detachedDetails1 = await _dbService.RetrieveAsync(
-      CollectionName.EventDetails,
-      Builders<EventDetails>.Filter.Eq("eventId", detached1.Id)
-    );
-    detachedDetails1.Description.Should().Be("Don't forget the mat!");
-
-    var detachedInstance1 = oldDetachedList.Instances.First();
-    detachedInstance1.EventId.Should().Be(new ObjectId(detached1.Id));
-    detachedInstance1.RecurrencyId.Should().Be(detached1.RecurrencyInstanceId);
-    detachedInstance1.StartTime.Should().Be(detached1.StartTime);
 
     // ASSERT: New DetachedInstances
-    var newDetachedList = await _dbService.RetrieveAsync(
-      CollectionName.DetachedInstances,
-      Builders<DetachedInstances>.Filter.Eq(di => di.MasterId, oldMasterEvent.Id)
+    await AssertDetachedInstances(
+      newMaster.Id,
+      (
+        detachedAfter.Id.ToString(),
+        detachedAfter.Title,
+        detachedAfter.StartTime,
+        detachedAfter.EndTime,
+        detachedAfter.RecurrencyInstanceId!,
+        "Don't forget the mat!"
+      )
     );
-    newDetachedList.Should().NotBeNull();
-
-    var newEventIds = newDetachedList.Instances.Select(i => i.EventId).ToHashSet();
-    var newDetachedEvents = await _dbService.RetrieveMultipleByIdAsync<Event>(
-      CollectionName.Events,
-      newEventIds
-    );
-    newDetachedEvents.Count.Should().Be(2);
-
-    foreach(var de in newDetachedEvents) {
-
-      de.Title.Should().Be(newMasterEvent.Title);
-      de.MasterEventId.Should().Be(newMasterEvent.Id);
-      de.DetachedInstance.Should().Be(true);
-      
-      var detachedInstance = newDetachedList.Instances.Where(instance => instance.EventId == de.Id);
-      detachedInstance.Count().Should().Be(1);
-
-      if (de.Id == detachedEvent.Id) {
-        detachedInstance.First().RecurrencyId.Should().Be(detachedEvent.RecurrencyInstanceId);
-        detachedInstance.First().StartTime.Should().Be(detachedEvent.StartTime);
-      } else if (de.Id == new ObjectId(detached2.Id)) {
-        de.StartTime.Should().Be(detached2.StartTime);
-        de.EndTime.Should().Be(detached2.EndTime);
-
-        var detachedDetails2 = await _dbService.RetrieveAsync(
-          CollectionName.EventDetails,
-          Builders<EventDetails>.Filter.Eq("eventId", detached2.Id)
-        );
-        detachedDetails2.Description.Should().Be("Don't forget the mat!");
-
-        de.RecurrencyInstanceId.Should().Be(detached2.RecurrencyInstanceId);
-
-        detachedInstance.First().RecurrencyId.Should().Be(detached2.RecurrencyInstanceId);
-        detachedInstance.First().StartTime.Should().Be(detached2.StartTime);
-      } else {
-        Assert.Fail("should never enter here, wrong id");
-      }
-    }
-    
   }
 
-
-  // TODO UpdateThisAndFollowingDetachedNthInstance_ShouldSucceed_WithNewDescription()
   #endregion
 
   #region RecurrenceRule
@@ -1639,7 +1121,7 @@ public class UpdateThisAndAllFollowingTests {
     var startTime = DateTimeOffset.UtcNow.AddHours(1);
     var recurrenceEnd = startTime.AddDays(43);
 
-    var master = await BuildMasterAsync(
+    var oldMaster = await BuildMasterAsync(
       "Weekly Yoga",
       "FREQ=WEEKLY;INTERVAL=1",
       "UTC",
@@ -1649,124 +1131,87 @@ public class UpdateThisAndAllFollowingTests {
     );
 
     //var oldMasterEvent = await _dbService.RetrieveByIdAsync<RecurrentEvent>(CollectionName.RecurrentEvents, master.Id);
-    var oldOldProfileEvent = await _dbService.RetrieveAsync(
-        CollectionName.ProfileRecurrentEvents,
-        Builders<ProfileRecurrentEvent>.Filter.And(
-            Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.EventId, new ObjectId(master.Id)),
-            Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.ProfileId, _creatorProfile.Id)
-        )
+    var oldProfileEvent = await _dbService.RetrieveAsync(
+      CollectionName.ProfileRecurrentEvents,
+      Builders<ProfileRecurrentEvent>.Filter.And(
+        Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.EventId, oldMaster.Id),
+        Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.ProfileId, _creatorProfile.Id)
+      )
     );
 
     // Generate other detached events
-    // Before cut
-    var detached1 = await BuildDetachedEvent(startTime.AddDays(14), master.Id.ToString(), 1, 2);
-
-    // after cut
-    var detached2 = await BuildDetachedEvent(startTime.AddDays(21), master.Id.ToString(), -2, -1);
+    var detachedBefore = await BuildDetachedEvent(startTime.AddDays(14), oldMaster.Id.ToString(), updateStartTime: startTime.AddDays(14).AddHours(1), endTime: startTime.AddDays(14).AddHours(2));
+    var detachedAfter = await BuildDetachedEvent(startTime.AddDays(28), oldMaster.Id.ToString(), updateStartTime: startTime.AddDays(28).AddHours(-2), endTime: startTime.AddDays(28).AddHours(-1));
 
     // after recurrenceEnd
-    var detached3 = await BuildDetachedEvent(startTime.AddDays(49), master.Id.ToString(), -2, -1);
+    var detachedAfterRecurrenceEnd = await BuildDetachedEvent(startTime.AddDays(49), oldMaster.Id.ToString(), updateStartTime: startTime.AddDays(49).AddHours(-2), endTime: startTime.AddDays(49).AddHours(-1));
 
 
     // ACT: Cut at third occurrence (day 21)
     var datePart = startTime.AddDays(21).ToString("yyyyMMddTHHmmssZ");
-    var instanceId = $"{master.Id}_{datePart}";
+    var instanceId = $"{oldMaster.Id}_{datePart}";
 
     var updateDto = new UpdateRecurrentEventRequestDto {
       UpdateType = RecurrentUpdateType.ThisAndAllFollowing,
-      MasterEventId = master.Id.ToString(),
+      MasterEventId = oldMaster.Id.ToString(),
       InstanceId = instanceId,
       RecurrenceRule = $"FREQ=WEEKLY;INTERVAL=1;UNTIL={recurrenceEnd:yyyyMMdd'T'HHmmss'Z'}"
     };
 
-    var result = await _recurrentUpdateService.UpdateRecurrentEvent(updateDto, _creatorProfile);
+    var newMaster = await _recurrentUpdateService.UpdateRecurrentEvent(updateDto, _creatorProfile);
 
     // TODO ASSERT: Old Master
-    var oldMasterEvent = await _dbService.RetrieveByIdAsync<RecurrentEvent>(CollectionName.RecurrentEvents, master.Id);
-
-    oldMasterEvent.Should().NotBeNull();
-    oldMasterEvent.RecurrenceEnd.Should().Be(startTime.AddDays(14));
-    oldMasterEvent.TimeZone.Should().Be("UTC");
-    oldMasterEvent.RecurrenceRule.Should().Be("FREQ=WEEKLY;INTERVAL=1;UNTIL=" + startTime.AddDays(14));
-
-    var oldProfileEvent = await _dbService.RetrieveAsync(
-      CollectionName.ProfileEvents,
-      Builders<ProfileRecurrentEvent>.Filter.And(
-        Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.EventId, new ObjectId(master.Id)),
-        Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.ProfileId, _creatorProfile.Id)
-      )
+    await AssertMaster(
+      oldMaster.Id.ToString(),
+      oldMaster.Title,
+      oldMaster.StartTime,
+      1,
+      startTime.AddDays(14),
+      "FREQ=WEEKLY;INTERVAL=1;UNTIL=" + startTime.AddDays(14),
+      "Don't forget the mat!",
+      oldProfileEvent,
+      oldMaster.TimeZone
     );
-    oldProfileEvent.Should().NotBeNull();
-    oldProfileEvent.RecurrenceStart.Should().Be(oldMasterEvent.StartTime);
-    oldProfileEvent.RecurrenceEnd.Should().Be(oldMasterEvent.RecurrenceEnd);
 
     // ASSERT: New Master
-    var newMasterEvent = await _dbService.RetrieveByIdAsync<RecurrentEvent>(CollectionName.RecurrentEvents, result.Id);
-
-    newMasterEvent.Should().NotBeNull();
-    newMasterEvent.Id.ToString().Should().NotBe(oldMasterEvent.Id.ToString());
-    newMasterEvent.RecurrenceEnd.Should().Be(recurrenceEnd);
-    newMasterEvent.RecurrenceRule.Should().Be($"FREQ=WEEKLY;INTERVAL=1;UNTIL={recurrenceEnd:yyyyMMdd'T'HHmmss'Z'}");
-    newMasterEvent.TimeZone.Should().Be(oldMasterEvent.TimeZone);
-
-    var masterProfileEvent = await _dbService.RetrieveAsync(
-      CollectionName.ProfileRecurrentEvents,
-      Builders<ProfileRecurrentEvent>.Filter.And(
-        Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.EventId, newMasterEvent.Id),
-        Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.ProfileId, _creatorProfile.Id)
-      )
+    await AssertMaster(
+      newMaster.Id.ToString(),
+      newMaster.Title,
+      newMaster.StartTime,
+      1,
+      recurrenceEnd,
+      $"FREQ=WEEKLY;INTERVAL=1;UNTIL={recurrenceEnd:yyyyMMdd'T'HHmmss'Z'}",
+      "Don't forget the mat!",
+      oldProfileEvent,
+      oldMaster.TimeZone,
+      oldMaster.Id
     );
-    masterProfileEvent.Should().NotBeNull();
-    masterProfileEvent.RecurrenceStart.Should().Be(newMasterEvent.StartTime);
-    masterProfileEvent.RecurrenceEnd.Should().Be(recurrenceEnd);
 
     // ASSERT: Old DetachedInstances
-    var oldDetachedList = await _dbService.RetrieveAsync(
-        CollectionName.DetachedInstances,
-        Builders<DetachedInstances>.Filter.Eq(di => di.MasterId, oldMasterEvent.Id)
+    await AssertDetachedInstances(
+      oldMaster.Id.ToString(),
+      (
+        detachedBefore.Id,
+        detachedBefore.Title,
+        detachedBefore.StartTime,
+        detachedBefore.EndTime,
+        detachedBefore.RecurrencyInstanceId!,
+        "Don't forget the mat!"
+      )
     );
-    oldDetachedList.Should().NotBeNull();
-
-    var oldEventIds = oldDetachedList.Instances.Select(i => i.EventId).ToHashSet();
-    var detachedEvents = await _dbService.RetrieveMultipleByIdAsync<Event>(
-        CollectionName.Events,
-        oldEventIds
-    );
-    detachedEvents.Count.Should().Be(1);
-
-    var oldEvent = detachedEvents.First(); //detached1
-    oldEvent.Id.Should().Be(new ObjectId(detached1.Id));
-    oldEvent.MasterEventId.Should().Be(oldMasterEvent.Id);
-    oldEvent.RecurrencyInstanceId.Should().Be(detached1.RecurrencyInstanceId);
-
-    var detachedInstance1 = oldDetachedList.Instances.First();
-    detachedInstance1.EventId.Should().Be(new ObjectId(detached1.Id));
-    detachedInstance1.RecurrencyId.Should().Be(detached1.RecurrencyInstanceId);
-    detachedInstance1.StartTime.Should().Be(detached1.StartTime);
 
     // ASSERT: New DetachedInstances
-    var newDetachedList = await _dbService.RetrieveAsync(
-        CollectionName.DetachedInstances,
-        Builders<DetachedInstances>.Filter.Eq(di => di.MasterId, oldMasterEvent.Id)
+    await AssertDetachedInstances(
+      newMaster.Id,
+      (
+        detachedAfter.Id,
+        detachedAfter.Title,
+        detachedAfter.StartTime,
+        detachedAfter.EndTime,
+        detachedAfter.RecurrencyInstanceId!,
+        "Don't forget the mat!"
+      )
     );
-    newDetachedList.Should().NotBeNull();
-
-    var newEventIds = newDetachedList.Instances.Select(i => i.EventId).ToHashSet();
-    var newDetachedEvents = await _dbService.RetrieveMultipleByIdAsync<Event>(
-        CollectionName.Events,
-        newEventIds
-    );
-    newDetachedEvents.Count.Should().Be(1);
-
-    var newDetached2 = detachedEvents.First(); //detached2
-    oldEvent.Id.Should().Be(new ObjectId(detached2.Id));
-    newDetached2.MasterEventId.Should().Be(oldMasterEvent.Id);
-    newDetached2.RecurrencyInstanceId.Should().Be(detached2.RecurrencyInstanceId);
-
-    var detachedInstance2 = oldDetachedList.Instances.First(di => di.EventId == newDetached2.Id);
-    detachedInstance2.EventId.Should().Be(new ObjectId(detached2.Id));
-    detachedInstance2.RecurrencyId.Should().Be(detached2.RecurrencyInstanceId);
-    detachedInstance2.StartTime.Should().Be(detached2.StartTime);
   }
 
   // TODO UpdateGeneratedThisAndFollowingGenerated_ShouldSucceed_WithRecurrencyRuleUntilUpdate()
@@ -1779,7 +1224,7 @@ public class UpdateThisAndAllFollowingTests {
 
     var startTime = DateTimeOffset.UtcNow.AddHours(1);
 
-    var master = await BuildMasterAsync(
+    var oldMaster = await BuildMasterAsync(
       "Weekly Yoga",
       "FREQ=WEEKLY;INTERVAL=1",
       "UTC",
@@ -1788,22 +1233,22 @@ public class UpdateThisAndAllFollowingTests {
       description: "Don't forget the mat!"
     );
 
-    var oldMasterEvent = await _dbService.RetrieveByIdAsync<RecurrentEvent>(CollectionName.RecurrentEvents, master.Id);
+    var oldMasterEvent = await _dbService.RetrieveByIdAsync<RecurrentEvent>(CollectionName.RecurrentEvents, oldMaster.Id.ToString());
     var oldMasterProfileEvent = await _dbService.RetrieveAsync(
       CollectionName.ProfileRecurrentEvents,
       Builders<ProfileRecurrentEvent>.Filter.And(
-        Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.EventId, new ObjectId(master.Id)),
+        Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.EventId, oldMaster.Id),
         Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.ProfileId, _creatorProfile.Id)
       )
     );
 
     // Generate detached to cut from (day 21)
     var datePart = startTime.AddDays(21).ToString("yyyyMMddTHHmmssZ");
-    var instanceId = $"{master.Id}_{datePart}";
+    var instanceId = $"{oldMaster.Id}_{datePart}";
 
     var createDto = new UpdateRecurrentEventRequestDto {
       UpdateType = RecurrentUpdateType.ThisInstance,
-      MasterEventId = master.Id.ToString(),
+      MasterEventId = oldMaster.Id.ToString(),
       InstanceId = instanceId,
       Title = "Detached Title"
     };
@@ -1811,52 +1256,44 @@ public class UpdateThisAndAllFollowingTests {
     var previousEvent = await _recurrentUpdateService.UpdateSingleInstance(createDto, _creatorProfile);
 
     // Generate other detached events
-    // before cut
-    var detached1 = await BuildDetachedEvent(startTime.AddDays(14), master.Id.ToString(), 1, 2);
-
-    // after cut
-    var detached2 = await BuildDetachedEvent(startTime.AddDays(28), master.Id.ToString(), -2, -1);
+    var detachedBefore = await BuildDetachedEvent(startTime.AddDays(14), oldMaster.Id.ToString(), updateStartTime: startTime.AddDays(14).AddHours(1), endTime: startTime.AddDays(14).AddHours(2));
+    var detachedAfter = await BuildDetachedEvent(startTime.AddDays(28), oldMaster.Id.ToString(),updateStartTime: startTime.AddDays(28).AddHours(-2), endTime: startTime.AddDays(28).AddHours(-1));
 
     var oldDetachedList = await _dbService.RetrieveAsync(
         CollectionName.DetachedInstances,
-        Builders<DetachedInstances>.Filter.Eq(di => di.MasterId, new ObjectId(master.Id))
+        Builders<DetachedInstances>.Filter.Eq(di => di.MasterId, oldMaster.Id)
     );
 
     // ACT, update freq in rrule
     var updateDto = new UpdateRecurrentEventRequestDto {
       UpdateType = RecurrentUpdateType.ThisAndAllFollowing,
-      MasterEventId = master.Id.ToString(),
+      MasterEventId = oldMaster.Id.ToString(),
       InstanceId = instanceId,
       RecurrenceRule = "FREQ=WEEKLY;INTERVAL=2"
     };
 
-    var result = await _recurrentUpdateService.UpdateRecurrentEvent(updateDto, _creatorProfile);
+    var newMaster = await _recurrentUpdateService.UpdateRecurrentEvent(updateDto, _creatorProfile);
 
-    // ASSERT: Master
-    var newMasterEvent = await _dbService.RetrieveByIdAsync<RecurrentEvent>(CollectionName.RecurrentEvents, result.Id);
-
-    newMasterEvent.RecurrenceEnd.Should().Be(oldMasterEvent.RecurrenceEnd);
-    newMasterEvent.RecurrenceRule.Should().Be("FREQ=WEEKLY;INTERVAL=2");
-    newMasterEvent.TimeZone.Should().Be(oldMasterEvent.TimeZone);
-
-    var masterProfileEvent = await _dbService.RetrieveAsync(
-      CollectionName.ProfileRecurrentEvents,
-      Builders<ProfileRecurrentEvent>.Filter.And(
-        Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.EventId, new ObjectId(master.Id)),
-        Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.ProfileId, _creatorProfile.Id)
-      )
+    // ASSERT: NewMaster
+    await AssertMaster(
+      newMaster.Id,
+      newMaster.Title,
+      newMaster.StartTime,
+      1,
+      oldMaster.RecurrenceEnd,
+      "FREQ=WEEKLY;INTERVAL=2",
+      "Don't forget the mat!",
+      oldMasterProfileEvent,
+      oldMaster.TimeZone
     );
-    masterProfileEvent.Should().NotBeNull();
-    masterProfileEvent.RecurrenceStart.Should().Be(newMasterEvent.StartTime);
-    masterProfileEvent.RecurrenceEnd.Should().Be(oldMasterEvent.RecurrenceEnd);
 
     // ASSERT: DetachedInstances Collection
     var detachedList = await _dbService.RetrieveAsync(
       CollectionName.DetachedInstances,
-      Builders<DetachedInstances>.Filter.Eq(di => di.MasterId, new ObjectId(master.Id))
+      Builders<DetachedInstances>.Filter.Eq(di => di.MasterId, oldMaster.Id)
     );
     detachedList.Should().NotBeNull();
-    detachedList.MasterId.Should().Be(new ObjectId(master.Id));
+    detachedList.MasterId.Should().Be(oldMaster.Id);
 
     detachedList.Instances.Count.Should().Be(0);
 
