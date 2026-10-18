@@ -223,10 +223,10 @@ public abstract class RecurrentEventTestBase {
 
     var detachedProfileEvent =await _dbService.RetrieveMultipleAsync(
       CollectionName.ProfileEvents,
-        Builders<ProfileEvent>.Filter.And(
-            Builders<ProfileEvent>.Filter.Eq(pe => pe.EventId, detachedEvent.Id),
-            Builders<ProfileEvent>.Filter.Eq(pe => pe.ProfileId, _creatorProfile.Id)
-        )
+      Builders<ProfileEvent>.Filter.And(
+        Builders<ProfileEvent>.Filter.Eq(pe => pe.EventId, detachedEvent.Id),
+        Builders<ProfileEvent>.Filter.Eq(pe => pe.ProfileId, _creatorProfile.Id)
+      )
     );
     detachedProfileEvent.Count.Should().Be(1);
     detachedProfileEvent.First().Confirmed.Should().Be(confirmed);

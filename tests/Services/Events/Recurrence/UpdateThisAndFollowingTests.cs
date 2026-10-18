@@ -719,7 +719,7 @@ public class UpdateThisAndAllFollowingTests(MongoDbFixture fixture) : RecurrentE
   // Previous with different StartDate
 
 
-  // no need for recurrenceRule section because
+  // no need for recurrenceRule region because
   #endregion
 
   #region Current Detached
@@ -902,7 +902,7 @@ public class UpdateThisAndAllFollowingTests(MongoDbFixture fixture) : RecurrentE
     var detachedAfter = await BuildDetachedEvent(startTime.AddDays(24), oldMaster.Id.ToString(), title: "Modified Yoga Session 2", description: "Description 2");
 
     // Generate nth detached
-    var detached = await BuildDetachedEvent(startTime.AddDays(21), oldMaster.Id.ToString(), title: "Created Yoga Session");
+    var detached = await BuildDetachedEvent(startTime.AddDays(21), oldMaster.Id.ToString(), description: "Created Yoga Session");
 
     // get other useful pre-acting objects
     var oldMasterProfileEvent = await _dbService.RetrieveAsync(
@@ -943,7 +943,7 @@ public class UpdateThisAndAllFollowingTests(MongoDbFixture fixture) : RecurrentE
     // ASSERT: New Master
     await AssertMaster(
       newMaster.Id,
-      "Created Yoga Session",
+      oldMaster.Title,
       startTime.AddDays(21),
       1,
       oldMaster.RecurrenceEnd,
@@ -961,6 +961,107 @@ public class UpdateThisAndAllFollowingTests(MongoDbFixture fixture) : RecurrentE
       detached.EndTime,
       newMaster.Id,
       newMaster.StartTime.ToString("yyyyMMddTHHmmssZ"),
+      "Bring your own mat today!",
+      detachedProfileEvent.Confirmed,
+      detachedProfileEvent.Role
+    );
+
+    // ASSERT: Old DetachedInstances
+    await AssertDetachedInstances(
+      oldMaster.Id.ToString(),
+      (
+        detachedBefore.Id.ToString(),
+        detachedBefore.Title,
+        detachedBefore.StartTime,
+        detachedBefore.EndTime,
+        detachedBefore.RecurrencyInstanceId!,
+        "Bring your own mat today!"
+      )
+    );
+
+    // ASSERT: New DetachedInstances
+    await AssertDetachedInstances(
+      newMaster.Id,
+      (
+        detachedAfter.Id.ToString(),
+        detachedAfter.Title,
+        detachedAfter.StartTime,
+        detachedAfter.EndTime,
+        detachedAfter.RecurrencyInstanceId!,
+        "Bring your own mat today!"
+      )
+    );
+  }
+
+  [SkippableFact]
+  public async Task UpdateThisAndFollowingDetachedNthInstance_ShouldSucceed_WithBothTimeUpdate() {
+    var startTime = DateTimeOffset.UtcNow.AddHours(1);
+
+    var oldMaster = await BuildMasterAsync(
+      "Weekly Yoga",
+      "FREQ=WEEKLY;INTERVAL=1",
+      "UTC",
+      startTime,
+      startTime.AddHours(1),
+      description: "Don't forget the mat!"
+    );
+
+    var oldMasterEvent = await _dbService.RetrieveByIdAsync<RecurrentEvent>(CollectionName.RecurrentEvents, oldMaster.Id.ToString());
+
+    // Generate a valid InstanceId for the first occurrence
+    var detached = await BuildDetachedEvent(
+      startTime,
+      oldMaster.Id.ToString(),
+      title: "Created Yoga Session"
+    );
+
+    // Generate other detached events
+    var detachedBefore = await BuildDetachedEvent(
+      startTime.AddDays(14),
+      oldMaster.Id.ToString(),
+      updateStartTime: startTime.AddDays(14).AddHours(1),
+      endTime: startTime.AddDays(14).AddHours(2)
+    );
+
+    var detachedAfter = await BuildDetachedEvent(
+      startTime.AddDays(28),
+      oldMaster.Id.ToString(),
+      updateStartTime: startTime.AddDays(28).AddHours(-2),
+      endTime: startTime.AddDays(28).AddHours(-1)
+    );
+
+    var oldDetachedList = await _dbService.RetrieveAsync(
+      CollectionName.DetachedInstances,
+      Builders<DetachedInstances>.Filter.Eq(di => di.MasterId, oldMaster.Id)
+    );
+
+    var detachedProfileEvent = await _dbService.RetrieveAsync(
+      CollectionName.ProfileEvents,
+      Builders<ProfileEvent>.Filter.Eq(pe => pe.EventId, new ObjectId(detached.Id))
+    );
+
+    // ACT
+    var updateDto = new UpdateRecurrentEventRequestDto {
+      UpdateType = RecurrentUpdateType.AllTheSequence,
+      MasterEventId = oldMaster.Id.ToString(),
+      InstanceId = detached.Id,
+      StartTime = startTime.AddHours(4),
+      EndTime = startTime.AddHours(5)
+    };
+    var newMaster = await _recurrentUpdateService.UpdateRecurrentEvent(updateDto, _creatorProfile);
+
+
+    // ASSERT: Master
+    // Already checked in Generated one
+
+    // ASSERT: The Event document
+    await AssertDetached(
+      detached.Id,
+      "Created Yoga Session",
+      startTime.AddHours(4),
+      startTime.AddHours(5),
+      oldMaster.Id.ToString(),
+      startTime.AddHours(4).ToString("yyyyMMddTHHmmssZ"),
       "Don't forget the mat!",
       detachedProfileEvent.Confirmed,
       detachedProfileEvent.Role
@@ -979,9 +1080,17 @@ public class UpdateThisAndAllFollowingTests(MongoDbFixture fixture) : RecurrentE
       )
     );
 
-    // ASSERT: New DetachedInstances
+    // ASSERT: DetachedInstances Collection
     await AssertDetachedInstances(
-      newMaster.Id,
+      newMaster.Id.ToString(),
+      (
+        detached.Id.ToString(),
+        detached.Title,
+        detached.StartTime,
+        detached.EndTime,
+        detached.RecurrencyInstanceId!,
+        "Don't forget the mat!"
+      ),
       (
         detachedAfter.Id.ToString(),
         detachedAfter.Title,
@@ -994,6 +1103,7 @@ public class UpdateThisAndAllFollowingTests(MongoDbFixture fixture) : RecurrentE
   }
 
   #endregion
+
 
   #region RecurrenceRule
 

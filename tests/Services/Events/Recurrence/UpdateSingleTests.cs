@@ -4,72 +4,15 @@ using Core.Components.Database;
 using Xunit;
 using FluentAssertions;
 using Core.Tests.Setup;
-using Microsoft.Extensions.DependencyInjection;
 using Core.Model.Events;
-using Core.Services.Profiles;
 using MongoDB.Bson;
 using MongoDB.Driver;
-using Core.Services.Events.Recurrence;
 using Core.Model.Events.Recurrence;
-using Core.Services.Events.Instances;
 
 namespace Core.Tests.Services.Events.Recurrence;
 
 [Collection("DatabaseTests")]
-public class UpdateSingleTests {
-    private readonly ProfileService _profileService;
-    private readonly RecurrentEventService _recurrentEventService;
-    private readonly RecurrentEventUpdateService _recurrentUpdateService;
-    private readonly MongoDbService _dbService;
-    private readonly Profile _creatorProfile;
-
-    private readonly IClientSessionHandle _session;
-
-    public UpdateSingleTests(MongoDbFixture fixture) {
-        Skip.If(fixture.InitializationFailed, fixture.InitializationError);
-
-        _dbService = fixture.DbService!;
-
-        var scope = fixture.ServiceProvider!.CreateScope();
-
-        _profileService = scope.ServiceProvider.GetRequiredService<ProfileService>();
-        _recurrentEventService = scope.ServiceProvider.GetRequiredService<RecurrentEventService>();
-        _recurrentUpdateService = scope.ServiceProvider.GetRequiredService<RecurrentEventUpdateService>();
-
-        _session = fixture.StartSessionAsync().GetAwaiter().GetResult();
-
-        string uniqueTag = $"jdoe_{Guid.NewGuid().ToString()[..8]}";
-        _creatorProfile = _profileService.CreateAsync(uniqueTag, "John Doe", _session).GetAwaiter().GetResult();
-    }
-
-    #region util
-    private async Task<RetrieveRecurrentEventResponseDto> BuildMasterAsync(
-        string title = "Team Standup",
-        string rrule = "FREQ=DAILY;COUNT=5",
-        string timeZone = "UTC",
-        DateTimeOffset? start = null,
-        DateTimeOffset? end = null,
-        string? description = null) {
-
-        var s = start ?? new DateTimeOffset(2025, 6, 1, 9, 0, 0, TimeSpan.Zero);
-        var e = end ?? s.AddHours(1);
-
-        var requestDto = new CreateRecurrentEventRequestDto {
-            Title = title,
-            RecurrenceRule = rrule,
-            TimeZone = timeZone,
-            StartTime = s,
-            EndTime = e,
-            CacheIntervalStart = s,
-            CacheIntervalEnd = s.AddMonths(1),
-            Description = description
-        };
-
-        var responseDto = await _recurrentEventService.CreateRecurrentEventAsync(requestDto, _creatorProfile);
-        return responseDto;
-    }
-
-    #endregion
+public class UpdateSingleTests(MongoDbFixture fixture) : RecurrentEventTestBase(fixture) {
 
     #region exceptions
 
@@ -128,11 +71,11 @@ public class UpdateSingleTests {
 
         // Generate a valid InstanceId for the first occurrence
         var datePart = startTime.ToString("yyyyMMddTHHmmssZ");
-        var instanceId = $"{master.Id}_{datePart}";
+        var instanceId = $"{master.Id.ToString()}_{datePart}";
 
         var updateDto = new UpdateRecurrentEventRequestDto {
             UpdateType = RecurrentUpdateType.ThisInstance,
-            MasterEventId = master.Id.ToString(),
+            MasterEventId = master.Id.ToString().ToString(),
             InstanceId = instanceId
         };
 
@@ -141,7 +84,7 @@ public class UpdateSingleTests {
 
         var updateDto3 = new UpdateRecurrentEventRequestDto {
             UpdateType = RecurrentUpdateType.ThisInstance,
-            MasterEventId = master.Id.ToString(),
+            MasterEventId = master.Id.ToString().ToString(),
             InstanceId = instanceId,
             StartTime = startTime,
             EndTime = startTime.AddHours(1)
@@ -152,7 +95,7 @@ public class UpdateSingleTests {
 
         var updateDto4 = new UpdateRecurrentEventRequestDto {
             UpdateType = RecurrentUpdateType.ThisInstance,
-            MasterEventId = master.Id.ToString(),
+            MasterEventId = master.Id.ToString().ToString(),
             InstanceId = instanceId,
             StartTime = null,
             EndTime = startTime.AddHours(1)
@@ -163,7 +106,7 @@ public class UpdateSingleTests {
 
         var updateDto5 = new UpdateRecurrentEventRequestDto {
             UpdateType = RecurrentUpdateType.ThisInstance,
-            MasterEventId = master.Id.ToString(),
+            MasterEventId = master.Id.ToString().ToString(),
             InstanceId = instanceId,
             StartTime = startTime,
             EndTime = null
@@ -188,11 +131,11 @@ public class UpdateSingleTests {
 
         // Generate a valid InstanceId for the first occurrence
         var datePart = startTime.ToString("yyyyMMddTHHmmssZ");
-        var instanceId = $"{master.Id}_{datePart}";
+        var instanceId = $"{master.Id.ToString()}_{datePart}";
 
         var updateDto = new UpdateRecurrentEventRequestDto {
             UpdateType = RecurrentUpdateType.ThisInstance,
-            MasterEventId = master.Id.ToString(),
+            MasterEventId = master.Id.ToString().ToString(),
             InstanceId = instanceId,
             Title = ""
         };
@@ -217,12 +160,12 @@ public class UpdateSingleTests {
 
         // Generate a valid InstanceId for the first occurrence
         var datePart = startTime.ToString("yyyyMMddTHHmmssZ");
-        var instanceId = $"{master.Id}_{datePart}";
+        var instanceId = $"{master.Id.ToString()}_{datePart}";
 
         // only start
         var updateDto = new UpdateRecurrentEventRequestDto {
             UpdateType = RecurrentUpdateType.ThisInstance,
-            MasterEventId = master.Id.ToString(),
+            MasterEventId = master.Id.ToString().ToString(),
             InstanceId = instanceId,
             StartTime = startTime.AddHours(4)
         };
@@ -234,7 +177,7 @@ public class UpdateSingleTests {
         //only end
         var updateDto1 = new UpdateRecurrentEventRequestDto {
             UpdateType = RecurrentUpdateType.ThisInstance,
-            MasterEventId = master.Id.ToString(),
+            MasterEventId = master.Id.ToString().ToString(),
             InstanceId = instanceId,
             EndTime = startTime.AddHours(3)
         };
@@ -246,7 +189,7 @@ public class UpdateSingleTests {
         //end is before start
         var updateDto2 = new UpdateRecurrentEventRequestDto {
             UpdateType = RecurrentUpdateType.ThisInstance,
-            MasterEventId = master.Id.ToString(),
+            MasterEventId = master.Id.ToString().ToString(),
             InstanceId = instanceId,
             StartTime = startTime,
             EndTime = startTime.AddHours(-2)
@@ -259,7 +202,7 @@ public class UpdateSingleTests {
         // end is equal start
         var updateDto3 = new UpdateRecurrentEventRequestDto {
             UpdateType = RecurrentUpdateType.ThisInstance,
-            MasterEventId = master.Id.ToString(),
+            MasterEventId = master.Id.ToString().ToString(),
             InstanceId = instanceId,
             StartTime = startTime,
             EndTime = startTime
@@ -272,7 +215,7 @@ public class UpdateSingleTests {
         //start is within less than 5 mins to end
         var updateDto6 = new UpdateRecurrentEventRequestDto {
             UpdateType = RecurrentUpdateType.ThisInstance,
-            MasterEventId = master.Id.ToString(),
+            MasterEventId = master.Id.ToString().ToString(),
             InstanceId = instanceId,
             StartTime = startTime.AddHours(5),
             EndTime = startTime.AddHours(5).AddMinutes(4)
@@ -285,7 +228,7 @@ public class UpdateSingleTests {
         // StartTime is not UTC (e.g., UTC+2)
         var updateDtoNonUtcStart = new UpdateRecurrentEventRequestDto {
             UpdateType = RecurrentUpdateType.ThisInstance,
-            MasterEventId = master.Id.ToString(),
+            MasterEventId = master.Id.ToString().ToString(),
             InstanceId = instanceId,
             StartTime = new DateTimeOffset(startTime.Year, startTime.Month, startTime.Day, startTime.Hour - 1, 0, 0, TimeSpan.FromHours(2)),
             EndTime = startTime.AddHours(8)
@@ -297,7 +240,7 @@ public class UpdateSingleTests {
         // EndTime is not UTC (e.g., UTC-5)
         var updateDtoNonUtcEnd = new UpdateRecurrentEventRequestDto {
             UpdateType = RecurrentUpdateType.ThisInstance,
-            MasterEventId = master.Id.ToString(),
+            MasterEventId = master.Id.ToString().ToString(),
             InstanceId = instanceId,
             StartTime = startTime,
             EndTime = new DateTimeOffset(startTime.Year, startTime.Month, startTime.Day, startTime.Hour + 2, 0, 0, TimeSpan.FromHours(-5))
@@ -328,11 +271,11 @@ public class UpdateSingleTests {
 
         // Generate a valid InstanceId for the first occurrence
         var datePart = startTime.ToString("yyyyMMddTHHmmssZ");
-        var instanceId = $"{master.Id}_{datePart}";
+        var instanceId = $"{master.Id.ToString()}_{datePart}";
 
         var updateDto = new UpdateRecurrentEventRequestDto {
             UpdateType = RecurrentUpdateType.ThisInstance,
-            MasterEventId = master.Id.ToString(),
+            MasterEventId = master.Id.ToString().ToString(),
             InstanceId = instanceId,
             Title = "Modified Yoga Session"
         };
@@ -347,7 +290,7 @@ public class UpdateSingleTests {
         detachedEvent.Title.Should().Be("Modified Yoga Session");
         detachedEvent.StartTime.Should().Be(master.StartTime);
         detachedEvent.EndTime.Should().Be(master.EndTime);
-        detachedEvent.MasterEventId.ToString().Should().Be(master.Id);
+        detachedEvent.MasterEventId.ToString().Should().Be(master.Id.ToString());
         detachedEvent.RecurrencyInstanceId.Should().Be(instanceId);
         detachedEvent.DetachedInstance.Should().BeTrue();
 
@@ -382,7 +325,7 @@ public class UpdateSingleTests {
         var masterProfileEvent= await _dbService.RetrieveAsync(
             CollectionName.ProfileEvents,
             Builders<ProfileRecurrentEvent>.Filter.And(
-                Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.EventId, new ObjectId(master.Id)),
+                Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.EventId, new ObjectId(master.Id.ToString())),
                 Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.ProfileId, _creatorProfile.Id)
             )
         );
@@ -395,10 +338,10 @@ public class UpdateSingleTests {
         // ASSERT: DetachedInstances Collection
         var detachedList = await _dbService.RetrieveAsync(
             CollectionName.DetachedInstances,
-            Builders<DetachedInstances>.Filter.Eq(di => di.MasterId, new ObjectId(master.Id))
+            Builders<DetachedInstances>.Filter.Eq(di => di.MasterId, new ObjectId(master.Id.ToString()))
         );
         detachedList.Should().NotBeNull();
-        detachedList.MasterId.Should().Be(new ObjectId(master.Id));
+        detachedList.MasterId.Should().Be(new ObjectId(master.Id.ToString()));
         detachedList.Instances.Should().ContainSingle(i => i.RecurrencyId == instanceId);
         detachedList.Instances.Should().ContainSingle(i => i.EventId == detachedEvent.Id );
         var detachedListInstance = detachedList.Instances.First(i => i.RecurrencyId == instanceId);
@@ -422,11 +365,11 @@ public class UpdateSingleTests {
 
         // Generate a valid InstanceId for the first occurrence
         var datePart = startTime.ToString("yyyyMMddTHHmmssZ");
-        var instanceId = $"{master.Id}_{datePart}";
+        var instanceId = $"{master.Id.ToString()}_{datePart}";
 
         var updateDto = new UpdateRecurrentEventRequestDto {
             UpdateType = RecurrentUpdateType.ThisInstance,
-            MasterEventId = master.Id.ToString(),
+            MasterEventId = master.Id.ToString().ToString(),
             InstanceId = instanceId,
             Description = "Bring your own mat today!"
         };
@@ -441,7 +384,7 @@ public class UpdateSingleTests {
         detachedEvent.Title.Should().Be("Weekly Yoga");
         detachedEvent.StartTime.Should().Be(master.StartTime);
         detachedEvent.EndTime.Should().Be(master.EndTime);
-        detachedEvent.MasterEventId.ToString().Should().Be(master.Id);
+        detachedEvent.MasterEventId.ToString().Should().Be(master.Id.ToString());
         detachedEvent.RecurrencyInstanceId.Should().Be(instanceId);
         detachedEvent.DetachedInstance.Should().BeTrue();
 
@@ -468,11 +411,11 @@ public class UpdateSingleTests {
 
         // Generate a valid InstanceId for the first occurrence
         var datePart = startTime.ToString("yyyyMMddTHHmmssZ");
-        var instanceId = $"{master.Id}_{datePart}";
+        var instanceId = $"{master.Id.ToString()}_{datePart}";
 
         var updateDto = new UpdateRecurrentEventRequestDto {
             UpdateType = RecurrentUpdateType.ThisInstance,
-            MasterEventId = master.Id.ToString(),
+            MasterEventId = master.Id.ToString().ToString(),
             InstanceId = instanceId,
             StartTime = startTime.AddHours(4),
             EndTime = startTime.AddHours(5)
@@ -490,7 +433,7 @@ public class UpdateSingleTests {
         detachedEvent.StartTime.Should().Be(startTime.AddHours(4));
         detachedEvent.EndTime.Should().Be(startTime.AddHours(5));
 
-        detachedEvent.MasterEventId.ToString().Should().Be(master.Id);
+        detachedEvent.MasterEventId.ToString().Should().Be(master.Id.ToString());
         detachedEvent.RecurrencyInstanceId.Should().Be(instanceId);
         detachedEvent.DetachedInstance.Should().BeTrue();
 
@@ -524,7 +467,7 @@ public class UpdateSingleTests {
         var masterProfileEvent= await _dbService.RetrieveAsync(
             CollectionName.ProfileEvents,
             Builders<ProfileRecurrentEvent>.Filter.And(
-                Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.EventId, new ObjectId(master.Id)),
+                Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.EventId, new ObjectId(master.Id.ToString())),
                 Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.ProfileId, _creatorProfile.Id)
             )
         );
@@ -539,10 +482,10 @@ public class UpdateSingleTests {
         // ASSERT: DetachedInstances Collection
         var detachedList = await _dbService.RetrieveAsync(
             CollectionName.DetachedInstances,
-            Builders<DetachedInstances>.Filter.Eq(di => di.MasterId, new ObjectId(master.Id))
+            Builders<DetachedInstances>.Filter.Eq(di => di.MasterId, new ObjectId(master.Id.ToString()))
         );
         detachedList.Should().NotBeNull();
-        detachedList.MasterId.Should().Be(new ObjectId(master.Id));
+        detachedList.MasterId.Should().Be(new ObjectId(master.Id.ToString()));
         detachedList.Instances.Should().ContainSingle(i => i.RecurrencyId == instanceId);
         detachedList.Instances.Should().ContainSingle(i => i.EventId == detachedEvent.Id );
         var detachedListInstance = detachedList.Instances.First(i => i.RecurrencyId == instanceId);
@@ -552,7 +495,7 @@ public class UpdateSingleTests {
 
         var masterEventAfter = await _dbService.RetrieveAsync(
             CollectionName.RecurrentEvents,
-            Builders<RecurrentEvent>.Filter.Eq(m => m.Id, new ObjectId(master.Id))
+            Builders<RecurrentEvent>.Filter.Eq(m => m.Id, new ObjectId(master.Id.ToString()))
         );
         masterEventAfter.StartTime.Should().Be(master.StartTime);
         masterEventAfter.EndTime.Should().Be(master.EndTime);
@@ -578,11 +521,11 @@ public class UpdateSingleTests {
         // Generate a valid InstanceId for the n-th occurrence
         var startTime = masterStartTime.AddDays(14);
         var datePart = startTime.ToString("yyyyMMddTHHmmssZ");
-        var instanceId = $"{master.Id}_{datePart}";
+        var instanceId = $"{master.Id.ToString()}_{datePart}";
 
         var updateDto = new UpdateRecurrentEventRequestDto {
             UpdateType = RecurrentUpdateType.ThisInstance,
-            MasterEventId = master.Id.ToString(),
+            MasterEventId = master.Id.ToString().ToString(),
             InstanceId = instanceId,
             Title = "Modified Yoga Session"
         };
@@ -597,7 +540,7 @@ public class UpdateSingleTests {
         detachedEvent.Title.Should().Be("Modified Yoga Session");
         detachedEvent.StartTime.Should().Be(startTime);
         detachedEvent.EndTime.Should().Be(startTime.AddHours(1));
-        detachedEvent.MasterEventId.ToString().Should().Be(master.Id);
+        detachedEvent.MasterEventId.ToString().Should().Be(master.Id.ToString());
         detachedEvent.RecurrencyInstanceId.Should().Be(instanceId);
         detachedEvent.DetachedInstance.Should().BeTrue();
 
@@ -631,7 +574,7 @@ public class UpdateSingleTests {
         var masterProfileEvent= await _dbService.RetrieveAsync(
             CollectionName.ProfileEvents,
             Builders<ProfileRecurrentEvent>.Filter.And(
-                Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.EventId, new ObjectId(master.Id)),
+                Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.EventId, new ObjectId(master.Id.ToString())),
                 Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.ProfileId, _creatorProfile.Id)
             )
         );
@@ -644,10 +587,10 @@ public class UpdateSingleTests {
         // ASSERT: DetachedInstances Collection
         var detachedList = await _dbService.RetrieveAsync(
             CollectionName.DetachedInstances,
-            Builders<DetachedInstances>.Filter.Eq(di => di.MasterId, new ObjectId(master.Id))
+            Builders<DetachedInstances>.Filter.Eq(di => di.MasterId, new ObjectId(master.Id.ToString()))
         );
         detachedList.Should().NotBeNull();
-        detachedList.MasterId.Should().Be(new ObjectId(master.Id));
+        detachedList.MasterId.Should().Be(new ObjectId(master.Id.ToString()));
         detachedList.Instances.Should().ContainSingle(i => i.RecurrencyId == instanceId);
         detachedList.Instances.Should().ContainSingle(i => i.EventId == detachedEvent.Id );
         var detachedListInstance = detachedList.Instances.First(i => i.RecurrencyId == instanceId);
@@ -672,11 +615,11 @@ public class UpdateSingleTests {
         // Generate a valid InstanceId for the n-th occurrence
         var startTime = masterStartTime.AddDays(14);
         var datePart = startTime.ToString("yyyyMMddTHHmmssZ");
-        var instanceId = $"{master.Id}_{datePart}";
+        var instanceId = $"{master.Id.ToString()}_{datePart}";
 
         var updateDto = new UpdateRecurrentEventRequestDto {
             UpdateType = RecurrentUpdateType.ThisInstance,
-            MasterEventId = master.Id.ToString(),
+            MasterEventId = master.Id.ToString().ToString(),
             InstanceId = instanceId,
             Description = "Bring your own mat today!"
         };
@@ -691,7 +634,7 @@ public class UpdateSingleTests {
         detachedEvent.Title.Should().Be("Weekly Yoga");
         detachedEvent.StartTime.Should().Be(startTime);
         detachedEvent.EndTime.Should().Be(startTime.AddHours(1));
-        detachedEvent.MasterEventId.ToString().Should().Be(master.Id);
+        detachedEvent.MasterEventId.ToString().Should().Be(master.Id.ToString());
         detachedEvent.RecurrencyInstanceId.Should().Be(instanceId);
         detachedEvent.DetachedInstance.Should().BeTrue();
 
@@ -719,11 +662,11 @@ public class UpdateSingleTests {
         // Generate a valid InstanceId for the first occurrence
         var startTime = masterStartTime.AddDays(14);
         var datePart = startTime.ToString("yyyyMMddTHHmmssZ");
-        var instanceId = $"{master.Id}_{datePart}";
+        var instanceId = $"{master.Id.ToString()}_{datePart}";
 
         var updateDto = new UpdateRecurrentEventRequestDto {
             UpdateType = RecurrentUpdateType.ThisInstance,
-            MasterEventId = master.Id.ToString(),
+            MasterEventId = master.Id.ToString().ToString(),
             InstanceId = instanceId,
             StartTime = startTime.AddHours(4),
             EndTime = startTime.AddHours(5)
@@ -741,7 +684,7 @@ public class UpdateSingleTests {
         detachedEvent.StartTime.Should().Be(startTime.AddHours(4));
         detachedEvent.EndTime.Should().Be(startTime.AddHours(5));
 
-        detachedEvent.MasterEventId.ToString().Should().Be(master.Id);
+        detachedEvent.MasterEventId.ToString().Should().Be(master.Id.ToString());
         detachedEvent.RecurrencyInstanceId.Should().Be(instanceId);
         detachedEvent.DetachedInstance.Should().BeTrue();
 
@@ -775,7 +718,7 @@ public class UpdateSingleTests {
         var masterProfileEvent = await _dbService.RetrieveAsync(
             CollectionName.ProfileEvents,
             Builders<ProfileRecurrentEvent>.Filter.And(
-                Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.EventId, new ObjectId(master.Id)),
+                Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.EventId, new ObjectId(master.Id.ToString())),
                 Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.ProfileId, _creatorProfile.Id)
             )
         );
@@ -790,10 +733,10 @@ public class UpdateSingleTests {
         // ASSERT: DetachedInstances Collection
         var detachedList = await _dbService.RetrieveAsync(
             CollectionName.DetachedInstances,
-            Builders<DetachedInstances>.Filter.Eq(di => di.MasterId, new ObjectId(master.Id))
+            Builders<DetachedInstances>.Filter.Eq(di => di.MasterId, new ObjectId(master.Id.ToString()))
         );
         detachedList.Should().NotBeNull();
-        detachedList.MasterId.Should().Be(new ObjectId(master.Id));
+        detachedList.MasterId.Should().Be(new ObjectId(master.Id.ToString()));
         detachedList.Instances.Should().ContainSingle(i => i.RecurrencyId == instanceId);
         detachedList.Instances.Should().ContainSingle(i => i.EventId == detachedEvent.Id);
         var detachedListInstance = detachedList.Instances.First(i => i.RecurrencyId == instanceId);
@@ -803,7 +746,7 @@ public class UpdateSingleTests {
 
         var masterEventAfter = await _dbService.RetrieveAsync(
             CollectionName.RecurrentEvents,
-            Builders<RecurrentEvent>.Filter.Eq(m => m.Id, new ObjectId(master.Id))
+            Builders<RecurrentEvent>.Filter.Eq(m => m.Id, new ObjectId(master.Id.ToString()))
         );
         masterEventAfter.StartTime.Should().Be(master.StartTime);
         masterEventAfter.EndTime.Should().Be(master.EndTime);
@@ -832,11 +775,11 @@ public class UpdateSingleTests {
 
         // Generate a valid InstanceId for the first occurrence
         var datePart = startTime.ToString("yyyyMMddTHHmmssZ");
-        var instanceId = $"{master.Id}_{datePart}";
+        var instanceId = $"{master.Id.ToString()}_{datePart}";
 
         var createDto = new UpdateRecurrentEventRequestDto {
             UpdateType = RecurrentUpdateType.ThisInstance,
-            MasterEventId = master.Id.ToString(),
+            MasterEventId = master.Id.ToString().ToString(),
             InstanceId = instanceId,
             Title = "Created Yoga Session"
         };
@@ -852,7 +795,7 @@ public class UpdateSingleTests {
 
         var updateDto = new UpdateRecurrentEventRequestDto {
             UpdateType = RecurrentUpdateType.ThisInstance,
-            MasterEventId = master.Id.ToString(),
+            MasterEventId = master.Id.ToString().ToString(),
             InstanceId = instanceId,
             Title = "Modified Yoga Session"
         };
@@ -904,7 +847,7 @@ public class UpdateSingleTests {
         var masterProfileEvent= await _dbService.RetrieveAsync(
             CollectionName.ProfileEvents,
             Builders<ProfileRecurrentEvent>.Filter.And(
-                Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.EventId, new ObjectId(master.Id)),
+                Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.EventId, new ObjectId(master.Id.ToString())),
                 Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.ProfileId, _creatorProfile.Id)
             )
         );
@@ -917,10 +860,10 @@ public class UpdateSingleTests {
         // ASSERT: DetachedInstances Collection
         var detachedList = await _dbService.RetrieveAsync(
             CollectionName.DetachedInstances,
-            Builders<DetachedInstances>.Filter.Eq(di => di.MasterId, new ObjectId(master.Id))
+            Builders<DetachedInstances>.Filter.Eq(di => di.MasterId, new ObjectId(master.Id.ToString()))
         );
         detachedList.Should().NotBeNull();
-        detachedList.MasterId.Should().Be(new ObjectId(master.Id));
+        detachedList.MasterId.Should().Be(new ObjectId(master.Id.ToString()));
         detachedList.Instances.Should().ContainSingle(i => i.RecurrencyId == instanceId);
         detachedList.Instances.Should().ContainSingle(i => i.EventId == detachedEvent.Id );
         var detachedListInstance = detachedList.Instances.First(i => i.RecurrencyId == instanceId);
@@ -944,11 +887,11 @@ public class UpdateSingleTests {
 
         // Generate a valid InstanceId for the first occurrence
         var datePart = startTime.ToString("yyyyMMddTHHmmssZ");
-        var instanceId = $"{master.Id}_{datePart}";
+        var instanceId = $"{master.Id.ToString()}_{datePart}";
 
         var createDto = new UpdateRecurrentEventRequestDto {
             UpdateType = RecurrentUpdateType.ThisInstance,
-            MasterEventId = master.Id.ToString(),
+            MasterEventId = master.Id.ToString().ToString(),
             InstanceId = instanceId,
             Description = "description"
         };
@@ -957,7 +900,7 @@ public class UpdateSingleTests {
 
         var updateDto = new UpdateRecurrentEventRequestDto {
             UpdateType = RecurrentUpdateType.ThisInstance,
-            MasterEventId = master.Id.ToString(),
+            MasterEventId = master.Id.ToString().ToString(),
             InstanceId = instanceId,
             Description = "Bring your own mat today!"
         };
@@ -1000,11 +943,11 @@ public class UpdateSingleTests {
 
         // Generate a valid InstanceId for the first occurrence
         var datePart = startTime.ToString("yyyyMMddTHHmmssZ");
-        var instanceId = $"{master.Id}_{datePart}";
+        var instanceId = $"{master.Id.ToString()}_{datePart}";
 
         var createDto = new UpdateRecurrentEventRequestDto {
             UpdateType = RecurrentUpdateType.ThisInstance,
-            MasterEventId = master.Id.ToString(),
+            MasterEventId = master.Id.ToString().ToString(),
             InstanceId = instanceId,
             Title = "BothTime update"
         };
@@ -1013,7 +956,7 @@ public class UpdateSingleTests {
 
         var updateDto = new UpdateRecurrentEventRequestDto {
             UpdateType = RecurrentUpdateType.ThisInstance,
-            MasterEventId = master.Id.ToString(),
+            MasterEventId = master.Id.ToString().ToString(),
             InstanceId = instanceId,
             StartTime = startTime.AddHours(4),
             EndTime = startTime.AddHours(5)
@@ -1031,7 +974,7 @@ public class UpdateSingleTests {
         detachedEvent.StartTime.Should().Be(startTime.AddHours(4));
         detachedEvent.EndTime.Should().Be(startTime.AddHours(5));
 
-        detachedEvent.MasterEventId.ToString().Should().Be(master.Id);
+        detachedEvent.MasterEventId.ToString().Should().Be(master.Id.ToString());
         detachedEvent.RecurrencyInstanceId.Should().Be(instanceId);
         detachedEvent.DetachedInstance.Should().BeTrue();
 
@@ -1065,7 +1008,7 @@ public class UpdateSingleTests {
         var masterProfileEvent = await _dbService.RetrieveAsync(
             CollectionName.ProfileEvents,
             Builders<ProfileRecurrentEvent>.Filter.And(
-                Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.EventId, new ObjectId(master.Id)),
+                Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.EventId, new ObjectId(master.Id.ToString())),
                 Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.ProfileId, _creatorProfile.Id)
             )
         );
@@ -1080,10 +1023,10 @@ public class UpdateSingleTests {
         // ASSERT: DetachedInstances Collection
         var detachedList = await _dbService.RetrieveAsync(
             CollectionName.DetachedInstances,
-            Builders<DetachedInstances>.Filter.Eq(di => di.MasterId, new ObjectId(master.Id))
+            Builders<DetachedInstances>.Filter.Eq(di => di.MasterId, new ObjectId(master.Id.ToString()))
         );
         detachedList.Should().NotBeNull();
-        detachedList.MasterId.Should().Be(new ObjectId(master.Id));
+        detachedList.MasterId.Should().Be(new ObjectId(master.Id.ToString()));
         detachedList.Instances.Should().ContainSingle(i => i.RecurrencyId == instanceId);
         detachedList.Instances.Should().ContainSingle(i => i.EventId == detachedEvent.Id);
         var detachedListInstance = detachedList.Instances.First(i => i.RecurrencyId == instanceId);
@@ -1093,7 +1036,7 @@ public class UpdateSingleTests {
 
         var masterEventAfter = await _dbService.RetrieveAsync(
             CollectionName.RecurrentEvents,
-            Builders<RecurrentEvent>.Filter.Eq(m => m.Id, new ObjectId(master.Id))
+            Builders<RecurrentEvent>.Filter.Eq(m => m.Id, new ObjectId(master.Id.ToString()))
         );
         masterEventAfter.StartTime.Should().Be(master.StartTime);
         masterEventAfter.EndTime.Should().Be(master.EndTime);
@@ -1119,11 +1062,11 @@ public class UpdateSingleTests {
         // Generate a valid InstanceId for the n-th occurrence
         var startTime = masterStartTime.AddDays(14);
         var datePart = startTime.ToString("yyyyMMddTHHmmssZ");
-        var instanceId = $"{master.Id}_{datePart}";
+        var instanceId = $"{master.Id.ToString()}_{datePart}";
 
         var createDto = new UpdateRecurrentEventRequestDto {
             UpdateType = RecurrentUpdateType.ThisInstance,
-            MasterEventId = master.Id.ToString(),
+            MasterEventId = master.Id.ToString().ToString(),
             InstanceId = instanceId,
             Title = "Created Yoga Session"
         };
@@ -1139,7 +1082,7 @@ public class UpdateSingleTests {
 
         var updateDto = new UpdateRecurrentEventRequestDto {
             UpdateType = RecurrentUpdateType.ThisInstance,
-            MasterEventId = master.Id.ToString(),
+            MasterEventId = master.Id.ToString().ToString(),
             InstanceId = instanceId,
             Title = "Modified Yoga Session"
         };
@@ -1191,7 +1134,7 @@ public class UpdateSingleTests {
         var masterProfileEvent= await _dbService.RetrieveAsync(
             CollectionName.ProfileEvents,
             Builders<ProfileRecurrentEvent>.Filter.And(
-                Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.EventId, new ObjectId(master.Id)),
+                Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.EventId, new ObjectId(master.Id.ToString())),
                 Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.ProfileId, _creatorProfile.Id)
             )
         );
@@ -1204,10 +1147,10 @@ public class UpdateSingleTests {
         // ASSERT: DetachedInstances Collection
         var detachedList = await _dbService.RetrieveAsync(
             CollectionName.DetachedInstances,
-            Builders<DetachedInstances>.Filter.Eq(di => di.MasterId, new ObjectId(master.Id))
+            Builders<DetachedInstances>.Filter.Eq(di => di.MasterId, new ObjectId(master.Id.ToString()))
         );
         detachedList.Should().NotBeNull();
-        detachedList.MasterId.Should().Be(new ObjectId(master.Id));
+        detachedList.MasterId.Should().Be(new ObjectId(master.Id.ToString()));
         detachedList.Instances.Should().ContainSingle(i => i.RecurrencyId == instanceId);
         detachedList.Instances.Should().ContainSingle(i => i.EventId == detachedEvent.Id );
         var detachedListInstance = detachedList.Instances.First(i => i.RecurrencyId == instanceId);
@@ -1231,11 +1174,11 @@ public class UpdateSingleTests {
         // Generate a valid InstanceId for the n-th occurrence
         var startTime = masterStartTime.AddDays(14);
         var datePart = startTime.ToString("yyyyMMddTHHmmssZ");
-        var instanceId = $"{master.Id}_{datePart}";
+        var instanceId = $"{master.Id.ToString()}_{datePart}";
 
         var createDto = new UpdateRecurrentEventRequestDto {
             UpdateType = RecurrentUpdateType.ThisInstance,
-            MasterEventId = master.Id.ToString(),
+            MasterEventId = master.Id.ToString().ToString(),
             InstanceId = instanceId,
             Description = "description"
         };
@@ -1244,7 +1187,7 @@ public class UpdateSingleTests {
 
         var updateDto = new UpdateRecurrentEventRequestDto {
             UpdateType = RecurrentUpdateType.ThisInstance,
-            MasterEventId = master.Id.ToString(),
+            MasterEventId = master.Id.ToString().ToString(),
             InstanceId = instanceId,
             Description = "Bring your own mat today!"
         };
@@ -1288,11 +1231,11 @@ public class UpdateSingleTests {
         // Generate a valid InstanceId for the n-th occurrence
         var startTime = masterStartTime.AddDays(14);
         var datePart = startTime.ToString("yyyyMMddTHHmmssZ");
-        var instanceId = $"{master.Id}_{datePart}";
+        var instanceId = $"{master.Id.ToString()}_{datePart}";
 
         var createDto = new UpdateRecurrentEventRequestDto {
             UpdateType = RecurrentUpdateType.ThisInstance,
-            MasterEventId = master.Id.ToString(),
+            MasterEventId = master.Id.ToString().ToString(),
             InstanceId = instanceId,
             Title = "BothTime update"
         };
@@ -1301,7 +1244,7 @@ public class UpdateSingleTests {
 
         var updateDto = new UpdateRecurrentEventRequestDto {
             UpdateType = RecurrentUpdateType.ThisInstance,
-            MasterEventId = master.Id.ToString(),
+            MasterEventId = master.Id.ToString().ToString(),
             InstanceId = instanceId,
             StartTime = startTime.AddHours(4),
             EndTime = startTime.AddHours(5)
@@ -1319,7 +1262,7 @@ public class UpdateSingleTests {
         detachedEvent.StartTime.Should().Be(startTime.AddHours(4));
         detachedEvent.EndTime.Should().Be(startTime.AddHours(5));
 
-        detachedEvent.MasterEventId.ToString().Should().Be(master.Id);
+        detachedEvent.MasterEventId.ToString().Should().Be(master.Id.ToString());
         detachedEvent.RecurrencyInstanceId.Should().Be(instanceId);
         detachedEvent.DetachedInstance.Should().BeTrue();
 
@@ -1353,7 +1296,7 @@ public class UpdateSingleTests {
         var masterProfileEvent = await _dbService.RetrieveAsync(
             CollectionName.ProfileEvents,
             Builders<ProfileRecurrentEvent>.Filter.And(
-                Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.EventId, new ObjectId(master.Id)),
+                Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.EventId, new ObjectId(master.Id.ToString())),
                 Builders<ProfileRecurrentEvent>.Filter.Eq(pe => pe.ProfileId, _creatorProfile.Id)
             )
         );
@@ -1368,10 +1311,10 @@ public class UpdateSingleTests {
         // ASSERT: DetachedInstances Collection
         var detachedList = await _dbService.RetrieveAsync(
             CollectionName.DetachedInstances,
-            Builders<DetachedInstances>.Filter.Eq(di => di.MasterId, new ObjectId(master.Id))
+            Builders<DetachedInstances>.Filter.Eq(di => di.MasterId, new ObjectId(master.Id.ToString()))
         );
         detachedList.Should().NotBeNull();
-        detachedList.MasterId.Should().Be(new ObjectId(master.Id));
+        detachedList.MasterId.Should().Be(new ObjectId(master.Id.ToString()));
         detachedList.Instances.Should().ContainSingle(i => i.RecurrencyId == instanceId);
         detachedList.Instances.Should().ContainSingle(i => i.EventId == detachedEvent.Id);
         var detachedListInstance = detachedList.Instances.First(i => i.RecurrencyId == instanceId);
@@ -1381,7 +1324,7 @@ public class UpdateSingleTests {
 
         var masterEventAfter = await _dbService.RetrieveAsync(
             CollectionName.RecurrentEvents,
-            Builders<RecurrentEvent>.Filter.Eq(m => m.Id, new ObjectId(master.Id))
+            Builders<RecurrentEvent>.Filter.Eq(m => m.Id, new ObjectId(master.Id.ToString()))
         );
         masterEventAfter.StartTime.Should().Be(master.StartTime);
         masterEventAfter.EndTime.Should().Be(master.EndTime);
