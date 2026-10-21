@@ -130,9 +130,9 @@ public class RecurrentEventUpdateService(
 
   private async Task PropagateToDetachedInstances(UpdateRecurrentEventRequestDto updateDto, DetachedInstances detachedInstances, IClientSessionHandle session) {
     var filter = Builders<DetachedInstances>.Filter.And(
-        Builders<DetachedInstances>.Filter.Eq(di => di.MasterId, new ObjectId(updateDto.MasterEventId)),
-        Builders<DetachedInstances>.Filter.Eq(di => di.Id, detachedInstances.Id),
-        Builders<DetachedInstances>.Filter.ElemMatch(di => di.Instances, i => i.EventId == new ObjectId(updateDto.InstanceId))
+      Builders<DetachedInstances>.Filter.Eq(di => di.MasterId, new ObjectId(updateDto.MasterEventId)),
+      Builders<DetachedInstances>.Filter.Eq(di => di.Id, detachedInstances.Id),
+      Builders<DetachedInstances>.Filter.ElemMatch(di => di.Instances, i => i.EventId == new ObjectId(updateDto.InstanceId))
     );
     var update = Builders<DetachedInstances>.Update.Set("instances.$.startTime", updateDto.StartTime);
 
@@ -225,17 +225,17 @@ public class RecurrentEventUpdateService(
       await UpdateDetachedInstances(oldMaster, newMaster, stopTime, updateDto, session);
 
       return new RetrieveRecurrentEventResponseDto(
-          newMaster,
-          eventDetails,
-          profileEventDtos: [
-              new ProfileEventDto
-                    {
-                        ProfileId = profileRecurrentEvent.ProfileId.ToString(),
-                        Role = profileRecurrentEvent.Role,
-                        Confirmed = profileRecurrentEvent.Confirmed,
-                        Trusted = false
-                    }
-          ]
+        newMaster,
+        eventDetails,
+        profileEventDtos: [
+          new ProfileEventDto
+          {
+            ProfileId = profileRecurrentEvent.ProfileId.ToString(),
+            Role = profileRecurrentEvent.Role,
+            Confirmed = profileRecurrentEvent.Confirmed,
+            Trusted = false
+          }
+        ]
       );
     });
     return eventDto;
@@ -303,13 +303,13 @@ public class RecurrentEventUpdateService(
 
     // Count occurrences that stay with the OLD master (strictly before the split).
     var occurrencesBefore = RecurrenceService.GetOccurrences(
-        oldRule,
-        oldMaster.StartTime,
-        recurrenceEnd: null,                          // COUNT already limits the series
-        oldMaster.TimeZone,
-        eventDuration,
-        windowStart: oldMaster.StartTime,
-        windowEnd: splitOccurrenceTime.AddTicks(-1) // exclusive of the split occurrence
+      oldRule,
+      oldMaster.StartTime,
+      recurrenceEnd: null,                          // COUNT already limits the series
+      oldMaster.TimeZone,
+      eventDuration,
+      windowStart: oldMaster.StartTime,
+      windowEnd: splitOccurrenceTime.AddTicks(-1) // exclusive of the split occurrence
     ).Count();
 
     var remainingCount = Math.Max(1, totalCount - occurrencesBefore);
