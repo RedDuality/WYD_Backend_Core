@@ -103,9 +103,10 @@ public abstract class RecurrentEventTestBase {
     string? title = null,
     string? description = null,
     DateTimeOffset? updateStartTime = null,
-    DateTimeOffset? endTime = null
+    DateTimeOffset? endTime = null,
+    string? recurrenceRule = null
   ){
-    var datePart = startTime.AddDays(21).ToString("yyyyMMddTHHmmssZ");
+    var datePart = startTime.ToString("yyyyMMddTHHmmssZ");
     var instanceId = $"{masterId}_{datePart}";
 
     var updateDto = new UpdateRecurrentEventRequestDto {
@@ -115,7 +116,8 @@ public abstract class RecurrentEventTestBase {
       Title = title,
       Description = description,
       StartTime = updateStartTime,
-      EndTime = endTime
+      EndTime = endTime,
+      RecurrenceRule = recurrenceRule
     };
     return updateDto;
   }
