@@ -49,7 +49,8 @@ public abstract class RecurrentEventTestBase {
       string timeZone = "UTC",
       DateTimeOffset? start = null,
       DateTimeOffset? end = null,
-    string? description = null) {
+    string? description = null
+    ) {
 
     var s = start ?? new DateTimeOffset(2025, 6, 1, 9, 0, 0, TimeSpan.Zero);
     var e = end ?? s.AddHours(1);
@@ -200,6 +201,7 @@ public abstract class RecurrentEventTestBase {
       eventId
     );
 
+    detachedEvent.Should().NotBeNull();
     detachedEvent.Title.Should().Be(title);
     detachedEvent.StartTime.Should().Be(startTime);
     detachedEvent.EndTime.Should().Be(endTime);
@@ -211,6 +213,7 @@ public abstract class RecurrentEventTestBase {
       CollectionName.EventDetails,
       Builders<EventDetails>.Filter.Eq("eventId", detachedEvent.Id)
     );
+    detachedDetails.Should().NotBeNull();
     detachedDetails.Description.Should().Be(description);
 
     var detachedEventProfile = await _dbService.RetrieveMultipleAsync(
@@ -237,7 +240,7 @@ public abstract class RecurrentEventTestBase {
     detachedProfileEvent.First().Role.Should().Be(role);
   }
   
-  protected async Task AssertDetachedInstances(
+  protected async Task AssertDetachedInstancesCollection(
     string masterId,
     params (
       string eventId, 
@@ -279,12 +282,13 @@ public abstract class RecurrentEventTestBase {
         detachedDetails.Description.Should().Be(description);
       }
 
+      detachedList.Instances.Should().ContainSingle(i => i.RecurrencyId == recurrencyInstanceId);
+      detachedList.Instances.Should().ContainSingle(i => i.EventId == dbEvent.Id);
       var detachedInstance = detachedList.Instances.First(instance => instance.EventId == dbEvent.Id);
       detachedInstance.EventId.Should().Be(new ObjectId(eventId));
       detachedInstance.RecurrencyId.Should().Be(recurrencyInstanceId);
       detachedInstance.StartTime.Should().Be(startTime);
     }
-
   }
   
   #endregion

@@ -145,7 +145,7 @@ public class EventServiceTests {
     };
     var createdEventDto = await _eventService.CreateEventAsync(request, _creatorProfile);
 
-    // 2. ACT
+    // ACT
     var shareRequest = new ShareEventRequestDto {
       SharedGroups = [
             new ShareGroupIdentifierDto
@@ -243,7 +243,7 @@ public class EventServiceTests {
       ShareDto = shareRequest
     };
 
-    // 2. ACT
+    // ACT
     var response = await _eventService.CreateEventAsync(request, _creatorProfile);
     var eventId = new ObjectId(response.Id);
 
@@ -327,7 +327,7 @@ public class EventServiceTests {
       EndTime = DateTimeOffset.UtcNow.AddDays(3).AddHours(4)
     };
 
-    // 2. ACT
+    // ACT
     await _eventService.UpdateEvent(updateDto, _session);
 
     // 3. ASSERT - Event document
@@ -363,7 +363,7 @@ public class EventServiceTests {
       EndTime = DateTimeOffset.UtcNow.AddDays(3).AddHours(4)
     };
 
-    // 2. ACT
+    // ACT
     await _eventService.UpdateEvent(updateRequest, _session);
 
     // 3. ASSERT
@@ -390,7 +390,7 @@ public class EventServiceTests {
       EndTime = DateTimeOffset.UtcNow.AddDays(3).AddHours(4)
     };
 
-    // 2. ACT
+    // ACT
     await _eventService.UpdateEvent(updateRequest, _session);
 
     // 3. ASSERT
@@ -423,7 +423,7 @@ public class EventServiceTests {
       EndTime = null
     };
 
-    // 2. ACT
+    // ACT
     await _eventService.UpdateEvent(updateRequest, _session);
 
     // 3. ASSERT

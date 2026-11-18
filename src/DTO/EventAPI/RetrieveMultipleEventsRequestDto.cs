@@ -1,9 +1,9 @@
+using Core.Model.Util.Extensions;
+
 namespace Core.DTO.EventAPI;
 
-public record RetrieveMultipleEventsRequestDto
-{
-    public DateTimeOffset StartTime { get; set; }
-    public DateTimeOffset EndTime { get; set; }
-    
-    public RetrieveMultipleEventsRequestDto() { }
+public record RetrieveMultipleEventsRequestDto {
+  required public DateTimeOffset StartTime { get; set => field = value.TruncateToSeconds(); }
+  required public DateTimeOffset EndTime { get; set => field = value.TruncateToSeconds(); }
+  public RetrieveMultipleEventsRequestDto() { }
 }

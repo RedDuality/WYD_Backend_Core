@@ -24,7 +24,7 @@ public class Event(
 
     [BsonElement("recurrencyId")]
     [BsonIgnoreIfNull]
-    public string? RecurrencyInstanceId { get; set; } //yyyyMMddTHHmmssZ; (generated ones have MasterId_yyyyMMddTHHmmssZ)
+    public string? RecurrencyInstanceId { get; set; } //MasterId_yyyyMMddTHHmmssZ (all-day ones have MasterId_yyyyMMdd)
 
     [BsonElement("detached")]
     [BsonIgnoreIfDefault]

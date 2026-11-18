@@ -80,14 +80,14 @@ public class UpdateThisAndAllFollowingTests(MongoDbFixture fixture) : RecurrentE
     var startTime = DateTimeOffset.UtcNow.AddHours(1);
 
     var master = await BuildMasterAsync(
-        "Weekly Yoga",
-        "FREQ=WEEKLY;INTERVAL=1",
-        "UTC",
-        startTime,
-        startTime.AddHours(1)
+      "Weekly Yoga",
+      "FREQ=WEEKLY;INTERVAL=1",
+      "UTC",
+      startTime,
+      startTime.AddHours(1)
     );
 
-    // Generate a valid InstanceId for the first occurrence
+
     var datePart = startTime.ToString("yyyyMMddTHHmmssZ");
     var instanceId = $"{master.Id}_{datePart}";
 
@@ -473,7 +473,7 @@ public class UpdateThisAndAllFollowingTests(MongoDbFixture fixture) : RecurrentE
     var detachedBefore = await BuildDetachedEvent(startTime.AddDays(14), oldMaster.Id.ToString(), title: "Modified Yoga Session 1");
     var detachedAfter = await BuildDetachedEvent(startTime.AddDays(28), oldMaster.Id.ToString(), title: "Modified Yoga Session 2", description: "Description 2");
 
-    // 2. ACT
+    // ACT
     var updateDto = GetUpdateDto(
       oldMaster.Id,
       startTime.AddDays(21),
@@ -510,7 +510,7 @@ public class UpdateThisAndAllFollowingTests(MongoDbFixture fixture) : RecurrentE
     );
 
     // ASSERT: Old DetachedInstances
-    await AssertDetachedInstances(
+    await AssertDetachedInstancesCollection(
       oldMaster.Id.ToString(),
       (
         detachedBefore.Id,
@@ -523,7 +523,7 @@ public class UpdateThisAndAllFollowingTests(MongoDbFixture fixture) : RecurrentE
     );
 
     // ASSERT: New DetachedInstances
-    await AssertDetachedInstances(
+    await AssertDetachedInstancesCollection(
       newMaster.Id,
       (
         detachedAfter.Id,
@@ -561,7 +561,7 @@ public class UpdateThisAndAllFollowingTests(MongoDbFixture fixture) : RecurrentE
     var detachedBefore = await BuildDetachedEvent(startTime.AddDays(14), oldMaster.Id.ToString(), title: "Modified Yoga Session 1", description: "Description 1");
     var detachedAfter = await BuildDetachedEvent(startTime.AddDays(28), oldMaster.Id.ToString(), title: "Modified Yoga Session 2", description: "Description 2");
 
-    // 2. ACT
+    // ACT
     var updateDto = GetUpdateDto(
       oldMaster.Id,
       startTime.AddDays(21),
@@ -597,7 +597,7 @@ public class UpdateThisAndAllFollowingTests(MongoDbFixture fixture) : RecurrentE
     );
 
     // ASSERT: Old DetachedInstances
-    await AssertDetachedInstances(
+    await AssertDetachedInstancesCollection(
       oldMaster.Id.ToString(),
       (
         detachedBefore.Id,
@@ -610,7 +610,7 @@ public class UpdateThisAndAllFollowingTests(MongoDbFixture fixture) : RecurrentE
     );
 
     // ASSERT: New DetachedInstances
-    await AssertDetachedInstances(
+    await AssertDetachedInstancesCollection(
       newMaster.Id.ToString(),
       (
         detachedBefore.Id,
@@ -648,7 +648,7 @@ public class UpdateThisAndAllFollowingTests(MongoDbFixture fixture) : RecurrentE
     var detachedBefore = await BuildDetachedEvent(startTime.AddDays(14), oldMaster.Id.ToString(), updateStartTime: startTime.AddDays(14).AddHours(1), endTime: startTime.AddDays(14).AddHours(2));
     var detachedAfter = await BuildDetachedEvent(startTime.AddDays(28), oldMaster.Id.ToString(), updateStartTime: startTime.AddDays(28).AddHours(-2), endTime: startTime.AddDays(28).AddHours(-1));
     
-    // 2. ACT
+    // ACT
     var updateDto = GetUpdateDto(
       oldMaster.Id,
       startTime.AddDays(21),
@@ -686,7 +686,7 @@ public class UpdateThisAndAllFollowingTests(MongoDbFixture fixture) : RecurrentE
     );
 
     // ASSERT: Old DetachedInstances
-    await AssertDetachedInstances(
+    await AssertDetachedInstancesCollection(
       oldMaster.Id.ToString(),
       (
         detachedBefore.Id,
@@ -699,7 +699,7 @@ public class UpdateThisAndAllFollowingTests(MongoDbFixture fixture) : RecurrentE
     );
     
     // ASSERT: New DetachedInstances
-    await AssertDetachedInstances(
+    await AssertDetachedInstancesCollection(
       newMaster.Id,
       (
         detachedAfter.Id,
@@ -828,7 +828,7 @@ public class UpdateThisAndAllFollowingTests(MongoDbFixture fixture) : RecurrentE
       Builders<ProfileEvent>.Filter.Eq(pe => pe.EventId, new ObjectId(previousDetached.Id))
     );
 
-    // 2. ACT
+    // ACT
     var updateDto = new UpdateRecurrentEventRequestDto {
       InstanceId = previousDetached.Id,
       UpdateType = RecurrentUpdateType.ThisAndAllFollowing,
@@ -878,7 +878,7 @@ public class UpdateThisAndAllFollowingTests(MongoDbFixture fixture) : RecurrentE
     );
 
     // ASSERT: Old DetachedInstances
-    await AssertDetachedInstances(
+    await AssertDetachedInstancesCollection(
       oldMaster.Id.ToString(),
       (
         detachedBefore.Id,
@@ -891,7 +891,7 @@ public class UpdateThisAndAllFollowingTests(MongoDbFixture fixture) : RecurrentE
     );
 
     // ASSERT: New DetachedInstances
-    await AssertDetachedInstances(
+    await AssertDetachedInstancesCollection(
       newMaster.Id,
       (
         previousDetached.Id.ToString(),
@@ -945,7 +945,7 @@ public class UpdateThisAndAllFollowingTests(MongoDbFixture fixture) : RecurrentE
       Builders<ProfileEvent>.Filter.Eq(pe => pe.EventId, new ObjectId(detached.Id))
     );
 
-    // 2. ACT
+    // ACT
     var updateDto = new UpdateRecurrentEventRequestDto {
       InstanceId = detached.Id,
       UpdateType = RecurrentUpdateType.ThisAndAllFollowing,
@@ -994,7 +994,7 @@ public class UpdateThisAndAllFollowingTests(MongoDbFixture fixture) : RecurrentE
     );
 
     // ASSERT: Old DetachedInstances
-    await AssertDetachedInstances(
+    await AssertDetachedInstancesCollection(
       oldMaster.Id.ToString(),
       (
         detachedBefore.Id.ToString(),
@@ -1007,7 +1007,7 @@ public class UpdateThisAndAllFollowingTests(MongoDbFixture fixture) : RecurrentE
     );
 
     // ASSERT: New DetachedInstances
-    await AssertDetachedInstances(
+    await AssertDetachedInstancesCollection(
       newMaster.Id,
       (
         detachedAfter.Id.ToString(),
@@ -1072,7 +1072,7 @@ public class UpdateThisAndAllFollowingTests(MongoDbFixture fixture) : RecurrentE
     );
 
     // ASSERT: Old DetachedInstances
-    await AssertDetachedInstances(
+    await AssertDetachedInstancesCollection(
       oldMaster.Id.ToString(),
       (
         detachedBefore.Id.ToString(),
@@ -1085,7 +1085,7 @@ public class UpdateThisAndAllFollowingTests(MongoDbFixture fixture) : RecurrentE
     );
 
     // ASSERT: NewDetachedInstances
-    await AssertDetachedInstances(
+    await AssertDetachedInstancesCollection(
       newMaster.Id.ToString(),
       (
         detached.Id.ToString(),
@@ -1310,7 +1310,7 @@ public class UpdateThisAndAllFollowingTests(MongoDbFixture fixture) : RecurrentE
     );
 
     // ASSERT: Old DetachedInstances
-    await AssertDetachedInstances(
+    await AssertDetachedInstancesCollection(
       oldMaster.Id.ToString(),
       (
         detachedBefore.Id,
@@ -1323,7 +1323,7 @@ public class UpdateThisAndAllFollowingTests(MongoDbFixture fixture) : RecurrentE
     );
 
     // ASSERT: New DetachedInstances
-    await AssertDetachedInstances(
+    await AssertDetachedInstancesCollection(
       newMaster.Id,
       (
         detachedAfter.Id,
@@ -1407,7 +1407,7 @@ public class UpdateThisAndAllFollowingTests(MongoDbFixture fixture) : RecurrentE
 
     // ASSERT: DetachedInstances Collection
     // eventi sucessivi vengono eliminati
-    await AssertDetachedInstances(
+    await AssertDetachedInstancesCollection(
       newMaster.Id
     );
   }

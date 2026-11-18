@@ -122,7 +122,7 @@ public class EventRetrieveService(
             group => new
             {
                 ev = group.First().Event,
-                ProfileEvents = group.Select(pe => new ProfileEventDto
+                ProfileEvents = group.Select(pe => new RetrieveProfileEventResponseDto
                 {
                     ProfileId = pe.ProfileId.ToString(),
                     Role = pe.Role,
@@ -141,7 +141,7 @@ public class EventRetrieveService(
 
     }
 
-    public async Task<HashSet<ProfileEventDto>> GetProfileEventsAsync(string eventId)
+    public async Task<HashSet<RetrieveProfileEventResponseDto>> GetProfileEventsAsync(string eventId)
     {
         var eps = await eventProfileService.FindAllByEventId(new ObjectId(eventId));
 

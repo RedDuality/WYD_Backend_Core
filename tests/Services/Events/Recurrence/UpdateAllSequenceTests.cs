@@ -99,7 +99,7 @@ public class UpdateAllSequenceTests {
         startTime.AddHours(1)
     );
 
-    // Generate a valid InstanceId for the first occurrence
+
     var datePart = startTime.ToString("yyyyMMddTHHmmssZ");
     var instanceId = $"{master.Id}_{datePart}";
 
@@ -137,7 +137,7 @@ public class UpdateAllSequenceTests {
         startTime.AddHours(1)
     );
 
-    // Generate a valid InstanceId for the first occurrence
+
     var datePart = startTime.ToString("yyyyMMddTHHmmssZ");
     var instanceId = $"{master.Id}_{datePart}";
 
@@ -166,7 +166,7 @@ public class UpdateAllSequenceTests {
         startTime.AddHours(1)
     );
 
-    // Generate a valid InstanceId for the first occurrence
+
     var datePart = startTime.ToString("yyyyMMddTHHmmssZ");
     var instanceId = $"{master.Id}_{datePart}";
 
@@ -560,7 +560,7 @@ public class UpdateAllSequenceTests {
         oldEventIds
     );
 
-    // Generate a valid InstanceId for the first occurrence
+
     var datePart = startTime.ToString("yyyyMMddTHHmmssZ");
     var instanceId = $"{master.Id}_{datePart}";
 
@@ -694,7 +694,7 @@ public class UpdateAllSequenceTests {
 
     var detached2 = await _recurrentUpdateService.UpdateSingleInstance(updateDto2, _creatorProfile);
 
-    // Generate a valid InstanceId for the first occurrence
+
     var datePart = startTime.ToString("yyyyMMddTHHmmssZ");
     var instanceId = $"{master.Id}_{datePart}";
 
@@ -812,7 +812,7 @@ public class UpdateAllSequenceTests {
         Builders<DetachedInstances>.Filter.Eq(di => di.MasterId, new ObjectId(master.Id))
     );
 
-    // Generate a valid InstanceId for the first occurrence
+
     var datePart = startTime.ToString("yyyyMMddTHHmmssZ");
     var instanceId = $"{master.Id}_{datePart}";
 
@@ -950,7 +950,7 @@ public class UpdateAllSequenceTests {
         oldEventIds
     );
 
-    // Generate a valid InstanceId for the first occurrence
+
     var datePart = startTime.AddDays(7).ToString("yyyyMMddTHHmmssZ");
     var instanceId = $"{master.Id}_{datePart}";
 
@@ -1084,7 +1084,7 @@ public class UpdateAllSequenceTests {
 
     var detached2 = await _recurrentUpdateService.UpdateSingleInstance(updateDto2, _creatorProfile);
 
-    // Generate a valid InstanceId for the first occurrence
+
     var datePart = startTime.AddDays(7).ToString("yyyyMMddTHHmmssZ");
     var instanceId = $"{master.Id}_{datePart}";
 
@@ -1434,7 +1434,7 @@ public class UpdateAllSequenceTests {
 
     var oldMasterEvent = await _dbService.RetrieveByIdAsync<RecurrentEvent>(CollectionName.RecurrentEvents, master.Id);
 
-    // Generate a valid InstanceId for the first occurrence
+
     var datePart = startTime.ToString("yyyyMMddTHHmmssZ");
     var instanceId = $"{master.Id}_{datePart}";
 
@@ -1987,7 +1987,7 @@ public class UpdateAllSequenceTests {
         Builders<DetachedInstances>.Filter.Eq(di => di.MasterId, new ObjectId(master.Id))
     );
 
-    // Generate a valid InstanceId for the first occurrence
+
     var datePart = startTime.ToString("yyyyMMddTHHmmssZ");
     var instanceId = $"{master.Id}_{datePart}";
 

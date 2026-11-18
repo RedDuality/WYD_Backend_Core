@@ -112,7 +112,7 @@ public class RecurrentEventUpdateServiceTests {
       RecurrenceRule = "FREQ=WEEKLY"
     };
 
-    // 2. ACT
+    // ACT
     var result = await _recurrentUpdateService.UpdateRecurrentEvent(updateDto, _creatorProfile);
 
     // 3. ASSERT: Master RecurrentEvent document
@@ -162,7 +162,7 @@ public class RecurrentEventUpdateServiceTests {
       Description = "Common Description"
     };
 
-    // 2. ACT
+    // ACT
     await _recurrentUpdateService.UpdateRecurrentEvent(updateDto, _creatorProfile);
 
     // 3. ASSERT: Master was updated
@@ -205,7 +205,7 @@ public class RecurrentEventUpdateServiceTests {
       RecurrenceRule = "FREQ=DAILY;COUNT=5" // New rule going forward
     };
 
-    // 2. ACT
+    // ACT
     var result = await _recurrentUpdateService.UpdateRecurrentEvent(updateDto, _creatorProfile);
 
     // 3. ASSERT: Old Master should be truncated
@@ -266,7 +266,7 @@ public class RecurrentEventUpdateServiceTests {
       InstanceId = $"{oldMaster.Id}_{splitTime:yyyyMMddTHHmmssZ}"
     };
 
-    // 2. ACT
+    // ACT
     var result = await _recurrentUpdateService.UpdateRecurrentEvent(updateDto, _creatorProfile);
     var newMasterId = new ObjectId(result.Id);
 
@@ -323,7 +323,7 @@ public class RecurrentEventUpdateServiceTests {
       Description = "Description for the split point"
     };
 
-    // 2. ACT
+    // ACT
     var result = await _recurrentUpdateService.UpdateRecurrentEvent(updateDto, _creatorProfile);
 
     // 3. ASSERT: The specific detached event properties were overridden during migration

@@ -85,7 +85,7 @@ public class ProfileEventService(MongoDbService dbService, EventProfileService e
         return await dbService.RetrieveOrNullAsync(profileEventCollection, filter);
     }
 
-    public async Task<HashSet<ProfileEventDto>> FindMultipleByProfileAndEventIds(IEnumerable<(string profileId, string eventId)> profileEventPairs)
+    public async Task<HashSet<RetrieveProfileEventResponseDto>> FindMultipleByProfileAndEventIds(IEnumerable<(string profileId, string eventId)> profileEventPairs)
     {
         var filters = new List<FilterDefinition<ProfileEvent>>();
         foreach (var (profileId, eventId) in profileEventPairs)
@@ -102,7 +102,7 @@ public class ProfileEventService(MongoDbService dbService, EventProfileService e
         }
         var combinedFilter = Builders<ProfileEvent>.Filter.Or(filters);
 
-        var projection = Builders<ProfileEvent>.Projection.Expression(pe => new ProfileEventDto
+        var projection = Builders<ProfileEvent>.Projection.Expression(pe => new RetrieveProfileEventResponseDto
         {
             ProfileId = pe.ProfileId.ToString(),
             Role = pe.Role,
