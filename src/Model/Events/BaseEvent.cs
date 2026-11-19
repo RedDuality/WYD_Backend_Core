@@ -1,41 +1,31 @@
 using Core.Model.Base;
-using Ical.Net.DataTypes;
+using Core.Model.Util.Extensions;
 using MongoDB.Bson;
 using MongoDB.Bson.Serialization.Attributes;
 
 namespace Core.Model.Events;
 
-public abstract class BaseEvent : BaseDateEntity {
-    [BsonElement("title")]
-    public string Title { get; set; }
+public abstract class BaseEvent : BaseDateEntity
+{
 
-    [BsonElement("startTime")]
-    public DateTimeOffset StartTime { get; set; }
+  public BaseEvent(String title, DateTimeOffset startTime) : base()
+  {
+    Title = title;
+    StartTime = startTime;
+  }
 
-    [BsonElement("endTime")]
-    public DateTimeOffset EndTime { get; set; }
+  [BsonElement("title")]
+  public string Title { get; set; }
 
-    [BsonElement("isAllDay")]
-    [BsonIgnoreIfDefault]
-    public bool IsAllDay { get; set; } = false;
+  private DateTimeOffset _startTime;
+  [BsonElement("startTime")]
+  public DateTimeOffset StartTime { get => _startTime; set => _startTime = value.TruncateToSeconds(); }
 
-    public BaseEvent(
-        string title,
-        DateTimeOffset startTime,
-        DateTimeOffset endTime) {
-        if (endTime < startTime)
-            throw new ArgumentException("EndTime cannot be earlier than StartTime.");
+  [BsonElement("isAllDay")]
+  [BsonIgnoreIfDefault]
+  public bool IsAllDay { get; set; } = false;
 
-        Title = title;
-        StartTime = startTime;
-        EndTime = endTime;
-    }
+  abstract public DateTimeOffset EndTime { get; set; }
 
-    public TimeSpan GetTimeSpan() {
-        return EndTime - StartTime;
-    }
-
-    public Duration GetDuration() {
-        return Duration.FromTimeSpanExact(GetTimeSpan());
-    }
+  abstract public TimeSpan Duration { get; set; }
 }

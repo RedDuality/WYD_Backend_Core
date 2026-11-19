@@ -1,47 +1,68 @@
+using Core.Model.Util.Extensions;
 using MongoDB.Bson;
 using MongoDB.Bson.Serialization.Attributes;
 
 namespace Core.Model.Events;
 
-public class Event(
-    string title,
-    DateTimeOffset startTime,
-    DateTimeOffset endTime) : BaseEvent(title, startTime, endTime)
-{
-    [BsonElement("TotalProfiles")]
-    [BsonIgnoreIfDefault]
-    public int TotalProfilesMinusOne { get; set; } = 0;
+public class Event : BaseEvent {
+  public Event(string title, DateTimeOffset startTime, DateTimeOffset endTime) : base(title, startTime) {
+    EndTime = endTime;
+  }
 
-    [BsonElement("TotalConfirmed")]
-    [BsonIgnoreIfDefault]
-    public int TotalConfirmedMinusOne { get; set; } = 0;
+  private DateTimeOffset _endTime;
 
-    // --- Recurrence ---
+  [BsonElement("endTime")]
+  public override DateTimeOffset EndTime {
+    get => _endTime;
+    set {
+      if (value < StartTime.AddMinutes(5))
+        throw new ArgumentException("Event must be at least 5 minutes long", nameof(value));
 
-    [BsonElement("masterEventId")]
-    [BsonIgnoreIfNull]
-    public ObjectId? MasterEventId { get; set; }
+      _endTime = value.TruncateToSeconds();
+    }
+  }
 
-    [BsonElement("recurrencyId")]
-    [BsonIgnoreIfNull]
-    public string? RecurrencyInstanceId { get; set; } //MasterId_yyyyMMddTHHmmssZ (all-day ones have MasterId_yyyyMMdd)
+  public override TimeSpan Duration {
+    get => EndTime - StartTime; 
+    set {
+      EndTime = StartTime.Add(value);
+    }
+  }
 
-    [BsonElement("detached")]
-    [BsonIgnoreIfDefault]
-    public bool DetachedInstance { get; set; } = false;
+  [BsonElement("TotalProfiles")]
+  [BsonIgnoreIfDefault]
+  public int TotalProfilesMinusOne { get; set; } = 0;
 
-    // --- Imported values ---
+  [BsonElement("TotalConfirmed")]
+  [BsonIgnoreIfDefault]
+  public int TotalConfirmedMinusOne { get; set; } = 0;
 
-    [BsonElement("accountUid")]
-    [BsonIgnoreIfNull]
-    public string? ImportedAccountUid { get; set; }
+  // --- Recurrency: Detached Instance ---
 
-    [BsonElement("importedId")]
-    [BsonIgnoreIfNull]
-    public string? ExternalEventId { get; set; }
+  [BsonElement("masterEventId")]
+  [BsonIgnoreIfNull]
+  public ObjectId? MasterEventId { get; set; }
 
-    [BsonElement("exMasterEventId")]
-    [BsonIgnoreIfNull]
-    public string? ExternalMasterEventId { get; set; }
+  [BsonElement("recurrencyId")]
+  [BsonIgnoreIfNull]
+  public string? RecurrencyInstanceId { get; set; } //MasterId_yyyyMMddTHHmmssZ (all-day ones have MasterId_yyyyMMdd)
+
+  [BsonElement("detached")]
+  [BsonIgnoreIfDefault]
+  public bool DetachedInstance { get; set; } = false;
+
+  // --- Imported values ---
+
+  [BsonElement("accountUid")]
+  [BsonIgnoreIfNull]
+  public string? ImportedAccountUid { get; set; }
+
+  [BsonElement("importedId")]
+  [BsonIgnoreIfNull]
+  public string? ExternalEventId { get; set; }
+
+  [BsonElement("exMasterEventId")]
+  [BsonIgnoreIfNull]
+  public string? ExternalMasterEventId { get; set; }
+
 }
-
